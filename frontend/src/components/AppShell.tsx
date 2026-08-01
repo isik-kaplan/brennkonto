@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+
 import { NavLink, Outlet } from 'react-router-dom'
 
 import { useAuth } from '../hooks/useAuth'
@@ -11,18 +12,18 @@ const NAV_ITEMS = [
   { to: '/settings', label: 'Settings', end: false },
 ]
 
-function navLinkClass({ isActive }: { isActive: boolean }) {
-  return isActive ? 'app-nav__link is-active' : 'app-nav__link'
+function floatingLinkClass({ isActive }: { isActive: boolean }) {
+  return isActive ? 'app-floating-nav__link is-active' : 'app-floating-nav__link'
 }
 
 function tabLinkClass({ isActive }: { isActive: boolean }) {
   return isActive ? 'app-tabbar__link is-active' : 'app-tabbar__link'
 }
 
-function Brand(): ReactNode {
+function Brand({ className }: { className: string }): ReactNode {
   return (
-    <span className="app-nav__brand">
-      <span className="app-nav__brand-mark" aria-hidden="true" />
+    <span className={className}>
+      <span className="app-floating-nav__brand-mark" aria-hidden="true" />
       brennkonto
     </span>
   )
@@ -33,33 +34,35 @@ export default function AppShell() {
 
   return (
     <div className="app-shell">
-      <nav className="app-nav" aria-label="Primary">
-        <Brand />
-        <div className="app-nav__links">
+      <nav className="app-floating-nav" aria-label="Primary">
+        <Brand className="app-floating-nav__brand" />
+        <div className="app-floating-nav__links">
           {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={navLinkClass}>
+            <NavLink key={item.to} to={item.to} end={item.end} className={floatingLinkClass}>
               {item.label}
             </NavLink>
           ))}
         </div>
-        <div className="app-nav__user">
-          <span className="app-nav__user-name">{user?.display_name}</span>
+        <div className="app-floating-nav__user">
+          <span className="app-floating-nav__user-name">{user?.display_name}</span>
           <button type="button" className="btn btn--ghost btn--small" onClick={() => logout()}>
             Log out
           </button>
         </div>
       </nav>
 
-      <header className="app-topbar">
-        <Brand />
-        <button type="button" className="btn btn--ghost btn--small" onClick={() => logout()}>
-          Log out
-        </button>
-      </header>
+      <div className="app-paper">
+        <header className="app-topbar">
+          <Brand className="app-floating-nav__brand" />
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => logout()}>
+            Log out
+          </button>
+        </header>
 
-      <main className="app-main">
-        <Outlet />
-      </main>
+        <main className="app-main">
+          <Outlet />
+        </main>
+      </div>
 
       <nav className="app-tabbar" aria-label="Primary">
         {NAV_ITEMS.map((item) => (

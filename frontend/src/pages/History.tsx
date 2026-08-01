@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+
 import { Link } from 'react-router-dom'
 
 import { deleteEntry, fetchDailyStats } from '../api/endpoints'
@@ -44,7 +45,7 @@ export default function History() {
       </div>
 
       <div className="range-controls">
-        <button type="button" className="btn btn--small" onClick={() => setDate(addDays(date, -1))} aria-label="Previous day">
+        <button type="button" className="btn" onClick={() => setDate(addDays(date, -1))} aria-label="Previous day">
           ← Prev
         </button>
         <div className="field" style={{ margin: 0 }}>
@@ -62,7 +63,7 @@ export default function History() {
         </div>
         <button
           type="button"
-          className="btn btn--small"
+          className="btn"
           onClick={() => setDate(addDays(date, 1))}
           disabled={isToday}
           aria-label="Next day"
@@ -99,9 +100,7 @@ export default function History() {
             entries={stats.entries}
             onDelete={handleDelete}
             deletingId={deletingId}
-            emptyMessage={
-              isToday ? 'Nothing logged yet today.' : 'Nothing was logged on this day.'
-            }
+            emptyMessage={isToday ? 'Nothing logged yet today.' : 'Nothing was logged on this day.'}
           />
 
           {isToday && stats.entries.length === 0 && (

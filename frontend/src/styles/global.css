@@ -18,7 +18,7 @@ html {
 body {
   margin: 0;
   min-width: 320px;
-  background: var(--color-paper);
+  background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-body);
   font-size: var(--text-base);
@@ -102,92 +102,109 @@ svg {
   border: 0;
 }
 
-/* ---------- app shell ---------- */
+/* ---------- app shell ----------
+ * Layout: a horizontal, floating tab bar (sticky, offset hard-shadow) sits above a centered
+ * "paper" panel - the muted --color-bg shows around both, which is what makes the nav and the
+ * content read as objects sitting on a table rather than edge-to-edge chrome.
+ */
 
 .app-shell {
-  display: grid;
-  grid-template-columns: 15.5rem 1fr;
   min-height: 100vh;
-}
-
-.app-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xl);
-  padding: var(--space-lg);
-  background: var(--color-paper-2);
-  border-right: 1px solid var(--color-rule);
+  align-items: center;
+  padding: var(--space-xl) var(--space-lg) var(--space-3xl);
 }
 
-.app-nav__brand {
+.app-floating-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xl);
+  width: 100%;
+  max-width: 64rem;
+  background: var(--color-paper);
+  border: 1.5px solid var(--color-ink);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-sm) var(--space-lg);
+  margin-bottom: var(--space-2xl);
+  position: sticky;
+  top: var(--space-lg);
+  z-index: 20;
+}
+
+.app-floating-nav__brand {
   display: flex;
   align-items: center;
   gap: var(--space-2xs);
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: var(--text-lg);
+  font-size: var(--text-md);
   letter-spacing: -0.02em;
+  flex-shrink: 0;
 }
 
-.app-nav__brand-mark {
-  width: 0.85rem;
-  height: 0.85rem;
+.app-floating-nav__brand-mark {
+  width: 0.8rem;
+  height: 0.8rem;
   background: var(--color-accent);
   flex-shrink: 0;
 }
 
-.app-nav__links {
+.app-floating-nav__links {
   display: flex;
-  flex-direction: column;
   gap: var(--space-3xs);
   flex: 1;
 }
 
-.app-nav__link {
-  display: flex;
+.app-floating-nav__link {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-sm);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-md);
   text-decoration: none;
   color: var(--color-neutral);
-  font-weight: 500;
-  border-left: 2px solid transparent;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  border: 1.5px solid transparent;
   transition:
     color var(--dur-fast) var(--ease-out),
-    border-color var(--dur-fast) var(--ease-out),
-    background var(--dur-fast) var(--ease-out);
+    background var(--dur-fast) var(--ease-out),
+    border-color var(--dur-fast) var(--ease-out);
 }
 
-.app-nav__link:hover {
+.app-floating-nav__link:hover {
   color: var(--color-ink);
   background: var(--color-paper-3);
 }
 
-.app-nav__link.is-active {
-  color: var(--color-ink);
-  border-left-color: var(--color-accent);
-  background: var(--color-paper-3);
-  font-weight: 700;
+.app-floating-nav__link.is-active {
+  color: var(--color-accent-ink);
+  background: var(--color-accent);
+  border-color: var(--color-accent);
 }
 
-.app-nav__user {
+.app-floating-nav__user {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: var(--space-sm);
-  padding-top: var(--space-lg);
-  border-top: 1px solid var(--color-rule);
+  flex-shrink: 0;
 }
 
-.app-nav__user-name {
+.app-floating-nav__user-name {
   font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  color: var(--color-neutral);
   white-space: nowrap;
 }
 
+.app-paper {
+  width: 100%;
+  max-width: 64rem;
+  background: var(--color-paper);
+  border: 1.5px solid var(--color-ink);
+}
+
 .app-main {
-  padding: var(--space-2xl) var(--space-2xl) var(--space-3xl);
-  max-width: 68rem;
+  padding: var(--space-2xl);
 }
 
 .app-topbar {
@@ -200,10 +217,10 @@ svg {
 
 @media (max-width: 768px) {
   .app-shell {
-    grid-template-columns: 1fr;
+    padding: 0 0 calc(var(--space-2xl) + 4rem);
   }
 
-  .app-nav {
+  .app-floating-nav {
     display: none;
   }
 
@@ -212,28 +229,36 @@ svg {
     align-items: center;
     justify-content: space-between;
     padding: var(--space-sm) var(--space-md);
-    background: var(--color-paper-2);
-    border-bottom: 1px solid var(--color-rule);
+    background: var(--color-paper);
+    border-bottom: 1.5px solid var(--color-ink);
     position: sticky;
     top: 0;
     z-index: 10;
+    width: 100%;
+  }
+
+  .app-paper {
+    border: none;
+    border-top: none;
   }
 
   .app-main {
-    padding: var(--space-lg) var(--space-md) calc(var(--space-3xl) + 4rem);
+    padding: var(--space-lg) var(--space-md);
   }
 
   .app-tabbar {
     display: grid;
     grid-auto-flow: column;
     grid-auto-columns: minmax(0, 1fr);
+    gap: var(--space-2xs);
     position: fixed;
     bottom: 0;
     left: 0;
     right: 0;
-    background: var(--color-paper-2);
+    background: var(--color-bg);
     border-top: 1px solid var(--color-rule);
-    padding-bottom: env(safe-area-inset-bottom);
+    padding: var(--space-xs);
+    padding-bottom: calc(var(--space-xs) + env(safe-area-inset-bottom));
     z-index: 10;
   }
 
@@ -241,18 +266,22 @@ svg {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: var(--space-3xs);
-    padding: var(--space-xs) var(--space-3xs);
+    justify-content: center;
+    gap: 2px;
+    padding: var(--space-2xs) var(--space-3xs);
     text-decoration: none;
     color: var(--color-neutral);
+    background: var(--color-paper);
+    border: 1.5px solid var(--color-rule);
     font-size: var(--text-xs);
     font-weight: 600;
-    border-top: 2px solid transparent;
+    min-height: 3rem;
   }
 
   .app-tabbar__link.is-active {
-    color: var(--color-accent);
-    border-top-color: var(--color-accent);
+    color: var(--color-accent-ink);
+    background: var(--color-accent);
+    border-color: var(--color-accent);
   }
 }
 
@@ -282,13 +311,14 @@ svg {
   align-items: center;
   justify-content: center;
   gap: var(--space-2xs);
+  height: var(--control-h);
   border: 1.5px solid var(--color-ink);
   border-radius: var(--radius);
   background: transparent;
   color: var(--color-ink);
   font-weight: 600;
   font-size: var(--text-sm);
-  padding: var(--space-xs) var(--space-md);
+  padding: 0 var(--space-md);
   cursor: pointer;
   transition:
     transform var(--dur-fast) var(--ease-out),
@@ -346,7 +376,8 @@ svg {
 }
 
 .btn--small {
-  padding: var(--space-3xs) var(--space-xs);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-sm);
   font-size: var(--text-xs);
 }
 
@@ -387,6 +418,13 @@ svg {
   margin-top: var(--space-md);
 }
 
+/* Same bug as .grid > .card + .card: inside a .form__row grid, fields sit side by side, not
+   stacked - the sibling margin above was shrinking the second field's stretched grid-cell
+   height, offsetting it vertically from its row partner. */
+.form__row > .field + .field {
+  margin-top: 0;
+}
+
 .field label {
   font-size: var(--text-sm);
   font-weight: 600;
@@ -404,11 +442,12 @@ svg {
 
 .input,
 .select {
+  height: var(--control-h);
   border: 1.5px solid var(--color-rule);
   border-radius: var(--radius);
   background: var(--color-paper);
   color: var(--color-ink);
-  padding: var(--space-xs) var(--space-sm);
+  padding: 0 var(--space-sm);
   font-size: var(--text-base);
   transition: border-color var(--dur-fast) var(--ease-out);
   width: 100%;
@@ -439,8 +478,17 @@ svg {
 
 .form__row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  /* a fixed 2-up split, not auto-fit - auto-fit computes as many >=9rem tracks as the container
+     allows, which on a wide card gives a 2-field row 3+ empty trailing tracks: the two real
+     fields hug the left edge instead of splitting the row evenly. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: var(--space-md);
+}
+
+@media (max-width: 480px) {
+  .form__row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .form__actions {
@@ -475,6 +523,14 @@ svg {
 
 .card + .card {
   margin-top: var(--space-md);
+}
+
+/* Inside a .grid, spacing between cards comes from the grid's own `gap` - the sibling margin
+   above was shrinking whichever card happened to be second in DOM order within its row, since a
+   stretched grid item's margin is subtracted from its stretched height rather than just
+   repositioning it. That's the "card on the right is smaller" bug. */
+.grid > .card + .card {
+  margin-top: 0;
 }
 
 .card__title {
@@ -638,7 +694,7 @@ svg {
 }
 
 .macro-bar__fill--fat {
-  background: var(--color-positive);
+  background: var(--color-accent-2);
 }
 
 /* ---------- entry list ---------- */
@@ -771,6 +827,21 @@ svg {
   fill: var(--color-neutral);
 }
 
+.chart__placeholder {
+  fill: none;
+  stroke: var(--color-rule);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 1 7;
+}
+
+.chart__empty-hint {
+  margin-top: var(--space-sm);
+  color: var(--color-neutral);
+  font-size: var(--text-sm);
+  text-align: center;
+}
+
 .stat-strip {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -805,26 +876,37 @@ svg {
   font-weight: 600;
 }
 
+.stat-tile__delta {
+  margin-top: var(--space-3xs);
+  font-size: var(--text-xs);
+  color: var(--color-neutral);
+}
+
 /* ---------- range controls ---------- */
 
 .range-controls {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-end;
+  align-items: center;
   gap: var(--space-md);
   margin-bottom: var(--space-xl);
 }
 
 .segmented {
   display: inline-flex;
+  height: var(--control-h);
   border: 1.5px solid var(--color-ink);
 }
 
 .segmented button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
   border: none;
   background: transparent;
   color: var(--color-ink);
-  padding: var(--space-2xs) var(--space-sm);
+  padding: 0 var(--space-md);
   font-weight: 600;
   font-size: var(--text-sm);
   cursor: pointer;
@@ -855,7 +937,8 @@ svg {
   max-width: 26rem;
   padding: var(--space-2xl) var(--space-xl);
   border: 1.5px solid var(--color-ink);
-  background: var(--color-paper-2);
+  background: var(--color-paper);
+  box-shadow: var(--shadow-float);
 }
 
 .auth-card__brand {
@@ -890,6 +973,59 @@ svg {
   font-weight: 600;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+/* ---------- barcode scanner ---------- */
+
+.scanner-overlay {
+  position: fixed;
+  inset: 0;
+  background: oklch(from var(--color-ink) l c h / 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-lg);
+  z-index: 50;
+}
+
+.scanner-frame {
+  width: 100%;
+  max-width: 26rem;
+  background: var(--color-paper);
+  border: 1.5px solid var(--color-ink);
+  box-shadow: var(--shadow-float);
+  padding: var(--space-lg);
+}
+
+.scanner-viewport {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  background: var(--color-ink);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.scanner-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.scanner-reticle {
+  position: absolute;
+  inset: 22% 12%;
+  border: 2px solid var(--color-accent);
+  box-shadow: 0 0 0 999px oklch(from var(--color-ink) l c h / 0.35);
+}
+
+.scanner-hint {
+  margin-top: var(--space-md);
+  margin-bottom: var(--space-md);
+  color: var(--color-neutral);
+  font-size: var(--text-sm);
+  text-align: center;
 }
 
 .centered-loader {
