@@ -50,10 +50,6 @@ export function lookupBarcode(barcode: string) {
   return api.get<FoodSearchResult>(`/foods/barcode/${encodeURIComponent(barcode)}`)
 }
 
-export function fetchEntriesForDate(date: string) {
-  return api.get<FoodEntry[]>(`/entries/?date=${date}`)
-}
-
 export function createEntry(payload: CreateFoodEntryPayload) {
   return api.post<FoodEntry>('/entries/', payload)
 }

@@ -1,0 +1,123 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import { api } from '../../src/api/client'
+import * as endpoints from '../../src/api/endpoints'
+
+vi.mock('../../src/api/client', () => ({
+  api: {
+    get: vi.fn(),
+    post: vi.fn(),
+    patch: vi.fn(),
+    delete: vi.fn(),
+  },
+}))
+
+beforeEach(() => {
+  vi.mocked(api.get).mockReset()
+  vi.mocked(api.post).mockReset()
+  vi.mocked(api.patch).mockReset()
+  vi.mocked(api.delete).mockReset()
+})
+
+describe('auth endpoints', () => {
+  it('register posts email/password/display_name', () => {
+    endpoints.register('a@b.com', 'secret', 'Ada')
+    expect(api.post).toHaveBeenCalledWith('/auth/register', {
+      email: 'a@b.com',
+      password: 'secret',
+      display_name: 'Ada',
+    })
+  })
+
+  it('login posts email/password', () => {
+    endpoints.login('a@b.com', 'secret')
+    expect(api.post).toHaveBeenCalledWith('/auth/login', { email: 'a@b.com', password: 'secret' })
+  })
+
+  it('logout posts with no body', () => {
+    endpoints.logout()
+    expect(api.post).toHaveBeenCalledWith('/auth/logout')
+  })
+
+  it('fetchCurrentUser gets /auth/me', () => {
+    endpoints.fetchCurrentUser()
+    expect(api.get).toHaveBeenCalledWith('/auth/me')
+  })
+})
+
+describe('account endpoints', () => {
+  it('updateProfile patches display_name', () => {
+    endpoints.updateProfile('Ada')
+    expect(api.patch).toHaveBeenCalledWith('/account/profile', { display_name: 'Ada' })
+  })
+
+  it('updateGoals patches the full goals object', () => {
+    const goals = {
+      daily_calorie_goal: 2000,
+      daily_protein_goal_g: 150,
+      daily_carbs_goal_g: 200,
+      daily_fat_goal_g: 65,
+    }
+    endpoints.updateGoals(goals)
+    expect(api.patch).toHaveBeenCalledWith('/account/goals', goals)
+  })
+
+  it('changePassword posts current and new password', () => {
+    endpoints.changePassword('old', 'new')
+    expect(api.post).toHaveBeenCalledWith('/account/password', {
+      current_password: 'old',
+      new_password: 'new',
+    })
+  })
+})
+
+describe('food endpoints', () => {
+  it('searchFoods URL-encodes the query', () => {
+    endpoints.searchFoods('greek yogurt')
+    expect(api.get).toHaveBeenCalledWith('/foods/search?q=greek%20yogurt')
+  })
+
+  it('lookupBarcode URL-encodes the barcode', () => {
+    endpoints.lookupBarcode('123 456')
+    expect(api.get).toHaveBeenCalledWith('/foods/barcode/123%20456')
+  })
+})
+
+describe('entry endpoints', () => {
+  const payload = {
+    name: 'Banana',
+    grams: 120,
+    calories_per_100g: 89,
+    protein_per_100g: 1.1,
+    carbs_per_100g: 22.8,
+    fat_per_100g: 0.3,
+    consumed_at: '2026-08-01',
+  }
+
+  it('createEntry posts the full payload', () => {
+    endpoints.createEntry(payload)
+    expect(api.post).toHaveBeenCalledWith('/entries/', payload)
+  })
+
+  it('updateEntry patches grams and consumed_at by id', () => {
+    endpoints.updateEntry(5, 150, '2026-08-02')
+    expect(api.patch).toHaveBeenCalledWith('/entries/5', { grams: 150, consumed_at: '2026-08-02' })
+  })
+
+  it('deleteEntry deletes by id', () => {
+    endpoints.deleteEntry(5)
+    expect(api.delete).toHaveBeenCalledWith('/entries/5')
+  })
+})
+
+describe('stats endpoints', () => {
+  it('fetchDailyStats gets the daily endpoint with a date query', () => {
+    endpoints.fetchDailyStats('2026-08-01')
+    expect(api.get).toHaveBeenCalledWith('/stats/daily?date=2026-08-01')
+  })
+
+  it('fetchRangeStats gets the range endpoint with start/end/group_by', () => {
+    endpoints.fetchRangeStats('2026-07-01', '2026-08-01', 'week')
+    expect(api.get).toHaveBeenCalledWith('/stats/range?start=2026-07-01&end=2026-08-01&group_by=week')
+  })
+})
