@@ -32,6 +32,36 @@ The Vite dev server proxies `/api/*` to `http://localhost:8000` (see `frontend/v
 so run the backend on its default port. For local http (non-TLS) dev, set
 `SESSION_COOKIE_SECURE=False` in `.env` - browsers won't store a `Secure` cookie over plain http.
 
+## Testing
+
+Backend (pytest + hypothesis property-based tests, 100% branch coverage enforced):
+
+```sh
+cd backend
+uv run pytest --cov=app --cov-report=term-missing
+```
+
+Frontend (vitest + fast-check property-based tests, 100% coverage enforced):
+
+```sh
+cd frontend
+npm run test:coverage
+```
+
+A `backend/scripts/seed_demo_data.py` script is available for seeding a couple of years of
+realistic daily food logs into a fresh account, useful for exercising the aggregate views:
+`uv run python scripts/seed_demo_data.py [email] [password] [display_name] [days]`.
+
+## Pre-commit
+
+```sh
+pip install pre-commit  # or: brew install pre-commit
+pre-commit install
+```
+
+Runs ruff (backend) and eslint/prettier/tsc (frontend) on staged files, plus the usual
+whitespace/large-file hygiene checks. `pre-commit run --all-files` runs everything once.
+
 ## Configuration
 
 All configuration is environment variables, read via `isik.common.config` in
