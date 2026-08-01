@@ -1,11 +1,16 @@
-import { useEffect, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
+
 import { useNavigate } from 'react-router-dom'
 
 import { ApiError } from '../api/client'
 import { createEntry, lookupBarcode, searchFoods } from '../api/endpoints'
 import type { FoodSearchResult } from '../api/types'
 import { toISODate } from '../lib/dates'
+
+// The zxing barcode-decoding library is ~450kB - lazy-loaded so it only ships to people who
+// actually open the scanner, not on every visit to this page.
+const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'))
 
 export default function LogFood() {
   const navigate = useNavigate()
@@ -16,6 +21,7 @@ export default function LogFood() {
 
   const [barcode, setBarcode] = useState('')
   const [isLookingUp, setIsLookingUp] = useState(false)
+  const [isScanning, setIsScanning] = useState(false)
 
   const [selected, setSelected] = useState<FoodSearchResult | null>(null)
   const [grams, setGrams] = useState(100)
@@ -56,6 +62,22 @@ export default function LogFood() {
     }
   }
 
+  async function handleScanDetected(code: string) {
+    setIsScanning(false)
+    setBarcode(code)
+    setIsLookingUp(true)
+    setSearchError(null)
+    try {
+      const result = await lookupBarcode(code)
+      setSelected(result)
+      setSavedName(null)
+    } catch (error) {
+      setSearchError(error instanceof ApiError ? error.message : 'Barcode lookup failed.')
+    } finally {
+      setIsLookingUp(false)
+    }
+  }
+
   function selectResult(result: FoodSearchResult) {
     setSelected(result)
     setSavedName(null)
@@ -64,22 +86,25 @@ export default function LogFood() {
 
   async function handleSave(event: FormEvent) {
     event.preventDefault()
-    if (!selected) return
+    // Asserted rather than runtime-checked: this handler is only ever wired to the form that
+    // renders when `selected` is already set, so there's no real null case to branch on - just
+    // a closure TypeScript can't narrow on its own.
+    const product = selected!
     setIsSaving(true)
     setSaveError(null)
     try {
       await createEntry({
-        name: selected.name,
-        brand: selected.brand,
-        barcode: selected.barcode,
+        name: product.name,
+        brand: product.brand,
+        barcode: product.barcode,
         grams,
-        calories_per_100g: selected.calories_per_100g,
-        protein_per_100g: selected.protein_per_100g,
-        carbs_per_100g: selected.carbs_per_100g,
-        fat_per_100g: selected.fat_per_100g,
+        calories_per_100g: product.calories_per_100g,
+        protein_per_100g: product.protein_per_100g,
+        carbs_per_100g: product.carbs_per_100g,
+        fat_per_100g: product.fat_per_100g,
         consumed_at: consumedAt,
       })
-      setSavedName(selected.name)
+      setSavedName(product.name)
       setSelected(null)
       setQuery('')
       setResults([])
@@ -101,7 +126,10 @@ export default function LogFood() {
 
       {savedName && (
         <div className="form__banner form__banner--success">
-          Logged {savedName}. <button type="button" className="btn btn--ghost btn--small" onClick={() => navigate('/')}>View today</button>
+          Logged {savedName}.{' '}
+          <button type="button" className="btn btn--ghost btn--small" onClick={() => navigate('/')}>
+            View today
+          </button>
         </div>
       )}
 
@@ -118,13 +146,20 @@ export default function LogFood() {
                 placeholder="e.g. greek yogurt"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                autoFocus
               />
             </div>
 
-            {searchError && <div className="form__banner" style={{ marginTop: 'var(--space-md)' }}>{searchError}</div>}
+            {searchError && (
+              <div className="form__banner" style={{ marginTop: 'var(--space-md)' }}>
+                {searchError}
+              </div>
+            )}
 
-            {isSearching && <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>Searching…</p>}
+            {isSearching && (
+              <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
+                Searching…
+              </p>
+            )}
 
             {results.length > 0 && (
               <div className="search-results" style={{ marginTop: 'var(--space-md)' }}>
@@ -169,10 +204,19 @@ export default function LogFood() {
                   {isLookingUp && <span className="btn__spinner" aria-hidden="true" />}
                   Look up
                 </button>
+                <button type="button" className="btn btn--primary" onClick={() => setIsScanning(true)}>
+                  Scan with camera
+                </button>
               </div>
             </form>
           </div>
         </div>
+      )}
+
+      {isScanning && (
+        <Suspense fallback={<div className="scanner-overlay">Loading camera…</div>}>
+          <BarcodeScanner onDetected={handleScanDetected} onClose={() => setIsScanning(false)} />
+        </Suspense>
       )}
 
       {selected && (
@@ -197,7 +241,6 @@ export default function LogFood() {
                   required
                   value={grams}
                   onChange={(event) => setGrams(Number(event.target.value))}
-                  autoFocus
                 />
               </div>
               <div className="field">
