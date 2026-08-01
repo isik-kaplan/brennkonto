@@ -1,0 +1,94 @@
+/* Hallmark · custom theme: paper-band=light/dark · display-style=grotesk-sans · accent-hue=warm(35)
+ * vibe: "spacious, sharp-cornered, warm, spirited calorie tracker"
+ * fonts: Bricolage Grotesque (display) + General Sans (body) + Geist Mono (stat numerals only)
+ */
+
+:root {
+  color-scheme: light;
+
+  /* -- color: warm paprika anchor, hue ~35-55 -- */
+  --color-paper: oklch(97% 0.014 55);
+  --color-paper-2: oklch(94% 0.017 55);
+  --color-paper-3: oklch(91% 0.02 55);
+  --color-rule: oklch(85% 0.022 55);
+  --color-neutral: oklch(54% 0.02 50);
+  --color-muted: oklch(64% 0.016 50);
+  --color-ink: oklch(21% 0.02 40);
+
+  --color-accent: oklch(58% 0.19 35);
+  --color-accent-ink: oklch(98% 0.01 35);
+  --color-accent-soft: oklch(93% 0.05 35);
+  --color-focus: oklch(58% 0.2 35);
+
+  --color-positive: oklch(53% 0.13 145);
+  --color-positive-soft: oklch(93% 0.05 145);
+  --color-negative: oklch(54% 0.19 25);
+  --color-negative-soft: oklch(93% 0.05 25);
+  --color-warning: oklch(72% 0.14 85);
+  --color-warning-soft: oklch(93% 0.06 85);
+
+  /* -- type -- */
+  --font-display: 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
+  --font-body: 'General Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono', ui-monospace, 'SF Mono', monospace;
+
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-md: 1.25rem;
+  --text-lg: 1.5625rem;
+  --text-xl: 1.9531rem;
+  --text-2xl: 2.4414rem;
+  --text-display: clamp(2.25rem, 1.5rem + 3vw, 3.5rem);
+  --text-stat: clamp(2.75rem, 1.75rem + 5vw, 4.5rem);
+
+  /* -- space: generous, 4pt scale -- */
+  --space-3xs: 0.25rem;
+  --space-2xs: 0.5rem;
+  --space-xs: 0.75rem;
+  --space-sm: 1rem;
+  --space-md: 1.5rem;
+  --space-lg: 2rem;
+  --space-xl: 3rem;
+  --space-2xl: 4rem;
+  --space-3xl: 6rem;
+
+  /* -- corners: sharp by design, zero everywhere -- */
+  --radius: 0px;
+
+  /* -- motion -- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+  --ease-in-out: cubic-bezier(0.87, 0, 0.13, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+
+  --shadow-card: 0 1px 0 0 var(--color-rule);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+
+    --color-paper: oklch(16% 0.016 55);
+    --color-paper-2: oklch(20% 0.018 55);
+    --color-paper-3: oklch(24% 0.02 55);
+    --color-rule: oklch(32% 0.02 55);
+    --color-neutral: oklch(66% 0.018 50);
+    --color-muted: oklch(56% 0.014 50);
+    --color-ink: oklch(95% 0.012 60);
+
+    --color-accent: oklch(66% 0.17 35);
+    --color-accent-ink: oklch(14% 0.01 35);
+    --color-accent-soft: oklch(28% 0.06 35);
+    --color-focus: oklch(68% 0.18 35);
+
+    --color-positive: oklch(63% 0.13 145);
+    --color-positive-soft: oklch(26% 0.05 145);
+    --color-negative: oklch(64% 0.17 25);
+    --color-negative-soft: oklch(28% 0.06 25);
+    --color-warning: oklch(78% 0.13 85);
+    --color-warning-soft: oklch(30% 0.06 85);
+  }
+}
