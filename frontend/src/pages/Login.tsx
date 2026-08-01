@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { useFormState } from '@isik-kaplan/core/hooks'
-import { Link, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 
 import { ApiError } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
@@ -72,10 +72,6 @@ export default function Login() {
             </button>
           </div>
         </form>
-
-        <p className="auth-card__switch">
-          New here? <Link to="/register">Create an account</Link>
-        </p>
       </div>
     </div>
   )

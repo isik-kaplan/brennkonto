@@ -63,9 +63,4 @@ describe('Login', () => {
 
     expect(await screen.findByText('Something went wrong. Try again.')).toBeInTheDocument()
   })
-
-  it('links to the register page', () => {
-    renderLogin()
-    expect(screen.getByRole('link', { name: 'Create an account' })).toHaveAttribute('href', '/register')
-  })
 })
