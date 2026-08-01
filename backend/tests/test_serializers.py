@@ -1,0 +1,54 @@
+from datetime import UTC, date, datetime
+
+from app.models import FoodEntry, User
+from app.serializers import entry_out, user_out
+
+
+def test_user_out_maps_all_fields() -> None:
+    user = User(
+        id=1,
+        email="a@b.com",
+        password_hash="hashed",
+        display_name="Ada",
+        daily_calorie_goal=2000,
+        daily_protein_goal_g=150,
+        daily_carbs_goal_g=200,
+        daily_fat_goal_g=65,
+    )
+    out = user_out(user)
+    assert out.id == 1
+    assert out.email == "a@b.com"
+    assert out.display_name == "Ada"
+    assert out.daily_calorie_goal == 2000
+    assert out.daily_protein_goal_g == 150
+    assert out.daily_carbs_goal_g == 200
+    assert out.daily_fat_goal_g == 65
+    assert not hasattr(out, "password_hash")
+
+
+def test_entry_out_maps_fields_and_computed_macros() -> None:
+    entry = FoodEntry(
+        id=7,
+        user_id=1,
+        name="Banana",
+        brand="Chiquita",
+        barcode="123",
+        grams=120,
+        calories_per_100g=89,
+        protein_per_100g=1.1,
+        carbs_per_100g=22.8,
+        fat_per_100g=0.3,
+        consumed_at=date(2026, 8, 1),
+        created_at=datetime(2026, 8, 1, 12, 0, tzinfo=UTC),
+    )
+    out = entry_out(entry)
+    assert out.id == 7
+    assert out.name == "Banana"
+    assert out.brand == "Chiquita"
+    assert out.barcode == "123"
+    assert out.grams == 120
+    assert out.calories == 106.8
+    assert out.protein_g == 1.32
+    assert out.carbs_g == 27.36
+    assert out.fat_g == 0.36
+    assert out.consumed_at == date(2026, 8, 1)
