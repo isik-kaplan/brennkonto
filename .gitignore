@@ -1,0 +1,22 @@
+.claude/
+
+# env
+.env
+
+# python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# node
+node_modules/
+frontend/dist/
+frontend/coverage/
+
+# runtime data
+backend/data/
+backend/static/
+*.sqlite3
