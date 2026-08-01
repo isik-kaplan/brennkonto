@@ -13,8 +13,8 @@ export function register(email: string, password: string, displayName: string) {
   return api.post<User>('/auth/register', { email, password, display_name: displayName })
 }
 
-export function login(email: string, password: string) {
-  return api.post<User>('/auth/login', { email, password })
+export function login(identifier: string, password: string) {
+  return api.post<User>('/auth/login', { identifier, password })
 }
 
 export function logout() {

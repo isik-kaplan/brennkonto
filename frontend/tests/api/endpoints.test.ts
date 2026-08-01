@@ -29,9 +29,9 @@ describe('auth endpoints', () => {
     })
   })
 
-  it('login posts email/password', () => {
+  it('login posts identifier/password', () => {
     endpoints.login('a@b.com', 'secret')
-    expect(api.post).toHaveBeenCalledWith('/auth/login', { email: 'a@b.com', password: 'secret' })
+    expect(api.post).toHaveBeenCalledWith('/auth/login', { identifier: 'a@b.com', password: 'secret' })
   })
 
   it('logout posts with no body', () => {

@@ -8,6 +8,7 @@ def test_user_out_maps_all_fields() -> None:
     user = User(
         id=1,
         email="a@b.com",
+        username="ada",
         password_hash="hashed",
         display_name="Ada",
         daily_calorie_goal=2000,
@@ -18,6 +19,7 @@ def test_user_out_maps_all_fields() -> None:
     out = user_out(user)
     assert out.id == 1
     assert out.email == "a@b.com"
+    assert out.username == "ada"
     assert out.display_name == "Ada"
     assert out.daily_calorie_goal == 2000
     assert out.daily_protein_goal_g == 150

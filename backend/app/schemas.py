@@ -10,12 +10,15 @@ class RegisterRequest(msgspec.Struct):
 
 
 class LoginRequest(msgspec.Struct):
-    email: str
+    # Matched against either User.email or User.username - see controllers/auth.py.
+    identifier: str
     password: str
 
 
 class UpdateProfileRequest(msgspec.Struct):
     display_name: str
+    username: str | None = None
+    email: str | None = None
 
 
 class UpdateGoalsRequest(msgspec.Struct):
@@ -33,6 +36,7 @@ class ChangePasswordRequest(msgspec.Struct):
 class UserOut(msgspec.Struct):
     id: int
     email: str
+    username: str | None
     display_name: str
     daily_calorie_goal: int
     daily_protein_goal_g: int

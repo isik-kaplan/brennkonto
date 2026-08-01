@@ -6,6 +6,7 @@ def user_out(user: User) -> UserOut:
     return UserOut(
         id=user.id,
         email=user.email,
+        username=user.username,
         display_name=user.display_name,
         daily_calorie_goal=user.daily_calorie_goal,
         daily_protein_goal_g=user.daily_protein_goal_g,

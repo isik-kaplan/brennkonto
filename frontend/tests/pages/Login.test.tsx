@@ -34,7 +34,7 @@ describe('Login', () => {
     const user = userEvent.setup()
     const { login } = renderLogin(vi.fn().mockResolvedValue(undefined))
 
-    await user.type(screen.getByLabelText('Email'), 'demo@brennkonto.local')
+    await user.type(screen.getByLabelText('Email / Username'), 'demo@brennkonto.local')
     await user.type(screen.getByLabelText('Password'), 'hunter22')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
@@ -46,7 +46,7 @@ describe('Login', () => {
     const user = userEvent.setup()
     renderLogin(vi.fn().mockRejectedValue(new ApiError('Invalid email or password.', 401)))
 
-    await user.type(screen.getByLabelText('Email'), 'demo@brennkonto.local')
+    await user.type(screen.getByLabelText('Email / Username'), 'demo@brennkonto.local')
     await user.type(screen.getByLabelText('Password'), 'wrong')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
@@ -57,7 +57,7 @@ describe('Login', () => {
     const user = userEvent.setup()
     renderLogin(vi.fn().mockRejectedValue(new Error('network down')))
 
-    await user.type(screen.getByLabelText('Email'), 'demo@brennkonto.local')
+    await user.type(screen.getByLabelText('Email / Username'), 'demo@brennkonto.local')
     await user.type(screen.getByLabelText('Password'), 'wrong')
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 

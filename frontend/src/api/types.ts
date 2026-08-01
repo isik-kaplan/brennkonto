@@ -1,6 +1,7 @@
 export interface User {
   id: number
   email: string
+  username: string | null
   display_name: string
   daily_calorie_goal: number
   daily_protein_goal_g: number

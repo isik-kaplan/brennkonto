@@ -16,6 +16,7 @@ const today = toISODate(new Date())
 const user: User = {
   id: 1,
   email: 'demo@brennkonto.local',
+  username: null,
   display_name: 'Demo',
   daily_calorie_goal: 2000,
   daily_protein_goal_g: 150,

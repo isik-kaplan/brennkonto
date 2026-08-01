@@ -8,7 +8,7 @@ import type { User } from '../api/types'
 interface AuthContextValue {
   user: User | null
   isLoading: boolean
-  login: (email: string, password: string) => Promise<void>
+  login: (identifier: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
   setUser: (user: User) => void
@@ -32,8 +32,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  const login = useCallback(async (email: string, password: string) => {
-    setUser(await endpoints.login(email, password))
+  const login = useCallback(async (identifier: string, password: string) => {
+    setUser(await endpoints.login(identifier, password))
   }, [])
 
   const register = useCallback(async (email: string, password: string, displayName: string) => {

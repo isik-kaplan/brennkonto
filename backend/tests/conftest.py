@@ -9,6 +9,7 @@ from litestar.testing import AsyncTestClient
 # Must run before any `app.*` module is imported (app.config builds `settings` at import time),
 # so this sits at conftest module level rather than inside a fixture.
 os.environ.setdefault("SECRET_KEY", "test-secret-key-not-for-production")
+os.environ.setdefault("REGISTRATION_ENABLED", "True")
 os.environ.setdefault("DATABASE_PATH", str(Path(__file__).parent / "test.sqlite3"))
 os.environ.setdefault("SESSION_COOKIE_SECURE", "False")
 os.environ.setdefault("OFF_USER_AGENT", "Brennkonto-Test/0.1")

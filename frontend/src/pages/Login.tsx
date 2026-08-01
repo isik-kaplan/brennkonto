@@ -10,7 +10,7 @@ import { useAuth } from '../hooks/useAuth'
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
-  const { formState, handleFormStateEvent } = useFormState({ email: '', password: '' })
+  const { formState, handleFormStateEvent } = useFormState({ identifier: '', password: '' })
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -19,7 +19,7 @@ export default function Login() {
     setError(null)
     setIsSubmitting(true)
     try {
-      await login(formState.email, formState.password)
+      await login(formState.identifier, formState.password)
       navigate('/')
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
@@ -42,15 +42,15 @@ export default function Login() {
 
         <form className="form" onSubmit={handleSubmit}>
           <div className="field">
-            <label htmlFor="email">Email</label>
+            <label htmlFor="identifier">Email / Username</label>
             <input
-              id="email"
+              id="identifier"
               className="input"
-              type="email"
+              type="text"
               required
-              autoComplete="email"
-              value={formState.email}
-              onChange={handleFormStateEvent('email')}
+              autoComplete="username"
+              value={formState.identifier}
+              onChange={handleFormStateEvent('identifier')}
             />
           </div>
           <div className="field">

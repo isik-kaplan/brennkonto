@@ -6,6 +6,7 @@ async def test_register_creates_a_user_and_starts_a_session(client) -> None:
     assert response.status_code == 201
     body = response.json()
     assert body["email"] == "a@b.com"
+    assert body["username"] is None
     assert body["display_name"] == "Ada"
     assert body["daily_calorie_goal"] == 2000
     assert "password" not in body
@@ -26,16 +27,40 @@ async def test_register_rejects_a_duplicate_email(client) -> None:
     assert "already exists" in second.json()["detail"]
 
 
-async def test_login_with_correct_credentials(client) -> None:
+async def test_register_rejects_when_registration_is_disabled(client, monkeypatch) -> None:
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "REGISTRATION_ENABLED", False)
+    response = await client.post(
+        "/api/auth/register",
+        json={"email": "a@b.com", "password": "correcthorsebattery", "display_name": "Ada"},
+    )
+    assert response.status_code == 404
+
+
+async def test_login_with_email(client) -> None:
     await client.post(
         "/api/auth/register",
         json={"email": "a@b.com", "password": "correcthorsebattery", "display_name": "Ada"},
     )
     await client.post("/api/auth/logout")
 
-    response = await client.post("/api/auth/login", json={"email": "a@b.com", "password": "correcthorsebattery"})
+    response = await client.post("/api/auth/login", json={"identifier": "a@b.com", "password": "correcthorsebattery"})
     assert response.status_code == 201
     assert response.json()["email"] == "a@b.com"
+
+
+async def test_login_with_username(client) -> None:
+    await client.post(
+        "/api/auth/register",
+        json={"email": "a@b.com", "password": "correcthorsebattery", "display_name": "Ada"},
+    )
+    await client.patch("/api/account/profile", json={"display_name": "Ada", "username": "ada"})
+    await client.post("/api/auth/logout")
+
+    response = await client.post("/api/auth/login", json={"identifier": "ada", "password": "correcthorsebattery"})
+    assert response.status_code == 201
+    assert response.json()["username"] == "ada"
 
 
 async def test_login_with_wrong_password(client) -> None:
@@ -43,12 +68,12 @@ async def test_login_with_wrong_password(client) -> None:
         "/api/auth/register",
         json={"email": "a@b.com", "password": "correcthorsebattery", "display_name": "Ada"},
     )
-    response = await client.post("/api/auth/login", json={"email": "a@b.com", "password": "wrong"})
+    response = await client.post("/api/auth/login", json={"identifier": "a@b.com", "password": "wrong"})
     assert response.status_code == 401
 
 
-async def test_login_with_unknown_email(client) -> None:
-    response = await client.post("/api/auth/login", json={"email": "nobody@b.com", "password": "wrong"})
+async def test_login_with_unknown_identifier(client) -> None:
+    response = await client.post("/api/auth/login", json={"identifier": "nobody@b.com", "password": "wrong"})
     assert response.status_code == 401
 
 

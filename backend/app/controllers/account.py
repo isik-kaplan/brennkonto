@@ -1,5 +1,6 @@
 from litestar import Request, Router, patch, post
-from litestar.exceptions import NotAuthorizedException
+from litestar.exceptions import NotAuthorizedException, PermissionDeniedException
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import hash_password, verify_password
@@ -19,6 +20,19 @@ async def _load_current_user(db_session: AsyncSession, request: Request) -> User
 async def update_profile(data: UpdateProfileRequest, request: Request, db_session: AsyncSession) -> UserOut:
     user = await _load_current_user(db_session, request)
     user.display_name = data.display_name
+
+    if data.username is not None and data.username != user.username:
+        conflict = await db_session.scalar(select(User).where(User.username == data.username))
+        if conflict is not None:
+            raise PermissionDeniedException("That username is already taken.")
+        user.username = data.username
+
+    if data.email is not None and data.email != user.email:
+        conflict = await db_session.scalar(select(User).where(User.email == data.email))
+        if conflict is not None:
+            raise PermissionDeniedException("An account with this email already exists.")
+        user.email = data.email
+
     await db_session.commit()
     return user_out(user)
 
