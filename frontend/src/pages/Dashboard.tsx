@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+
 import { Link } from 'react-router-dom'
 
 import { deleteEntry, fetchDailyStats } from '../api/endpoints'

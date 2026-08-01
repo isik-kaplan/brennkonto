@@ -1,15 +1,16 @@
 import type { ReactNode } from 'react'
+
 import { Navigate, Route, Routes } from 'react-router-dom'
 
-import { useAuth } from './hooks/useAuth'
 import AppShell from './components/AppShell'
+import { useAuth } from './hooks/useAuth'
+import Dashboard from './pages/Dashboard'
+import History from './pages/History'
+import LogFood from './pages/LogFood'
 import Login from './pages/Login'
 import Register from './pages/Register'
-import Dashboard from './pages/Dashboard'
-import LogFood from './pages/LogFood'
-import History from './pages/History'
-import Trends from './pages/Trends'
 import Settings from './pages/Settings'
+import Trends from './pages/Trends'
 
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth()

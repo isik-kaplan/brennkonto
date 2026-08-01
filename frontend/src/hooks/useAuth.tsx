@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import * as endpoints from '../api/endpoints'
 import { ApiError } from '../api/client'
+import * as endpoints from '../api/endpoints'
 import type { User } from '../api/types'
 
 interface AuthContextValue {

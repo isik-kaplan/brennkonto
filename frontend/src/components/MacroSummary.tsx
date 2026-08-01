@@ -34,7 +34,12 @@ export default function MacroSummary({
 
   return (
     <div className="calorie-ring">
-      <svg className="calorie-ring__svg" viewBox="0 0 100 100" role="img" aria-label={`${Math.round(calories)} of ${calorieGoal} calories logged`}>
+      <svg
+        className="calorie-ring__svg"
+        viewBox="0 0 100 100"
+        role="img"
+        aria-label={`${Math.round(calories)} of ${calorieGoal} calories logged`}
+      >
         <circle className="calorie-ring__track" cx="50" cy="50" r={RADIUS} />
         <circle
           className={isOver ? 'calorie-ring__value is-over' : 'calorie-ring__value'}

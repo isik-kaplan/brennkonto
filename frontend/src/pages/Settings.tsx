@@ -106,9 +106,10 @@ function GoalsCard({ goals, onSaved }: { goals: Goals; onSaved: (user: User) => 
   const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
 
   function handleNumberChange(key: keyof Goals) {
+    // A native number input's .value is always a valid numeric string or "" - never text that
+    // would make Number(...) produce NaN - so there's no invalid case to guard here.
     return (event: ChangeEvent<HTMLInputElement>) => {
-      const value = Number(event.target.value)
-      setFormState((prev) => ({ ...prev, [key]: Number.isNaN(value) ? 0 : value }))
+      setFormState((prev) => ({ ...prev, [key]: Number(event.target.value) }))
     }
   }
 
