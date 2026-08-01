@@ -2,21 +2,26 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
-import { deleteEntry, fetchDailyStats } from '../api/endpoints'
-import type { DailyStats, FoodEntry } from '../api/types'
+import { createMealGroup, deleteEntry, deleteMealGroup, fetchDailyStats, fetchMealGroups } from '../api/endpoints'
+import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
 import EntryList from '../components/EntryList'
 import { addDays, displayDate, toISODate } from '../lib/dates'
 
 export default function History() {
   const [date, setDate] = useState(toISODate(new Date()))
   const [stats, setStats] = useState<DailyStats | null>(null)
+  const [groups, setGroups] = useState<MealGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [groupName, setGroupName] = useState('')
 
   const load = useCallback(async () => {
     setIsLoading(true)
     try {
-      setStats(await fetchDailyStats(date))
+      const [dailyStats, mealGroups] = await Promise.all([fetchDailyStats(date), fetchMealGroups()])
+      setStats(dailyStats)
+      setGroups(mealGroups)
     } finally {
       setIsLoading(false)
     }
@@ -34,6 +39,30 @@ export default function History() {
     } finally {
       setDeletingId(null)
     }
+  }
+
+  function toggleSelect(entry: FoodEntry) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(entry.id)) {
+        next.delete(entry.id)
+      } else {
+        next.add(entry.id)
+      }
+      return next
+    })
+  }
+
+  async function handleGroupSelected() {
+    await createMealGroup([...selectedIds], groupName.trim() || null)
+    setSelectedIds(new Set())
+    setGroupName('')
+    await load()
+  }
+
+  async function handleUngroup(groupId: string) {
+    await deleteMealGroup(groupId)
+    await load()
   }
 
   const isToday = date === toISODate(new Date())
@@ -96,11 +125,30 @@ export default function History() {
             </div>
           </div>
 
+          {selectedIds.size >= 2 && (
+            <div className="form__row" style={{ marginBottom: 'var(--space-md)' }}>
+              <input
+                className="input"
+                type="text"
+                placeholder="Meal name (optional)"
+                value={groupName}
+                onChange={(event) => setGroupName(event.target.value)}
+              />
+              <button type="button" className="btn btn--primary" onClick={handleGroupSelected}>
+                Group selected
+              </button>
+            </div>
+          )}
           <EntryList
             entries={stats.entries}
             onDelete={handleDelete}
             deletingId={deletingId}
             emptyMessage={isToday ? 'Nothing logged yet today.' : 'Nothing was logged on this day.'}
+            groups={groups}
+            selectable
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onUngroup={handleUngroup}
           />
 
           {isToday && stats.entries.length === 0 && (

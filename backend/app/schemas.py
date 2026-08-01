@@ -1,3 +1,4 @@
+import uuid
 from datetime import date, datetime
 
 import msgspec
@@ -97,6 +98,23 @@ class FoodEntryOut(msgspec.Struct):
     fat_g: float
     consumed_at: date
     created_at: datetime
+    meal_group_id: uuid.UUID | None
+
+
+class MealGroupOut(msgspec.Struct):
+    id: uuid.UUID
+    name: str | None
+    entry_ids: list[int]
+
+
+class CreateMealGroupRequest(msgspec.Struct):
+    entry_ids: list[int]
+    name: str | None = None
+
+
+class UpdateMealGroupRequest(msgspec.Struct):
+    entry_ids: list[int] | None = None
+    name: str | None = None
 
 
 class DailyStatsOut(msgspec.Struct):

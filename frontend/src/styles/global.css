@@ -739,6 +739,27 @@ svg {
   gap: var(--space-2xs);
 }
 
+.meal-group {
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius);
+  padding: 0 var(--space-md);
+  margin: var(--space-sm) 0;
+}
+
+.meal-group__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-sm) 0;
+  font-weight: 600;
+  font-size: var(--text-sm);
+  color: var(--color-neutral);
+}
+
+.meal-group .entry-row:last-child {
+  border-bottom: none;
+}
+
 .empty-state {
   padding: var(--space-2xl) var(--space-md);
   text-align: center;

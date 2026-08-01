@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { FoodEntry } from '../../src/api/types'
+import type { FoodEntry, MealGroup } from '../../src/api/types'
 import EntryList from '../../src/components/EntryList'
 
 function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
@@ -25,6 +25,7 @@ function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
     fat_g: 0.36,
     consumed_at: '2026-08-01',
     created_at: '2026-08-01T12:00:00Z',
+    meal_group_id: null,
     ...overrides,
   }
 }
@@ -74,5 +75,59 @@ describe('EntryList', () => {
     const button = screen.getByRole('button', { name: 'Delete Banana' })
     expect(button).toBeDisabled()
     expect(button.querySelector('.btn__spinner')).toBeInTheDocument()
+  })
+
+  it('renders a checkbox per entry in selectable mode and calls onToggleSelect', async () => {
+    const user = userEvent.setup()
+    const onToggleSelect = vi.fn()
+    const entry = makeEntry()
+    render(
+      <EntryList
+        entries={[entry]}
+        onDelete={vi.fn()}
+        selectable
+        selectedIds={new Set()}
+        onToggleSelect={onToggleSelect}
+      />
+    )
+    const checkbox = screen.getByRole('checkbox', { name: 'Select Banana' })
+    expect(checkbox).not.toBeChecked()
+    await user.click(checkbox)
+    expect(onToggleSelect).toHaveBeenCalledWith(entry)
+  })
+
+  it('leaves the checkbox unchecked when no selectedIds set is provided', () => {
+    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} selectable />)
+    expect(screen.getByRole('checkbox', { name: 'Select Banana' })).not.toBeChecked()
+  })
+
+  it('checks the box for an already-selected entry', () => {
+    const entry = makeEntry()
+    render(<EntryList entries={[entry]} onDelete={vi.fn()} selectable selectedIds={new Set([entry.id])} />)
+    expect(screen.getByRole('checkbox', { name: 'Select Banana' })).toBeChecked()
+  })
+
+  it('clusters entries sharing a meal_group_id under a named header with an ungroup action', async () => {
+    const user = userEvent.setup()
+    const onUngroup = vi.fn()
+    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: [1, 2] }]
+    const entries = [
+      makeEntry({ id: 1, name: 'Eggs', meal_group_id: 'g1' }),
+      makeEntry({ id: 2, name: 'Toast', meal_group_id: 'g1' }),
+    ]
+    render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} onUngroup={onUngroup} />)
+
+    expect(screen.getByText('Breakfast')).toBeInTheDocument()
+    expect(screen.getByText('Eggs')).toBeInTheDocument()
+    expect(screen.getByText('Toast')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Ungroup' }))
+    expect(onUngroup).toHaveBeenCalledWith('g1')
+  })
+
+  it('falls back to a generic "Meal" header when the group has no name or lookup', () => {
+    const entries = [makeEntry({ id: 1, meal_group_id: 'g2' })]
+    render(<EntryList entries={entries} onDelete={vi.fn()} />)
+    expect(screen.getByText('Meal')).toBeInTheDocument()
   })
 })

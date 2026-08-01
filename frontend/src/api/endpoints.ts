@@ -5,6 +5,7 @@ import type {
   FoodEntry,
   FoodSearchResult,
   GroupBy,
+  MealGroup,
   RangeStats,
   User,
 } from './types'
@@ -60,6 +61,22 @@ export function updateEntry(id: number, grams: number, consumedAt: string) {
 
 export function deleteEntry(id: number) {
   return api.delete<void>(`/entries/${id}`)
+}
+
+export function fetchMealGroups() {
+  return api.get<MealGroup[]>('/meal-groups/')
+}
+
+export function createMealGroup(entryIds: number[], name?: string | null) {
+  return api.post<MealGroup>('/meal-groups/', { entry_ids: entryIds, name })
+}
+
+export function updateMealGroup(id: string, payload: { entry_ids?: number[]; name?: string | null }) {
+  return api.patch<MealGroup>(`/meal-groups/${id}`, payload)
+}
+
+export function deleteMealGroup(id: string) {
+  return api.delete<void>(`/meal-groups/${id}`)
 }
 
 export function fetchDailyStats(date: string) {

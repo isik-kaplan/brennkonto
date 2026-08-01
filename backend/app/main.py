@@ -11,6 +11,7 @@ from app.controllers.account import account_router
 from app.controllers.auth import auth_router
 from app.controllers.entries import entries_router
 from app.controllers.foods import foods_router
+from app.controllers.meal_groups import meal_groups_router
 from app.controllers.stats import stats_router
 from app.db import create_tables, get_db_session
 
@@ -24,7 +25,15 @@ async def health() -> dict[str, str]:
 
 
 def _build_route_handlers() -> list:
-    handlers = [health, auth_router, account_router, foods_router, entries_router, stats_router]
+    handlers = [
+        health,
+        auth_router,
+        account_router,
+        foods_router,
+        entries_router,
+        meal_groups_router,
+        stats_router,
+    ]
     if STATIC_DIR.is_dir():
         # Serves the built frontend SPA and falls back to index.html for client-side routes -
         # only present once the frontend build has been copied in (see the Dockerfile).

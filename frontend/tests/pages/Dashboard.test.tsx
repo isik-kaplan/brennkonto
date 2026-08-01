@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as endpoints from '../../src/api/endpoints'
-import type { DailyStats } from '../../src/api/types'
+import type { DailyStats, MealGroup } from '../../src/api/types'
 import { toISODate } from '../../src/lib/dates'
 import Dashboard from '../../src/pages/Dashboard'
 
@@ -42,6 +42,7 @@ const stats: DailyStats = {
       fat_g: 0.36,
       consumed_at: today,
       created_at: `${today}T12:00:00Z`,
+      meal_group_id: null,
     },
   ],
 }
@@ -57,6 +58,7 @@ function renderDashboard() {
 beforeEach(() => {
   vi.mocked(endpoints.fetchDailyStats).mockReset()
   vi.mocked(endpoints.deleteEntry).mockReset()
+  vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue([])
 })
 
 describe('Dashboard', () => {
@@ -98,5 +100,63 @@ describe('Dashboard', () => {
     renderDashboard()
     await waitFor(() => expect(screen.getByText('Banana')).toBeInTheDocument())
     expect(screen.getByRole('link', { name: '+ Log food' })).toHaveAttribute('href', '/log')
+  })
+
+  it('groups two selected entries into a named meal', async () => {
+    const user = userEvent.setup()
+    const twoEntryStats: DailyStats = {
+      ...stats,
+      entries: [...stats.entries, { ...stats.entries[0], id: 2, name: 'Toast' }],
+    }
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(twoEntryStats)
+    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: 'Breakfast', entry_ids: [1, 2] })
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
+    // click twice on one to exercise the deselect branch too, before settling on the final pick
+    await user.click(screen.getByRole('checkbox', { name: 'Select Banana' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select Banana' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select Banana' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select Toast' }))
+
+    await user.type(screen.getByPlaceholderText('Meal name (optional)'), 'Breakfast')
+    await user.click(screen.getByRole('button', { name: 'Group selected' }))
+
+    expect(endpoints.createMealGroup).toHaveBeenCalledWith([1, 2], 'Breakfast')
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+  })
+
+  it('groups selected entries with no name typed', async () => {
+    const user = userEvent.setup()
+    const twoEntryStats: DailyStats = {
+      ...stats,
+      entries: [...stats.entries, { ...stats.entries[0], id: 2, name: 'Toast' }],
+    }
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(twoEntryStats)
+    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: null, entry_ids: [1, 2] })
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
+    await user.click(screen.getByRole('checkbox', { name: 'Select Banana' }))
+    await user.click(screen.getByRole('checkbox', { name: 'Select Toast' }))
+    await user.click(screen.getByRole('button', { name: 'Group selected' }))
+
+    expect(endpoints.createMealGroup).toHaveBeenCalledWith([1, 2], null)
+  })
+
+  it('ungroups a meal', async () => {
+    const user = userEvent.setup()
+    const groupedStats: DailyStats = { ...stats, entries: [{ ...stats.entries[0], meal_group_id: 'g1' }] }
+    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: [1] }]
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(groupedStats)
+    vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
+    vi.mocked(endpoints.deleteMealGroup).mockResolvedValue(undefined)
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByText('Breakfast')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Ungroup' }))
+
+    expect(endpoints.deleteMealGroup).toHaveBeenCalledWith('g1')
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 })

@@ -1,13 +1,19 @@
+import uuid as uuid_module
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String
+from sqlalchemy import Date, DateTime, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+from uuid6 import uuid7
 
 from app.db import Base
 
 
 def _utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _uuid7() -> uuid_module.UUID:
+    return uuid7()
 
 
 class User(Base):
@@ -45,6 +51,22 @@ class ProductCache(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
+class MealGroup(Base):
+    """A user-defined cluster of food entries logged together as one meal - purely a display/
+    organizational grouping, entries survive independently of the group (see ondelete="SET NULL"
+    on FoodEntry.meal_group_id)."""
+
+    __tablename__ = "meal_groups"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
+    # Stays a plain int FK until the users/food_entries UUID migration lands - it must match
+    # users.id's column type exactly, whatever that currently is.
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+
 class FoodEntry(Base):
     """A single logged food, storing the macros per 100g at the time it was logged rather than a
     foreign key to ProductCache - so a later re-fetch of the same barcode (or the product being
@@ -70,6 +92,13 @@ class FoodEntry(Base):
     fat_per_100g: Mapped[float]
     consumed_at: Mapped[date] = mapped_column(Date, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # Plain scalar FK, not a relationship() - group membership is always read/written via direct
+    # queries in the meal-groups controller rather than ORM collection traversal, which sidesteps
+    # async lazy-loading pitfalls on a relationship that's frequently untouched (e.g. an entry
+    # with no group at all).
+    meal_group_id: Mapped[uuid_module.UUID | None] = mapped_column(
+        ForeignKey("meal_groups.id", ondelete="SET NULL"), nullable=True
+    )
 
     user: Mapped[User] = relationship(back_populates="entries")
 

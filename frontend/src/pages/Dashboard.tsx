@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
-import { deleteEntry, fetchDailyStats } from '../api/endpoints'
-import type { DailyStats, FoodEntry } from '../api/types'
+import { createMealGroup, deleteEntry, deleteMealGroup, fetchDailyStats, fetchMealGroups } from '../api/endpoints'
+import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
 import EntryList from '../components/EntryList'
 import MacroSummary from '../components/MacroSummary'
 import { displayDateLong, toISODate } from '../lib/dates'
@@ -11,13 +11,18 @@ import { displayDateLong, toISODate } from '../lib/dates'
 export default function Dashboard() {
   const today = toISODate(new Date())
   const [stats, setStats] = useState<DailyStats | null>(null)
+  const [groups, setGroups] = useState<MealGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [groupName, setGroupName] = useState('')
 
   const load = useCallback(async () => {
     setIsLoading(true)
     try {
-      setStats(await fetchDailyStats(today))
+      const [dailyStats, mealGroups] = await Promise.all([fetchDailyStats(today), fetchMealGroups()])
+      setStats(dailyStats)
+      setGroups(mealGroups)
     } finally {
       setIsLoading(false)
     }
@@ -35,6 +40,30 @@ export default function Dashboard() {
     } finally {
       setDeletingId(null)
     }
+  }
+
+  function toggleSelect(entry: FoodEntry) {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (next.has(entry.id)) {
+        next.delete(entry.id)
+      } else {
+        next.add(entry.id)
+      }
+      return next
+    })
+  }
+
+  async function handleGroupSelected() {
+    await createMealGroup([...selectedIds], groupName.trim() || null)
+    setSelectedIds(new Set())
+    setGroupName('')
+    await load()
+  }
+
+  async function handleUngroup(groupId: string) {
+    await deleteMealGroup(groupId)
+    await load()
   }
 
   return (
@@ -68,11 +97,30 @@ export default function Dashboard() {
 
           <div className="card">
             <h2 className="card__title">Logged today</h2>
+            {selectedIds.size >= 2 && (
+              <div className="form__row" style={{ marginBottom: 'var(--space-md)' }}>
+                <input
+                  className="input"
+                  type="text"
+                  placeholder="Meal name (optional)"
+                  value={groupName}
+                  onChange={(event) => setGroupName(event.target.value)}
+                />
+                <button type="button" className="btn btn--primary" onClick={handleGroupSelected}>
+                  Group selected
+                </button>
+              </div>
+            )}
             <EntryList
               entries={stats.entries}
               onDelete={handleDelete}
               deletingId={deletingId}
               emptyMessage="Nothing logged yet today - start with the button above."
+              groups={groups}
+              selectable
+              selectedIds={selectedIds}
+              onToggleSelect={toggleSelect}
+              onUngroup={handleUngroup}
             />
           </div>
         </>

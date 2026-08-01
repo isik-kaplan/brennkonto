@@ -51,12 +51,22 @@ def _add_product_cache_unit_columns_if_missing(connection: Connection) -> None:
         connection.execute(text("ALTER TABLE product_cache ADD COLUMN unit_to_grams FLOAT DEFAULT 1.0"))
 
 
+def _add_meal_group_id_column_if_missing(connection: Connection) -> None:
+    columns = {column["name"] for column in inspect(connection).get_columns("food_entries")}
+    if "meal_group_id" not in columns:
+        # No inline REFERENCES/index - the app doesn't turn on SQLite foreign-key enforcement, so
+        # this only needs to satisfy the ORM's own FK/cascade handling, matching the minimal-ALTER
+        # pattern used everywhere else in this file.
+        connection.execute(text("ALTER TABLE food_entries ADD COLUMN meal_group_id CHAR(32)"))
+
+
 async def create_tables() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.run_sync(_add_username_column_if_missing)
         await connection.run_sync(_add_unit_input_columns_if_missing)
         await connection.run_sync(_add_product_cache_unit_columns_if_missing)
+        await connection.run_sync(_add_meal_group_id_column_if_missing)
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:

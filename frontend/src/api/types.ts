@@ -40,6 +40,13 @@ export interface FoodEntry {
   fat_g: number
   consumed_at: string
   created_at: string
+  meal_group_id: string | null
+}
+
+export interface MealGroup {
+  id: string
+  name: string | null
+  entry_ids: number[]
 }
 
 export interface CreateFoodEntryPayload {

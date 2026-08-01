@@ -1,5 +1,5 @@
-from app.models import FoodEntry, User
-from app.schemas import FoodEntryOut, UserOut
+from app.models import FoodEntry, MealGroup, User
+from app.schemas import FoodEntryOut, MealGroupOut, UserOut
 
 
 def user_out(user: User) -> UserOut:
@@ -35,4 +35,9 @@ def entry_out(entry: FoodEntry) -> FoodEntryOut:
         fat_g=entry.fat_g,
         consumed_at=entry.consumed_at,
         created_at=entry.created_at,
+        meal_group_id=entry.meal_group_id,
     )
+
+
+def meal_group_out(group: MealGroup, entry_ids: list[int]) -> MealGroupOut:
+    return MealGroupOut(id=group.id, name=group.name, entry_ids=entry_ids)

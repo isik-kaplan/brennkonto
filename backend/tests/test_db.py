@@ -86,6 +86,39 @@ async def test_create_tables_adds_unit_input_columns_to_a_pre_existing_food_entr
     assert row.unit_to_grams == 1.0
 
 
+async def test_create_tables_adds_meal_group_id_column_to_a_pre_existing_food_entries_table() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        # Simulates a deployment from before meal grouping existed.
+        await connection.execute(text("CREATE TABLE users (id INTEGER PRIMARY KEY)"))
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE food_entries (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    grams FLOAT,
+                    input_unit VARCHAR(16) DEFAULT 'g',
+                    input_amount FLOAT,
+                    unit_to_grams FLOAT DEFAULT 1.0,
+                    calories_per_100g FLOAT,
+                    protein_per_100g FLOAT,
+                    carbs_per_100g FLOAT,
+                    fat_per_100g FLOAT,
+                    consumed_at DATE,
+                    created_at DATETIME
+                )
+                """
+            )
+        )
+
+    await create_tables()
+
+    async with engine.begin() as connection:
+        columns = await connection.run_sync(lambda conn: {c["name"] for c in inspect(conn).get_columns("food_entries")})
+    assert "meal_group_id" in columns
+
+
 async def test_create_tables_adds_unit_columns_to_a_pre_existing_product_cache_table() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)

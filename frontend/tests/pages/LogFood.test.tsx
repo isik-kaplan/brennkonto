@@ -309,6 +309,7 @@ describe('LogFood save form', () => {
       fat_g: 11.66,
       consumed_at: '2026-08-01',
       created_at: '2026-08-01T12:00:00Z',
+      meal_group_id: null,
     })
     renderLogFood()
     await user.type(screen.getByLabelText('Barcode'), '4')
@@ -379,6 +380,7 @@ describe('LogFood save form', () => {
       fat_g: 30.9,
       consumed_at: '2026-08-01',
       created_at: '2026-08-01T12:00:00Z',
+      meal_group_id: null,
     })
     await openSaveForm(user)
 

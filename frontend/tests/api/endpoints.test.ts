@@ -110,6 +110,28 @@ describe('entry endpoints', () => {
   })
 })
 
+describe('meal group endpoints', () => {
+  it('fetchMealGroups gets the meal-groups list', () => {
+    endpoints.fetchMealGroups()
+    expect(api.get).toHaveBeenCalledWith('/meal-groups/')
+  })
+
+  it('createMealGroup posts entry_ids and name', () => {
+    endpoints.createMealGroup([1, 2], 'Breakfast')
+    expect(api.post).toHaveBeenCalledWith('/meal-groups/', { entry_ids: [1, 2], name: 'Breakfast' })
+  })
+
+  it('updateMealGroup patches the group by id', () => {
+    endpoints.updateMealGroup('g1', { name: 'Brunch' })
+    expect(api.patch).toHaveBeenCalledWith('/meal-groups/g1', { name: 'Brunch' })
+  })
+
+  it('deleteMealGroup deletes the group by id', () => {
+    endpoints.deleteMealGroup('g1')
+    expect(api.delete).toHaveBeenCalledWith('/meal-groups/g1')
+  })
+})
+
 describe('stats endpoints', () => {
   it('fetchDailyStats gets the daily endpoint with a date query', () => {
     endpoints.fetchDailyStats('2026-08-01')
