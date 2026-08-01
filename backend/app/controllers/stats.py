@@ -69,6 +69,11 @@ async def range_stats(
 ) -> RangeStatsOut:
     if start > end:
         raise ValidationException("start must be on or before end.")
+    if group_by not in ("day", "week", "month"):
+        # Validated here rather than left to _bucket_key alone - that check only fires once per
+        # entry, so an empty range (valid dates, no logged days yet) would silently accept a
+        # bogus group_by and return an empty result instead of rejecting the request.
+        raise ValidationException(f"Unsupported group_by: {group_by!r}. Use 'day', 'week', or 'month'.")
 
     entries = list(
         await db_session.scalars(

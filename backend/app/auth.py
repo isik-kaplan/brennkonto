@@ -1,7 +1,7 @@
 import hashlib
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError
+from argon2.exceptions import InvalidHashError, VerifyMismatchError
 from litestar.connection import ASGIConnection
 from litestar.middleware.session.client_side import CookieBackendConfig
 from litestar.security.session_auth import SessionAuth
@@ -19,9 +19,12 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
+    # InvalidHashError - a corrupted or foreign-format hash - is a ValueError, not a subclass of
+    # VerifyMismatchError's Argon2Error hierarchy, so it needs its own except clause; both cases
+    # mean "this password doesn't verify", not a 500.
     try:
         return _hasher.verify(password_hash, password)
-    except VerifyMismatchError:
+    except (VerifyMismatchError, InvalidHashError):
         return False
 
 

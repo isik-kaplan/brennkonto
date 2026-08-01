@@ -32,16 +32,16 @@ def _build_route_handlers() -> list:
     return handlers
 
 
-cors_config = (
-    CORSConfig(allow_origins=settings.CORS_ALLOW_ORIGINS, allow_credentials=True)
-    if settings.CORS_ALLOW_ORIGINS
-    else None
-)
+def _build_cors_config() -> CORSConfig | None:
+    if not settings.CORS_ALLOW_ORIGINS:
+        return None
+    return CORSConfig(allow_origins=settings.CORS_ALLOW_ORIGINS, allow_credentials=True)
+
 
 app = Litestar(
     route_handlers=_build_route_handlers(),
     dependencies={"db_session": Provide(get_db_session)},
     on_app_init=[session_auth.on_app_init],
     on_startup=[create_tables],
-    cors_config=cors_config,
+    cors_config=_build_cors_config(),
 )
