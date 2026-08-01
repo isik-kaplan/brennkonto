@@ -32,6 +32,23 @@ function shortLabel(periodStart: string, groupBy: GroupBy): string {
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
+function daysBetween(start: string, end: string): number {
+  const MS_PER_DAY = 24 * 60 * 60 * 1000
+  return Math.round((fromISODate(end).getTime() - fromISODate(start).getTime()) / MS_PER_DAY) + 1
+}
+
+function previousPeriod(start: string, end: string): { start: string; end: string } {
+  const length = daysBetween(start, end)
+  const previousEnd = addDays(start, -1)
+  return { start: addDays(previousEnd, -(length - 1)), end: previousEnd }
+}
+
+function formatDelta(current: number, previous: number): string {
+  const delta = Math.round(current - previous)
+  if (delta === 0) return 'Same as the previous period'
+  return `${delta > 0 ? '+' : ''}${delta} vs the previous period`
+}
+
 export default function Trends() {
   const { user } = useAuth()
   const [preset, setPreset] = useState<Preset>('7')
@@ -39,13 +56,20 @@ export default function Trends() {
   const [customStart, setCustomStart] = useState(addDays(toISODate(new Date()), -6))
   const [customEnd, setCustomEnd] = useState(toISODate(new Date()))
   const [stats, setStats] = useState<RangeStats | null>(null)
+  const [previousStats, setPreviousStats] = useState<RangeStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
   const load = useCallback(async () => {
     const { start, end } = presetRange(preset, customStart, customEnd)
+    const previous = previousPeriod(start, end)
     setIsLoading(true)
     try {
-      setStats(await fetchRangeStats(start, end, groupBy))
+      const [current, before] = await Promise.all([
+        fetchRangeStats(start, end, groupBy),
+        fetchRangeStats(previous.start, previous.end, groupBy),
+      ])
+      setStats(current)
+      setPreviousStats(before)
     } finally {
       setIsLoading(false)
     }
@@ -134,6 +158,11 @@ export default function Trends() {
             <div className="stat-tile">
               <div className="stat-tile__label">Avg calories / logged day</div>
               <div className="stat-tile__value">{Math.round(stats.average_calories)}</div>
+              {previousStats && previousStats.days_logged > 0 && (
+                <div className="stat-tile__delta">
+                  {formatDelta(stats.average_calories, previousStats.average_calories)}
+                </div>
+              )}
             </div>
             <div className="stat-tile">
               <div className="stat-tile__label">Avg protein</div>
@@ -157,6 +186,7 @@ export default function Trends() {
                 value: point.calories,
               }))}
               goal={user?.daily_calorie_goal}
+              sparse={stats.days_logged < Math.min(3, stats.days_in_range)}
             />
             <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
               Logged {stats.days_logged} of {stats.days_in_range} days in range. Dashed line marks your daily goal.
