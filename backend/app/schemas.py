@@ -1,0 +1,120 @@
+from datetime import date, datetime
+
+import msgspec
+
+
+class RegisterRequest(msgspec.Struct):
+    email: str
+    password: str
+    display_name: str
+
+
+class LoginRequest(msgspec.Struct):
+    email: str
+    password: str
+
+
+class UpdateProfileRequest(msgspec.Struct):
+    display_name: str
+
+
+class UpdateGoalsRequest(msgspec.Struct):
+    daily_calorie_goal: int
+    daily_protein_goal_g: int
+    daily_carbs_goal_g: int
+    daily_fat_goal_g: int
+
+
+class ChangePasswordRequest(msgspec.Struct):
+    current_password: str
+    new_password: str
+
+
+class UserOut(msgspec.Struct):
+    id: int
+    email: str
+    display_name: str
+    daily_calorie_goal: int
+    daily_protein_goal_g: int
+    daily_carbs_goal_g: int
+    daily_fat_goal_g: int
+
+
+class FoodSearchResultOut(msgspec.Struct):
+    barcode: str
+    name: str
+    brand: str | None
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+
+
+class CreateFoodEntryRequest(msgspec.Struct):
+    name: str
+    grams: float
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    consumed_at: date
+    brand: str | None = None
+    barcode: str | None = None
+
+
+class UpdateFoodEntryRequest(msgspec.Struct):
+    grams: float
+    consumed_at: date
+
+
+class FoodEntryOut(msgspec.Struct):
+    id: int
+    name: str
+    brand: str | None
+    barcode: str | None
+    grams: float
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    consumed_at: date
+    created_at: datetime
+
+
+class DailyStatsOut(msgspec.Struct):
+    date: date
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    calorie_goal: int
+    protein_goal_g: int
+    carbs_goal_g: int
+    fat_goal_g: int
+    entries: list[FoodEntryOut]
+
+
+class RangeStatsPointOut(msgspec.Struct):
+    period_label: str
+    period_start: date
+    period_end: date
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    days_logged: int
+
+
+class RangeStatsOut(msgspec.Struct):
+    points: list[RangeStatsPointOut]
+    average_calories: float
+    average_protein_g: float
+    average_carbs_g: float
+    average_fat_g: float
+    total_calories: float
+    days_in_range: int
+    days_logged: int

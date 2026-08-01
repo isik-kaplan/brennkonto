@@ -1,0 +1,57 @@
+[project]
+name = "brennkonto"
+version = "0.1.0"
+description = "Calorie and macro tracker backed by Open Food Facts."
+authors = [
+  { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }
+]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "litestar[standard,cryptography]>=2.13",
+  "sqlalchemy[asyncio]>=2.0",
+  "aiosqlite>=0.20",
+  "httpx>=0.27",
+  "argon2-cffi>=23.1",
+  "python-dotenv>=1.0",
+  "isik @ git+https://github.com/isik-kaplan/isik.git",
+]
+
+[tool.uv]
+dev-dependencies = [
+  "pytest>=8.0.0",
+  "pytest-asyncio>=0.24.0",
+  "ruff>=0.9.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.ruff]
+line-length = 120
+fix = true
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008: Litestar's own idiom for query/header parameter metadata is a `Parameter(...)` call as
+# the argument default (see app/controllers/*.py) - not the mutable-default footgun B008 guards
+# against elsewhere.
+ignore = ["B008"]
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
