@@ -1,0 +1,15 @@
+.git
+.claude
+.env
+*.md
+!backend/README.md
+backend/.venv
+backend/data
+backend/static
+backend/__pycache__
+backend/.pytest_cache
+backend/.ruff_cache
+backend/.coverage
+frontend/node_modules
+frontend/dist
+frontend/coverage
