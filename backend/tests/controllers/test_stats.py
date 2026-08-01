@@ -82,9 +82,9 @@ async def test_daily_stats_with_no_entries(authed_client) -> None:
 
 
 async def test_daily_stats_sums_same_day_entries(authed_client) -> None:
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01"})
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01"})
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-02"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-02T12:00:00Z"})
 
     response = await authed_client.get("/api/stats/daily?date=2026-08-01")
     body = response.json()
@@ -117,8 +117,8 @@ async def test_range_stats_with_no_entries(authed_client) -> None:
 
 
 async def test_range_stats_groups_by_day(authed_client) -> None:
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01"})
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-03"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-03T12:00:00Z"})
 
     response = await authed_client.get("/api/stats/range?start=2026-08-01&end=2026-08-07&group_by=day")
     body = response.json()
@@ -128,8 +128,8 @@ async def test_range_stats_groups_by_day(authed_client) -> None:
 
 
 async def test_range_stats_groups_by_week(authed_client) -> None:
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01"})
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-02"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-02T12:00:00Z"})
 
     response = await authed_client.get("/api/stats/range?start=2026-07-27&end=2026-08-09&group_by=week")
     body = response.json()
@@ -139,8 +139,8 @@ async def test_range_stats_groups_by_week(authed_client) -> None:
 
 
 async def test_range_stats_groups_by_month(authed_client) -> None:
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01"})
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-31"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-31T12:00:00Z"})
 
     response = await authed_client.get("/api/stats/range?start=2026-08-01&end=2026-08-31&group_by=month")
     body = response.json()
@@ -149,7 +149,7 @@ async def test_range_stats_groups_by_month(authed_client) -> None:
 
 
 async def test_range_stats_average_ignores_days_with_no_entries(authed_client) -> None:
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
 
     # a 7-day range with only 1 logged day - average should be over the 1 logged day, not the
     # full 7 days, so a partial week doesn't read as "you're eating far too little."

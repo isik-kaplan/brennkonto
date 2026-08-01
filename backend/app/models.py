@@ -1,7 +1,7 @@
 import uuid as uuid_module
-from datetime import UTC, date, datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, Uuid
+from sqlalchemy import DateTime, ForeignKey, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid6 import uuid7
 
@@ -19,7 +19,7 @@ def _uuid7() -> uuid_module.UUID:
 class User(Base):
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     username: Mapped[str | None] = mapped_column(String(120), unique=True, index=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
@@ -29,6 +29,9 @@ class User(Base):
     daily_carbs_goal_g: Mapped[int] = mapped_column(default=200)
     daily_fat_goal_g: Mapped[int] = mapped_column(default=65)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    # Nullable, no default, no onupdate= - stays null until a controller explicitly sets it on a
+    # real edit; auto-touching it would also fire during the id-migration's own row copy.
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     entries: Mapped[list["FoodEntry"]] = relationship(back_populates="user", cascade="all, delete-orphan")
 
@@ -59,9 +62,7 @@ class MealGroup(Base):
     __tablename__ = "meal_groups"
 
     id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
-    # Stays a plain int FK until the users/food_entries UUID migration lands - it must match
-    # users.id's column type exactly, whatever that currently is.
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
@@ -74,8 +75,8 @@ class FoodEntry(Base):
 
     __tablename__ = "food_entries"
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
+    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(64), nullable=True)
@@ -90,8 +91,12 @@ class FoodEntry(Base):
     protein_per_100g: Mapped[float]
     carbs_per_100g: Mapped[float]
     fat_per_100g: Mapped[float]
-    consumed_at: Mapped[date] = mapped_column(Date, index=True)
+    # Full timestamp (not just a date) so a logged food can carry a time of day, editable
+    # retroactively - distinct from created_at, which is a fixed audit timestamp of the row's
+    # insertion, never editable.
+    consumed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     # Plain scalar FK, not a relationship() - group membership is always read/written via direct
     # queries in the meal-groups controller rather than ORM collection traversal, which sidesteps
     # async lazy-loading pitfalls on a relationship that's frequently untouched (e.g. an entry

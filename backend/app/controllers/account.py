@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import hash_password, verify_password
-from app.models import User
+from app.models import User, _utcnow
 from app.schemas import ChangePasswordRequest, UpdateGoalsRequest, UpdateProfileRequest, UserOut
 from app.serializers import user_out
 
@@ -33,6 +33,7 @@ async def update_profile(data: UpdateProfileRequest, request: Request, db_sessio
             raise PermissionDeniedException("An account with this email already exists.")
         user.email = data.email
 
+    user.updated_at = _utcnow()
     await db_session.commit()
     return user_out(user)
 
@@ -44,6 +45,7 @@ async def update_goals(data: UpdateGoalsRequest, request: Request, db_session: A
     user.daily_protein_goal_g = data.daily_protein_goal_g
     user.daily_carbs_goal_g = data.daily_carbs_goal_g
     user.daily_fat_goal_g = data.daily_fat_goal_g
+    user.updated_at = _utcnow()
     await db_session.commit()
     return user_out(user)
 
@@ -54,6 +56,7 @@ async def change_password(data: ChangePasswordRequest, request: Request, db_sess
     if not verify_password(data.current_password, user.password_hash):
         raise NotAuthorizedException("Current password is incorrect.")
     user.password_hash = hash_password(data.new_password)
+    user.updated_at = _utcnow()
     await db_session.commit()
     return user_out(user)
 

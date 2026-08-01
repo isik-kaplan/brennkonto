@@ -1,3 +1,5 @@
+NOT_FOUND_ID = "11111111-1111-1111-1111-111111111111"
+
 ENTRY_PAYLOAD = {
     "name": "Banana",
     "grams": 120,
@@ -5,11 +7,11 @@ ENTRY_PAYLOAD = {
     "protein_per_100g": 1.1,
     "carbs_per_100g": 22.8,
     "fat_per_100g": 0.3,
-    "consumed_at": "2026-08-01",
+    "consumed_at": "2026-08-01T12:00:00Z",
 }
 
 
-async def _create_entry(authed_client, **overrides) -> int:
+async def _create_entry(authed_client, **overrides) -> str:
     response = await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, **overrides})
     return response.json()["id"]
 
@@ -121,9 +123,7 @@ async def test_update_meal_group_clears_all_membership(authed_client) -> None:
 
 
 async def test_update_meal_group_not_found(authed_client) -> None:
-    response = await authed_client.patch(
-        "/api/meal-groups/11111111-1111-1111-1111-111111111111", json={"name": "Brunch"}
-    )
+    response = await authed_client.patch(f"/api/meal-groups/{NOT_FOUND_ID}", json={"name": "Brunch"})
     assert response.status_code == 404
 
 
@@ -144,7 +144,7 @@ async def test_update_meal_group_rejects_a_new_entry_not_owned_by_the_user(authe
     created = await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry_a]})
     group_id = created.json()["id"]
 
-    response = await authed_client.patch(f"/api/meal-groups/{group_id}", json={"entry_ids": [999999]})
+    response = await authed_client.patch(f"/api/meal-groups/{group_id}", json={"entry_ids": [NOT_FOUND_ID]})
     assert response.status_code == 404
 
 
@@ -163,7 +163,7 @@ async def test_delete_meal_group_ungroups_without_deleting_entries(authed_client
 
 
 async def test_delete_meal_group_not_found(authed_client) -> None:
-    response = await authed_client.delete("/api/meal-groups/11111111-1111-1111-1111-111111111111")
+    response = await authed_client.delete(f"/api/meal-groups/{NOT_FOUND_ID}")
     assert response.status_code == 404
 
 

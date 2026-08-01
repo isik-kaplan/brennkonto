@@ -1,4 +1,5 @@
 import hashlib
+from uuid import UUID
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
@@ -32,8 +33,15 @@ async def retrieve_user_handler(session: dict, connection: ASGIConnection) -> Us
     user_id = session.get("user_id")
     if user_id is None:
         return None
+    # The session cookie round-trips through JSON, which has no UUID type - a UUID stored via
+    # set_session() comes back here as a plain string. A malformed/stale value (e.g. an int id
+    # from a pre-UUID-migration session cookie) must resolve to "not logged in", not a 500.
+    try:
+        parsed_id = UUID(user_id) if isinstance(user_id, str) else UUID(str(user_id))
+    except (ValueError, AttributeError, TypeError):
+        return None
     async with session_factory() as db_session:
-        return await db_session.get(User, user_id)
+        return await db_session.get(User, parsed_id)
 
 
 # CookieBackendConfig encrypts the session with AES, which requires a 16/24/32-byte key -

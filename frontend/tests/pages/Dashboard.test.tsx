@@ -24,7 +24,7 @@ const stats: DailyStats = {
   fat_goal_g: 65,
   entries: [
     {
-      id: 1,
+      id: '1',
       name: 'Banana',
       brand: null,
       barcode: null,
@@ -40,8 +40,9 @@ const stats: DailyStats = {
       protein_g: 1.32,
       carbs_g: 27.36,
       fat_g: 0.36,
-      consumed_at: today,
+      consumed_at: `${today}T12:00:00`,
       created_at: `${today}T12:00:00Z`,
+      updated_at: null,
       meal_group_id: null,
     },
   ],
@@ -59,6 +60,7 @@ beforeEach(() => {
   vi.mocked(endpoints.fetchDailyStats).mockReset()
   vi.mocked(endpoints.deleteEntry).mockReset()
   vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue([])
+  vi.mocked(endpoints.updateEntry).mockReset()
 })
 
 describe('Dashboard', () => {
@@ -91,7 +93,21 @@ describe('Dashboard', () => {
     await waitFor(() => expect(screen.getByText('Banana')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Delete Banana' }))
 
-    expect(endpoints.deleteEntry).toHaveBeenCalledWith(1)
+    expect(endpoints.deleteEntry).toHaveBeenCalledWith('1')
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+  })
+
+  it('edits when an entry was logged and reloads', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(stats)
+    vi.mocked(endpoints.updateEntry).mockResolvedValue(stats.entries[0])
+    renderDashboard()
+
+    await waitFor(() => expect(screen.getByText('Banana')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(endpoints.updateEntry).toHaveBeenCalledWith('1', 120, expect.any(String))
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 
@@ -106,10 +122,10 @@ describe('Dashboard', () => {
     const user = userEvent.setup()
     const twoEntryStats: DailyStats = {
       ...stats,
-      entries: [...stats.entries, { ...stats.entries[0], id: 2, name: 'Toast' }],
+      entries: [...stats.entries, { ...stats.entries[0], id: '2', name: 'Toast' }],
     }
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(twoEntryStats)
-    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: 'Breakfast', entry_ids: [1, 2] })
+    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] })
     renderDashboard()
 
     await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
@@ -122,7 +138,7 @@ describe('Dashboard', () => {
     await user.type(screen.getByPlaceholderText('Meal name (optional)'), 'Breakfast')
     await user.click(screen.getByRole('button', { name: 'Group selected' }))
 
-    expect(endpoints.createMealGroup).toHaveBeenCalledWith([1, 2], 'Breakfast')
+    expect(endpoints.createMealGroup).toHaveBeenCalledWith(['1', '2'], 'Breakfast')
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 
@@ -130,10 +146,10 @@ describe('Dashboard', () => {
     const user = userEvent.setup()
     const twoEntryStats: DailyStats = {
       ...stats,
-      entries: [...stats.entries, { ...stats.entries[0], id: 2, name: 'Toast' }],
+      entries: [...stats.entries, { ...stats.entries[0], id: '2', name: 'Toast' }],
     }
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(twoEntryStats)
-    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: null, entry_ids: [1, 2] })
+    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: null, entry_ids: ['1', '2'] })
     renderDashboard()
 
     await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
@@ -141,13 +157,13 @@ describe('Dashboard', () => {
     await user.click(screen.getByRole('checkbox', { name: 'Select Toast' }))
     await user.click(screen.getByRole('button', { name: 'Group selected' }))
 
-    expect(endpoints.createMealGroup).toHaveBeenCalledWith([1, 2], null)
+    expect(endpoints.createMealGroup).toHaveBeenCalledWith(['1', '2'], null)
   })
 
   it('ungroups a meal', async () => {
     const user = userEvent.setup()
     const groupedStats: DailyStats = { ...stats, entries: [{ ...stats.entries[0], meal_group_id: 'g1' }] }
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: [1] }]
+    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(groupedStats)
     vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
     vi.mocked(endpoints.deleteMealGroup).mockResolvedValue(undefined)

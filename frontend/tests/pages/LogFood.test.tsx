@@ -291,7 +291,7 @@ describe('LogFood save form', () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.lookupBarcode).mockResolvedValue(eggs)
     vi.mocked(endpoints.createEntry).mockResolvedValue({
-      id: 1,
+      id: '1',
       name: 'Eggs',
       brand: null,
       barcode: '4',
@@ -309,6 +309,7 @@ describe('LogFood save form', () => {
       fat_g: 11.66,
       consumed_at: '2026-08-01',
       created_at: '2026-08-01T12:00:00Z',
+      updated_at: null,
       meal_group_id: null,
     })
     renderLogFood()
@@ -359,10 +360,19 @@ describe('LogFood save form', () => {
     expect(dateInput.value).toBe('2026-01-01')
   })
 
+  it('allows changing the consumed-at time', async () => {
+    const user = userEvent.setup()
+    await openSaveForm(user)
+
+    const timeInput = screen.getByLabelText('Time') as HTMLInputElement
+    fireEvent.change(timeInput, { target: { value: '08:30' } })
+    expect(timeInput.value).toBe('08:30')
+  })
+
   it('saves the entry and shows a success banner with a link back to today', async () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.createEntry).mockResolvedValue({
-      id: 1,
+      id: '1',
       name: nutella.name,
       brand: nutella.brand,
       barcode: nutella.barcode,
@@ -380,6 +390,7 @@ describe('LogFood save form', () => {
       fat_g: 30.9,
       consumed_at: '2026-08-01',
       created_at: '2026-08-01T12:00:00Z',
+      updated_at: null,
       meal_group_id: null,
     })
     await openSaveForm(user)

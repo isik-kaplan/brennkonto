@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -7,7 +7,7 @@ import EntryList from '../../src/components/EntryList'
 
 function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
   return {
-    id: 1,
+    id: '1',
     name: 'Banana',
     brand: 'Chiquita',
     barcode: '123',
@@ -23,8 +23,9 @@ function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
     protein_g: 1.32,
     carbs_g: 27.36,
     fat_g: 0.36,
-    consumed_at: '2026-08-01',
+    consumed_at: '2026-08-01T12:00:00',
     created_at: '2026-08-01T12:00:00Z',
+    updated_at: null,
     meal_group_id: null,
     ...overrides,
   }
@@ -110,10 +111,10 @@ describe('EntryList', () => {
   it('clusters entries sharing a meal_group_id under a named header with an ungroup action', async () => {
     const user = userEvent.setup()
     const onUngroup = vi.fn()
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: [1, 2] }]
+    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
     const entries = [
-      makeEntry({ id: 1, name: 'Eggs', meal_group_id: 'g1' }),
-      makeEntry({ id: 2, name: 'Toast', meal_group_id: 'g1' }),
+      makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
+      makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
     ]
     render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} onUngroup={onUngroup} />)
 
@@ -126,8 +127,43 @@ describe('EntryList', () => {
   })
 
   it('falls back to a generic "Meal" header when the group has no name or lookup', () => {
-    const entries = [makeEntry({ id: 1, meal_group_id: 'g2' })]
+    const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
     render(<EntryList entries={entries} onDelete={vi.fn()} />)
     expect(screen.getByText('Meal')).toBeInTheDocument()
+  })
+
+  it('does not show an Edit button when onUpdateConsumedAt is not provided', () => {
+    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} />)
+    expect(screen.queryByRole('button', { name: 'Edit when Banana was logged' })).not.toBeInTheDocument()
+  })
+
+  it('edits the consumed-at date and time, pre-filled from the entry', async () => {
+    const user = userEvent.setup()
+    const onUpdateConsumedAt = vi.fn()
+    const entry = makeEntry({ consumed_at: '2026-08-01T09:15:00' })
+    render(<EntryList entries={[entry]} onDelete={vi.fn()} onUpdateConsumedAt={onUpdateConsumedAt} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    expect(screen.getByLabelText('Date')).toHaveValue('2026-08-01')
+    expect(screen.getByLabelText('Time')).toHaveValue('09:15')
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-08-02' } })
+    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '13:30' } })
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onUpdateConsumedAt).toHaveBeenCalledWith(entry, '2026-08-02T13:30:00')
+    expect(screen.queryByLabelText('Date')).not.toBeInTheDocument()
+  })
+
+  it('cancels editing without calling onUpdateConsumedAt', async () => {
+    const user = userEvent.setup()
+    const onUpdateConsumedAt = vi.fn()
+    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} onUpdateConsumedAt={onUpdateConsumedAt} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(onUpdateConsumedAt).not.toHaveBeenCalled()
+    expect(screen.queryByLabelText('Date')).not.toBeInTheDocument()
   })
 })

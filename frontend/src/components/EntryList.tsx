@@ -1,15 +1,19 @@
+import { useState } from 'react'
+
 import type { FoodEntry, MealGroup } from '../api/types'
+import { combineDateAndTime, splitDateAndTime } from '../lib/dates'
 
 interface EntryListProps {
   entries: FoodEntry[]
   onDelete: (entry: FoodEntry) => void
-  deletingId?: number | null
+  deletingId?: string | null
   emptyMessage?: string
   groups?: MealGroup[]
   selectable?: boolean
-  selectedIds?: Set<number>
+  selectedIds?: Set<string>
   onToggleSelect?: (entry: FoodEntry) => void
   onUngroup?: (groupId: string) => void
+  onUpdateConsumedAt?: (entry: FoodEntry, consumedAt: string) => void
 }
 
 interface Cluster {
@@ -49,12 +53,67 @@ export default function EntryList({
   selectedIds,
   onToggleSelect,
   onUngroup,
+  onUpdateConsumedAt,
 }: EntryListProps) {
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editDate, setEditDate] = useState('')
+  const [editTime, setEditTime] = useState('')
+
   if (entries.length === 0) {
     return <div className="empty-state">{emptyMessage ?? 'Nothing logged yet.'}</div>
   }
 
+  function startEditing(entry: FoodEntry) {
+    const { date, time } = splitDateAndTime(entry.consumed_at)
+    setEditingId(entry.id)
+    setEditDate(date)
+    setEditTime(time)
+  }
+
+  function saveEdit(entry: FoodEntry) {
+    onUpdateConsumedAt?.(entry, combineDateAndTime(editDate, editTime))
+    setEditingId(null)
+  }
+
   function renderRow(entry: FoodEntry) {
+    if (editingId === entry.id) {
+      return (
+        <li key={entry.id} className="entry-row entry-row--editing">
+          <div className="entry-row__name">{entry.name}</div>
+          <div className="form__row">
+            <div className="field">
+              <label htmlFor={`edit-date-${entry.id}`}>Date</label>
+              <input
+                id={`edit-date-${entry.id}`}
+                className="input"
+                type="date"
+                value={editDate}
+                onChange={(event) => setEditDate(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={`edit-time-${entry.id}`}>Time</label>
+              <input
+                id={`edit-time-${entry.id}`}
+                className="input"
+                type="time"
+                value={editTime}
+                onChange={(event) => setEditTime(event.target.value)}
+              />
+            </div>
+          </div>
+          <div className="entry-row__actions">
+            <button type="button" className="btn btn--primary btn--small" onClick={() => saveEdit(entry)}>
+              Save
+            </button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => setEditingId(null)}>
+              Cancel
+            </button>
+          </div>
+        </li>
+      )
+    }
+
     return (
       <li key={entry.id} className="entry-row">
         {selectable && (
@@ -81,6 +140,16 @@ export default function EntryList({
         </div>
         <div className="entry-row__calories numeral">{Math.round(entry.calories)} kcal</div>
         <div className="entry-row__actions">
+          {onUpdateConsumedAt && (
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => startEditing(entry)}
+              aria-label={`Edit when ${entry.name} was logged`}
+            >
+              Edit
+            </button>
+          )}
           <button
             type="button"
             className="btn btn--ghost btn--small"

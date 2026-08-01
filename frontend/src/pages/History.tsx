@@ -2,7 +2,14 @@ import { useCallback, useEffect, useState } from 'react'
 
 import { Link } from 'react-router-dom'
 
-import { createMealGroup, deleteEntry, deleteMealGroup, fetchDailyStats, fetchMealGroups } from '../api/endpoints'
+import {
+  createMealGroup,
+  deleteEntry,
+  deleteMealGroup,
+  fetchDailyStats,
+  fetchMealGroups,
+  updateEntry,
+} from '../api/endpoints'
 import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
 import EntryList from '../components/EntryList'
 import { addDays, displayDate, toISODate } from '../lib/dates'
@@ -12,8 +19,8 @@ export default function History() {
   const [stats, setStats] = useState<DailyStats | null>(null)
   const [groups, setGroups] = useState<MealGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [groupName, setGroupName] = useState('')
 
   const load = useCallback(async () => {
@@ -62,6 +69,11 @@ export default function History() {
 
   async function handleUngroup(groupId: string) {
     await deleteMealGroup(groupId)
+    await load()
+  }
+
+  async function handleUpdateConsumedAt(entry: FoodEntry, consumedAt: string) {
+    await updateEntry(entry.id, entry.grams, consumedAt)
     await load()
   }
 
@@ -149,6 +161,7 @@ export default function History() {
             selectedIds={selectedIds}
             onToggleSelect={toggleSelect}
             onUngroup={handleUngroup}
+            onUpdateConsumedAt={handleUpdateConsumedAt}
           />
 
           {isToday && stats.entries.length === 0 && (

@@ -1,7 +1,16 @@
 import { fc, test } from '@fast-check/vitest'
 import { describe, expect, it } from 'vitest'
 
-import { addDays, displayDate, displayDateLong, fromISODate, toISODate } from '../../src/lib/dates'
+import {
+  addDays,
+  combineDateAndTime,
+  displayDate,
+  displayDateLong,
+  fromISODate,
+  splitDateAndTime,
+  toISODate,
+  toISOTime,
+} from '../../src/lib/dates'
 
 const dateArb = fc.date({ min: new Date(2000, 0, 1), max: new Date(2099, 11, 31), noInvalidDate: true })
 
@@ -56,5 +65,36 @@ describe('displayDate / displayDateLong', () => {
 
   it('formats a long display date', () => {
     expect(displayDateLong('2026-08-01')).toBe('Saturday, 1 August 2026')
+  })
+})
+
+describe('toISOTime', () => {
+  it('zero-pads single-digit hours and minutes', () => {
+    expect(toISOTime(new Date(2026, 0, 5, 9, 5))).toBe('09:05')
+  })
+
+  it('formats an afternoon time', () => {
+    expect(toISOTime(new Date(2026, 0, 5, 13, 45))).toBe('13:45')
+  })
+})
+
+describe('combineDateAndTime / splitDateAndTime', () => {
+  it('combines a date and time into an ISO-shaped string', () => {
+    expect(combineDateAndTime('2026-08-01', '13:45')).toBe('2026-08-01T13:45:00')
+  })
+
+  it('splits an ISO datetime string back into date and time', () => {
+    expect(splitDateAndTime('2026-08-01T13:45:00')).toEqual({ date: '2026-08-01', time: '13:45' })
+  })
+
+  it('splits a datetime string carrying seconds/microseconds', () => {
+    expect(splitDateAndTime('2026-08-01T13:45:00.000000')).toEqual({ date: '2026-08-01', time: '13:45' })
+  })
+
+  it('round-trips combine -> split', () => {
+    expect(splitDateAndTime(combineDateAndTime('2026-08-01', '09:30'))).toEqual({
+      date: '2026-08-01',
+      time: '09:30',
+    })
   })
 })

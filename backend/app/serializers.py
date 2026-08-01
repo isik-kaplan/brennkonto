@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from app.models import FoodEntry, MealGroup, User
 from app.schemas import FoodEntryOut, MealGroupOut, UserOut
 
@@ -12,6 +14,7 @@ def user_out(user: User) -> UserOut:
         daily_protein_goal_g=user.daily_protein_goal_g,
         daily_carbs_goal_g=user.daily_carbs_goal_g,
         daily_fat_goal_g=user.daily_fat_goal_g,
+        updated_at=user.updated_at,
     )
 
 
@@ -35,9 +38,10 @@ def entry_out(entry: FoodEntry) -> FoodEntryOut:
         fat_g=entry.fat_g,
         consumed_at=entry.consumed_at,
         created_at=entry.created_at,
+        updated_at=entry.updated_at,
         meal_group_id=entry.meal_group_id,
     )
 
 
-def meal_group_out(group: MealGroup, entry_ids: list[int]) -> MealGroupOut:
+def meal_group_out(group: MealGroup, entry_ids: list[UUID]) -> MealGroupOut:
     return MealGroupOut(id=group.id, name=group.name, entry_ids=entry_ids)

@@ -100,12 +100,12 @@ describe('entry endpoints', () => {
   })
 
   it('updateEntry patches grams and consumed_at by id', () => {
-    endpoints.updateEntry(5, 150, '2026-08-02')
+    endpoints.updateEntry('5', 150, '2026-08-02')
     expect(api.patch).toHaveBeenCalledWith('/entries/5', { grams: 150, consumed_at: '2026-08-02' })
   })
 
   it('deleteEntry deletes by id', () => {
-    endpoints.deleteEntry(5)
+    endpoints.deleteEntry('5')
     expect(api.delete).toHaveBeenCalledWith('/entries/5')
   })
 })
@@ -117,8 +117,8 @@ describe('meal group endpoints', () => {
   })
 
   it('createMealGroup posts entry_ids and name', () => {
-    endpoints.createMealGroup([1, 2], 'Breakfast')
-    expect(api.post).toHaveBeenCalledWith('/meal-groups/', { entry_ids: [1, 2], name: 'Breakfast' })
+    endpoints.createMealGroup(['1', '2'], 'Breakfast')
+    expect(api.post).toHaveBeenCalledWith('/meal-groups/', { entry_ids: ['1', '2'], name: 'Breakfast' })
   })
 
   it('updateMealGroup patches the group by id', () => {

@@ -14,7 +14,7 @@ vi.mock('../../src/hooks/useAuth')
 const today = toISODate(new Date())
 
 const user: User = {
-  id: 1,
+  id: '1',
   email: 'demo@brennkonto.local',
   username: null,
   display_name: 'Demo',
@@ -22,6 +22,7 @@ const user: User = {
   daily_protein_goal_g: 150,
   daily_carbs_goal_g: 200,
   daily_fat_goal_g: 65,
+  updated_at: null,
 }
 
 function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {

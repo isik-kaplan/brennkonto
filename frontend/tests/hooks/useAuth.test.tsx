@@ -11,7 +11,7 @@ import { AuthProvider, useAuth } from '../../src/hooks/useAuth'
 vi.mock('../../src/api/endpoints')
 
 const user: User = {
-  id: 1,
+  id: '1',
   email: 'demo@brennkonto.local',
   username: null,
   display_name: 'Demo',
@@ -19,6 +19,7 @@ const user: User = {
   daily_protein_goal_g: 150,
   daily_carbs_goal_g: 200,
   daily_fat_goal_g: 65,
+  updated_at: null,
 }
 
 function wrapper({ children }: { children: ReactNode }) {

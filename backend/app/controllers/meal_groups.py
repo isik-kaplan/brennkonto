@@ -17,7 +17,7 @@ async def _get_owned_group(db_session: AsyncSession, request: Request, group_id:
     return group
 
 
-async def _get_owned_entries(db_session: AsyncSession, request: Request, entry_ids: list[int]) -> list[FoodEntry]:
+async def _get_owned_entries(db_session: AsyncSession, request: Request, entry_ids: list[UUID]) -> list[FoodEntry]:
     if not entry_ids:
         return []
     entries = list(
@@ -30,7 +30,7 @@ async def _get_owned_entries(db_session: AsyncSession, request: Request, entry_i
     return entries
 
 
-async def _member_entry_ids(db_session: AsyncSession, group_id: UUID) -> list[int]:
+async def _member_entry_ids(db_session: AsyncSession, group_id: UUID) -> list[UUID]:
     return list(await db_session.scalars(select(FoodEntry.id).where(FoodEntry.meal_group_id == group_id)))
 
 

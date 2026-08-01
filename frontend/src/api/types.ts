@@ -1,5 +1,5 @@
 export interface User {
-  id: number
+  id: string
   email: string
   username: string | null
   display_name: string
@@ -7,6 +7,7 @@ export interface User {
   daily_protein_goal_g: number
   daily_carbs_goal_g: number
   daily_fat_goal_g: number
+  updated_at: string | null
 }
 
 export interface FoodSearchResult {
@@ -22,7 +23,7 @@ export interface FoodSearchResult {
 }
 
 export interface FoodEntry {
-  id: number
+  id: string
   name: string
   brand: string | null
   barcode: string | null
@@ -40,13 +41,14 @@ export interface FoodEntry {
   fat_g: number
   consumed_at: string
   created_at: string
+  updated_at: string | null
   meal_group_id: string | null
 }
 
 export interface MealGroup {
   id: string
   name: string | null
-  entry_ids: number[]
+  entry_ids: string[]
 }
 
 export interface CreateFoodEntryPayload {

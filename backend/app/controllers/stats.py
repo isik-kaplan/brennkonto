@@ -1,5 +1,5 @@
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 from litestar import Request, Router, get
 from litestar.exceptions import ValidationException
@@ -37,10 +37,18 @@ def _bucket_label(key: date, group_by: str) -> tuple[str, date, date]:
 async def daily_stats(
     db_session: AsyncSession, request: Request, entry_date: date = Parameter(query="date")
 ) -> DailyStatsOut:
+    # consumed_at is a full timestamp now, not a plain date - "which day" means a half-open range
+    # rather than exact equality.
+    day_start = datetime.combine(entry_date, datetime.min.time(), tzinfo=UTC)
+    day_end = day_start + timedelta(days=1)
     entries = list(
         await db_session.scalars(
             select(FoodEntry)
-            .where(FoodEntry.user_id == request.user.id, FoodEntry.consumed_at == entry_date)
+            .where(
+                FoodEntry.user_id == request.user.id,
+                FoodEntry.consumed_at >= day_start,
+                FoodEntry.consumed_at < day_end,
+            )
             .order_by(FoodEntry.created_at)
         )
     )
@@ -75,12 +83,16 @@ async def range_stats(
         # bogus group_by and return an empty result instead of rejecting the request.
         raise ValidationException(f"Unsupported group_by: {group_by!r}. Use 'day', 'week', or 'month'.")
 
+    # consumed_at is a full timestamp - `<= end` would silently exclude anything logged after
+    # midnight on the end day, so the upper bound is exclusive at the start of the following day.
+    range_start = datetime.combine(start, datetime.min.time(), tzinfo=UTC)
+    range_end = datetime.combine(end + timedelta(days=1), datetime.min.time(), tzinfo=UTC)
     entries = list(
         await db_session.scalars(
             select(FoodEntry).where(
                 FoodEntry.user_id == request.user.id,
-                FoodEntry.consumed_at >= start,
-                FoodEntry.consumed_at <= end,
+                FoodEntry.consumed_at >= range_start,
+                FoodEntry.consumed_at < range_end,
             )
         )
     )
@@ -88,8 +100,9 @@ async def range_stats(
     buckets: dict[date, list[FoodEntry]] = defaultdict(list)
     logged_days: set[date] = set()
     for entry in entries:
-        buckets[_bucket_key(entry.consumed_at, group_by)].append(entry)
-        logged_days.add(entry.consumed_at)
+        entry_date = entry.consumed_at.date()
+        buckets[_bucket_key(entry_date, group_by)].append(entry)
+        logged_days.add(entry_date)
 
     points = []
     for key in sorted(buckets):
@@ -104,7 +117,7 @@ async def range_stats(
                 protein_g=sum(entry.protein_g for entry in bucket_entries),
                 carbs_g=sum(entry.carbs_g for entry in bucket_entries),
                 fat_g=sum(entry.fat_g for entry in bucket_entries),
-                days_logged=len({entry.consumed_at for entry in bucket_entries}),
+                days_logged=len({entry.consumed_at.date() for entry in bucket_entries}),
             )
         )
 

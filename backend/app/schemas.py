@@ -35,7 +35,7 @@ class ChangePasswordRequest(msgspec.Struct):
 
 
 class UserOut(msgspec.Struct):
-    id: int
+    id: uuid.UUID
     email: str
     username: str | None
     display_name: str
@@ -43,6 +43,7 @@ class UserOut(msgspec.Struct):
     daily_protein_goal_g: int
     daily_carbs_goal_g: int
     daily_fat_goal_g: int
+    updated_at: datetime | None
 
 
 class FoodSearchResultOut(msgspec.Struct):
@@ -64,7 +65,7 @@ class CreateFoodEntryRequest(msgspec.Struct):
     protein_per_100g: float
     carbs_per_100g: float
     fat_per_100g: float
-    consumed_at: date
+    consumed_at: datetime
     brand: str | None = None
     barcode: str | None = None
     input_unit: str = "g"
@@ -76,11 +77,11 @@ class CreateFoodEntryRequest(msgspec.Struct):
 
 class UpdateFoodEntryRequest(msgspec.Struct):
     grams: float
-    consumed_at: date
+    consumed_at: datetime
 
 
 class FoodEntryOut(msgspec.Struct):
-    id: int
+    id: uuid.UUID
     name: str
     brand: str | None
     barcode: str | None
@@ -96,24 +97,25 @@ class FoodEntryOut(msgspec.Struct):
     protein_g: float
     carbs_g: float
     fat_g: float
-    consumed_at: date
+    consumed_at: datetime
     created_at: datetime
+    updated_at: datetime | None
     meal_group_id: uuid.UUID | None
 
 
 class MealGroupOut(msgspec.Struct):
     id: uuid.UUID
     name: str | None
-    entry_ids: list[int]
+    entry_ids: list[uuid.UUID]
 
 
 class CreateMealGroupRequest(msgspec.Struct):
-    entry_ids: list[int]
+    entry_ids: list[uuid.UUID]
     name: str | None = None
 
 
 class UpdateMealGroupRequest(msgspec.Struct):
-    entry_ids: list[int] | None = None
+    entry_ids: list[uuid.UUID] | None = None
     name: str | None = None
 
 

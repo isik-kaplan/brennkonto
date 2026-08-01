@@ -1,3 +1,5 @@
+NOT_FOUND_ID = "11111111-1111-1111-1111-111111111111"
+
 ENTRY_PAYLOAD = {
     "name": "Banana",
     "grams": 120,
@@ -5,7 +7,7 @@ ENTRY_PAYLOAD = {
     "protein_per_100g": 1.1,
     "carbs_per_100g": 22.8,
     "fat_per_100g": 0.3,
-    "consumed_at": "2026-08-01",
+    "consumed_at": "2026-08-01T12:00:00Z",
 }
 
 
@@ -44,13 +46,20 @@ async def test_create_entry_requires_authentication(client) -> None:
 
 async def test_list_entries_for_a_date(authed_client) -> None:
     await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
-    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-02"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-02T12:00:00Z"})
 
     response = await authed_client.get("/api/entries/?date=2026-08-01")
     assert response.status_code == 200
     body = response.json()
     assert len(body) == 1
-    assert body[0]["consumed_at"] == "2026-08-01"
+    assert body[0]["consumed_at"].startswith("2026-08-01")
+
+
+async def test_list_entries_includes_entries_logged_late_in_the_day(authed_client) -> None:
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T23:59:00Z"})
+
+    response = await authed_client.get("/api/entries/?date=2026-08-01")
+    assert len(response.json()) == 1
 
 
 async def test_list_entries_only_returns_the_current_users_entries(authed_client) -> None:
@@ -70,16 +79,21 @@ async def test_update_entry(authed_client) -> None:
     created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
     entry_id = created.json()["id"]
 
-    response = await authed_client.patch(f"/api/entries/{entry_id}", json={"grams": 200, "consumed_at": "2026-08-03"})
+    response = await authed_client.patch(
+        f"/api/entries/{entry_id}", json={"grams": 200, "consumed_at": "2026-08-03T09:30:00Z"}
+    )
     assert response.status_code == 200
     body = response.json()
     assert body["grams"] == 200
-    assert body["consumed_at"] == "2026-08-03"
+    assert body["consumed_at"].startswith("2026-08-03T09:30")
     assert body["calories"] == 89 * 2
+    assert body["updated_at"] is not None
 
 
 async def test_update_entry_not_found(authed_client) -> None:
-    response = await authed_client.patch("/api/entries/999999", json={"grams": 200, "consumed_at": "2026-08-03"})
+    response = await authed_client.patch(
+        f"/api/entries/{NOT_FOUND_ID}", json={"grams": 200, "consumed_at": "2026-08-03T09:30:00Z"}
+    )
     assert response.status_code == 404
 
 
@@ -90,7 +104,9 @@ async def test_update_entry_owned_by_another_user_is_not_found(authed_client) ->
     await authed_client.post(
         "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
     )
-    response = await authed_client.patch(f"/api/entries/{entry_id}", json={"grams": 1, "consumed_at": "2026-08-01"})
+    response = await authed_client.patch(
+        f"/api/entries/{entry_id}", json={"grams": 1, "consumed_at": "2026-08-01T12:00:00Z"}
+    )
     assert response.status_code == 404
 
 
@@ -106,7 +122,7 @@ async def test_delete_entry(authed_client) -> None:
 
 
 async def test_delete_entry_not_found(authed_client) -> None:
-    response = await authed_client.delete("/api/entries/999999")
+    response = await authed_client.delete(f"/api/entries/{NOT_FOUND_ID}")
     assert response.status_code == 404
 
 

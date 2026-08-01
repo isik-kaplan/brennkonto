@@ -55,11 +55,11 @@ export function createEntry(payload: CreateFoodEntryPayload) {
   return api.post<FoodEntry>('/entries/', payload)
 }
 
-export function updateEntry(id: number, grams: number, consumedAt: string) {
+export function updateEntry(id: string, grams: number, consumedAt: string) {
   return api.patch<FoodEntry>(`/entries/${id}`, { grams, consumed_at: consumedAt })
 }
 
-export function deleteEntry(id: number) {
+export function deleteEntry(id: string) {
   return api.delete<void>(`/entries/${id}`)
 }
 
@@ -67,11 +67,11 @@ export function fetchMealGroups() {
   return api.get<MealGroup[]>('/meal-groups/')
 }
 
-export function createMealGroup(entryIds: number[], name?: string | null) {
+export function createMealGroup(entryIds: string[], name?: string | null) {
   return api.post<MealGroup>('/meal-groups/', { entry_ids: entryIds, name })
 }
 
-export function updateMealGroup(id: string, payload: { entry_ids?: number[]; name?: string | null }) {
+export function updateMealGroup(id: string, payload: { entry_ids?: string[]; name?: string | null }) {
   return api.patch<MealGroup>(`/meal-groups/${id}`, payload)
 }
 

@@ -6,7 +6,7 @@ import { useNavigate } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { createEntry, lookupBarcode, searchFoods } from '../api/endpoints'
 import type { FoodSearchResult } from '../api/types'
-import { toISODate } from '../lib/dates'
+import { combineDateAndTime, toISODate, toISOTime } from '../lib/dates'
 
 // The zxing barcode-decoding library is ~450kB - lazy-loaded so it only ships to people who
 // actually open the scanner, not on every visit to this page.
@@ -33,6 +33,7 @@ export default function LogFood() {
   const [unit, setUnit] = useState('g')
   const [amountInput, setAmountInput] = useState('100')
   const [consumedAt, setConsumedAt] = useState(toISODate(new Date()))
+  const [consumedTime, setConsumedTime] = useState(toISOTime(new Date()))
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [savedName, setSavedName] = useState<string | null>(null)
@@ -137,7 +138,7 @@ export default function LogFood() {
         protein_per_100g: product.protein_per_100g,
         carbs_per_100g: product.carbs_per_100g,
         fat_per_100g: product.fat_per_100g,
-        consumed_at: consumedAt,
+        consumed_at: combineDateAndTime(consumedAt, consumedTime),
       })
       setSavedName(product.name)
       setSelected(null)
@@ -304,6 +305,17 @@ export default function LogFood() {
                   required
                   value={consumedAt}
                   onChange={(event) => setConsumedAt(event.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label htmlFor="consumed_time">Time</label>
+                <input
+                  id="consumed_time"
+                  className="input"
+                  type="time"
+                  required
+                  value={consumedTime}
+                  onChange={(event) => setConsumedTime(event.target.value)}
                 />
               </div>
             </div>
