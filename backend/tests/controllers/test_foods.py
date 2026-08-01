@@ -67,6 +67,33 @@ async def test_barcode_lookup_returns_404_when_not_found(authed_client, monkeypa
     assert response.status_code == 404
 
 
+async def test_search_caches_and_returns_the_suggested_unit(authed_client, monkeypatch) -> None:
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return [
+            FoodSearchResultOut(
+                barcode="4",
+                name="Eggs",
+                brand=None,
+                calories_per_100g=155.0,
+                protein_per_100g=13.0,
+                carbs_per_100g=1.1,
+                fat_per_100g=11.0,
+                suggested_unit="count",
+                unit_to_grams=53.0,
+            )
+        ]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=eggs")
+    assert response.json()[0]["suggested_unit"] == "count"
+    assert response.json()[0]["unit_to_grams"] == 53.0
+
+    cached = await authed_client.get("/api/foods/barcode/4")
+    assert cached.json()["suggested_unit"] == "count"
+    assert cached.json()["unit_to_grams"] == 53.0
+
+
 async def test_repeated_search_updates_an_existing_cache_entry(authed_client, monkeypatch) -> None:
     call_count = 0
 

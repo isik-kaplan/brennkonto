@@ -17,6 +17,8 @@ export interface FoodSearchResult {
   protein_per_100g: number
   carbs_per_100g: number
   fat_per_100g: number
+  suggested_unit: string
+  unit_to_grams: number
 }
 
 export interface FoodEntry {
@@ -25,6 +27,9 @@ export interface FoodEntry {
   brand: string | null
   barcode: string | null
   grams: number
+  input_unit: string
+  input_amount: number
+  unit_to_grams: number
   calories_per_100g: number
   protein_per_100g: number
   carbs_per_100g: number
@@ -47,6 +52,9 @@ export interface CreateFoodEntryPayload {
   consumed_at: string
   brand?: string | null
   barcode?: string | null
+  input_unit?: string
+  input_amount?: number
+  unit_to_grams?: number
 }
 
 export interface DailyStats {

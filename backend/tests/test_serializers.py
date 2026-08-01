@@ -36,6 +36,9 @@ def test_entry_out_maps_fields_and_computed_macros() -> None:
         brand="Chiquita",
         barcode="123",
         grams=120,
+        input_unit="count",
+        input_amount=2,
+        unit_to_grams=60,
         calories_per_100g=89,
         protein_per_100g=1.1,
         carbs_per_100g=22.8,
@@ -49,6 +52,9 @@ def test_entry_out_maps_fields_and_computed_macros() -> None:
     assert out.brand == "Chiquita"
     assert out.barcode == "123"
     assert out.grams == 120
+    assert out.input_unit == "count"
+    assert out.input_amount == 2
+    assert out.unit_to_grams == 60
     assert out.calories == 106.8
     assert out.protein_g == 1.32
     assert out.carbs_g == 27.36

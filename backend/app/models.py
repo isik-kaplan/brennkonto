@@ -40,6 +40,8 @@ class ProductCache(Base):
     protein_per_100g: Mapped[float]
     carbs_per_100g: Mapped[float]
     fat_per_100g: Mapped[float]
+    suggested_unit: Mapped[str] = mapped_column(String(16), default="g")
+    unit_to_grams: Mapped[float] = mapped_column(default=1.0)
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
@@ -56,6 +58,12 @@ class FoodEntry(Base):
     brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
     barcode: Mapped[str | None] = mapped_column(String(64), nullable=True)
     grams: Mapped[float]
+    # What the user actually typed and in what unit, snapshotted at logging time - `grams` above
+    # is always the canonical value every calculation uses; these three are a historical record
+    # of how the entry was originally logged (e.g. "2 count" for 2 eggs), not live-editable.
+    input_unit: Mapped[str] = mapped_column(String(16), default="g")
+    input_amount: Mapped[float]
+    unit_to_grams: Mapped[float] = mapped_column(default=1.0)
     calories_per_100g: Mapped[float]
     protein_per_100g: Mapped[float]
     carbs_per_100g: Mapped[float]

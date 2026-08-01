@@ -4,7 +4,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from app.config import settings
-from app.services.off_client import OpenFoodFactsClient, _extract_macros, _normalize_brand, _to_result
+from app.services.off_client import OpenFoodFactsClient, _extract_macros, _infer_unit, _normalize_brand, _to_result
 
 
 def test_normalize_brand_joins_a_list() -> None:
@@ -72,12 +72,45 @@ def test_to_result_falls_back_to_english_product_name() -> None:
     assert result is None
 
 
+def test_infer_unit_uses_a_mass_product_quantity_unit() -> None:
+    assert _infer_unit({"product_quantity_unit": "kg"}) == ("kg", 1000.0)
+
+
+def test_infer_unit_uses_a_volume_product_quantity_unit() -> None:
+    assert _infer_unit({"product_quantity_unit": "l"}) == ("l", 1000.0)
+
+
+def test_infer_unit_is_case_insensitive_on_product_quantity_unit() -> None:
+    assert _infer_unit({"product_quantity_unit": "ML"}) == ("ml", 1.0)
+
+
+def test_infer_unit_detects_a_multipack_count_in_grams() -> None:
+    assert _infer_unit({"quantity": "6 x 53 g"}) == ("count", 53.0)
+
+
+def test_infer_unit_detects_a_multipack_count_with_a_comma_decimal() -> None:
+    assert _infer_unit({"quantity": "4 x 12,5 g"}) == ("count", 12.5)
+
+
+def test_infer_unit_detects_a_multipack_count_in_kilograms() -> None:
+    assert _infer_unit({"quantity": "2 x 1 kg"}) == ("count", 1000.0)
+
+
+def test_infer_unit_falls_back_to_grams_with_no_usable_signal() -> None:
+    assert _infer_unit({}) == ("g", 1.0)
+
+
+def test_infer_unit_falls_back_to_grams_for_an_unrecognized_quantity_unit() -> None:
+    assert _infer_unit({"product_quantity_unit": "piece", "quantity": "one piece"}) == ("g", 1.0)
+
+
 def test_to_result_happy_path() -> None:
     result = _to_result(
         {
             "code": "3017620422003",
             "product_name": "Nutella",
             "brands": "Ferrero",
+            "product_quantity_unit": "g",
             "nutriments": {
                 "energy-kcal_100g": 539,
                 "proteins_100g": 6.3,
@@ -91,6 +124,8 @@ def test_to_result_happy_path() -> None:
     assert result.name == "Nutella"
     assert result.brand == "Ferrero"
     assert result.calories_per_100g == 539.0
+    assert result.suggested_unit == "g"
+    assert result.unit_to_grams == 1.0
 
 
 async def test_search_filters_out_products_with_no_usable_macros() -> None:

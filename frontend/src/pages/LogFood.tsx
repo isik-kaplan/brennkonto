@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { ChangeEvent, FormEvent } from 'react'
 
 import { useNavigate } from 'react-router-dom'
 
@@ -11,6 +11,12 @@ import { toISODate } from '../lib/dates'
 // The zxing barcode-decoding library is ~450kB - lazy-loaded so it only ships to people who
 // actually open the scanner, not on every visit to this page.
 const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'))
+
+// Small amounts (grams/ml) default to a serving-sized 100; larger/discrete units (count, kg, l,
+// oz, ...) default to 1 - a default of "100 L" would be absurd.
+function defaultAmountFor(unit: string): string {
+  return unit === 'g' || unit === 'ml' ? '100' : '1'
+}
 
 export default function LogFood() {
   const navigate = useNavigate()
@@ -24,7 +30,8 @@ export default function LogFood() {
   const [isScanning, setIsScanning] = useState(false)
 
   const [selected, setSelected] = useState<FoodSearchResult | null>(null)
-  const [grams, setGrams] = useState(100)
+  const [unit, setUnit] = useState('g')
+  const [amountInput, setAmountInput] = useState('100')
   const [consumedAt, setConsumedAt] = useState(toISODate(new Date()))
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -55,6 +62,8 @@ export default function LogFood() {
       const result = await lookupBarcode(barcode.trim())
       setSelected(result)
       setSavedName(null)
+      setUnit(result.suggested_unit)
+      setAmountInput(defaultAmountFor(result.suggested_unit))
     } catch (error) {
       setSearchError(error instanceof ApiError ? error.message : 'Barcode lookup failed.')
     } finally {
@@ -71,6 +80,8 @@ export default function LogFood() {
       const result = await lookupBarcode(code)
       setSelected(result)
       setSavedName(null)
+      setUnit(result.suggested_unit)
+      setAmountInput(defaultAmountFor(result.suggested_unit))
     } catch (error) {
       setSearchError(error instanceof ApiError ? error.message : 'Barcode lookup failed.')
     } finally {
@@ -81,7 +92,25 @@ export default function LogFood() {
   function selectResult(result: FoodSearchResult) {
     setSelected(result)
     setSavedName(null)
-    setGrams(100)
+    setUnit(result.suggested_unit)
+    setAmountInput(defaultAmountFor(result.suggested_unit))
+  }
+
+  function handleAmountChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value
+    if (raw === '') {
+      setAmountInput('')
+      return
+    }
+    // Strip a stuck leading zero (e.g. from clearing down to "0" then typing) without touching
+    // a legitimate "0." while the user is mid-way through typing a decimal.
+    setAmountInput(raw.replace(/^0+(?=\d)/, ''))
+  }
+
+  function unitLabel(u: string): string {
+    if (u === 'g') return 'Amount (grams)'
+    if (u === 'count') return 'How many?'
+    return `Amount (${u})`
   }
 
   async function handleSave(event: FormEvent) {
@@ -90,6 +119,9 @@ export default function LogFood() {
     // renders when `selected` is already set, so there's no real null case to branch on - just
     // a closure TypeScript can't narrow on its own.
     const product = selected!
+    // Belt-and-suspenders: the input's own min/required attributes should already block this,
+    // but a controlled string-backed field can still reach an empty/zero commit in some browsers.
+    if (grams <= 0) return
     setIsSaving(true)
     setSaveError(null)
     try {
@@ -98,6 +130,9 @@ export default function LogFood() {
         brand: product.brand,
         barcode: product.barcode,
         grams,
+        input_unit: unit,
+        input_amount: amount,
+        unit_to_grams: unit === 'g' ? 1 : product.unit_to_grams,
         calories_per_100g: product.calories_per_100g,
         protein_per_100g: product.protein_per_100g,
         carbs_per_100g: product.carbs_per_100g,
@@ -116,6 +151,8 @@ export default function LogFood() {
     }
   }
 
+  const amount = amountInput === '' ? 0 : Number(amountInput)
+  const grams = selected && unit !== 'g' ? amount * selected.unit_to_grams : amount
   const scale = grams / 100
 
   return (
@@ -231,17 +268,32 @@ export default function LogFood() {
           <form className="form" onSubmit={handleSave}>
             <div className="form__row">
               <div className="field">
-                <label htmlFor="grams">Amount (grams)</label>
+                <label htmlFor="amount">{unitLabel(unit)}</label>
                 <input
-                  id="grams"
+                  id="amount"
                   className="input"
                   type="number"
-                  min={1}
-                  step="1"
+                  inputMode="decimal"
+                  min={0.01}
+                  step="any"
                   required
-                  value={grams}
-                  onChange={(event) => setGrams(Number(event.target.value))}
+                  value={amountInput}
+                  onChange={handleAmountChange}
                 />
+                {selected.suggested_unit !== 'g' && (
+                  <button
+                    type="button"
+                    className="btn btn--ghost btn--small"
+                    style={{ marginTop: 'var(--space-xs)' }}
+                    onClick={() => {
+                      const nextUnit = unit === 'g' ? selected.suggested_unit : 'g'
+                      setUnit(nextUnit)
+                      setAmountInput(defaultAmountFor(nextUnit))
+                    }}
+                  >
+                    {unit === 'g' ? `Use ${selected.suggested_unit} instead` : 'Use grams instead'}
+                  </button>
+                )}
               </div>
               <div className="field">
                 <label htmlFor="consumed_at">Date</label>

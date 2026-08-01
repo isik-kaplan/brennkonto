@@ -32,7 +32,10 @@ async def list_entries(
 
 @post("/")
 async def create_entry(data: CreateFoodEntryRequest, db_session: AsyncSession, request: Request) -> FoodEntryOut:
-    entry = FoodEntry(user_id=request.user.id, **{field: getattr(data, field) for field in data.__struct_fields__})
+    fields = {field: getattr(data, field) for field in data.__struct_fields__}
+    if fields["input_amount"] is None:
+        fields["input_amount"] = fields["grams"]
+    entry = FoodEntry(user_id=request.user.id, **fields)
     db_session.add(entry)
     await db_session.commit()
     return entry_out(entry)

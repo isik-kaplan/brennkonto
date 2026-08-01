@@ -1,3 +1,5 @@
+import re
+
 import httpx
 
 from app.config import settings
@@ -26,13 +28,55 @@ def _extract_macros(product: dict) -> dict | None:
     }
 
 
+# Grams-per-unit for every unit Open Food Facts might report - generic, unit-keyed conversion,
+# never product- or category-specific. Volume units are treated 1:1 with mass (the standard
+# simplification food-tracking apps use for near-water-density liquids).
+_UNIT_TO_GRAMS = {
+    "g": 1.0,
+    "kg": 1000.0,
+    "mg": 0.001,
+    "ml": 1.0,
+    "l": 1000.0,
+    "cl": 10.0,
+    "dl": 100.0,
+    "oz": 28.3495,
+}
+
+# Multipacks are commonly described as e.g. "6 x 53 g" or "4 x 125ml" in OFF's free-text
+# `quantity` field - this is how count-based units (eggs, yogurt cups, canned drinks, ...) are
+# detected, without ever hardcoding a category name.
+_MULTIPACK_PATTERN = re.compile(r"(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l)\b", re.IGNORECASE)
+
+
+def _infer_unit(product: dict) -> tuple[str, float]:
+    quantity_unit = str(product.get("product_quantity_unit") or "").strip().lower()
+    if quantity_unit in _UNIT_TO_GRAMS:
+        return quantity_unit, _UNIT_TO_GRAMS[quantity_unit]
+
+    match = _MULTIPACK_PATTERN.search(str(product.get("quantity") or ""))
+    if match is not None:
+        per_item_amount = float(match.group(2).replace(",", "."))
+        per_item_unit = match.group(3).lower()
+        return "count", per_item_amount * _UNIT_TO_GRAMS[per_item_unit]
+
+    return "g", 1.0
+
+
 def _to_result(product: dict) -> FoodSearchResultOut | None:
     macros = _extract_macros(product)
     barcode = product.get("code")
     name = product.get("product_name") or product.get("product_name_en")
     if macros is None or not barcode or not name:
         return None
-    return FoodSearchResultOut(barcode=barcode, name=name, brand=_normalize_brand(product.get("brands")), **macros)
+    suggested_unit, unit_to_grams = _infer_unit(product)
+    return FoodSearchResultOut(
+        barcode=barcode,
+        name=name,
+        brand=_normalize_brand(product.get("brands")),
+        suggested_unit=suggested_unit,
+        unit_to_grams=unit_to_grams,
+        **macros,
+    )
 
 
 class OpenFoodFactsClient:
@@ -42,7 +86,7 @@ class OpenFoodFactsClient:
     API on world.openfoodfacts.org. Products missing usable energy data are dropped rather than
     surfaced as zero-calorie entries."""
 
-    _fields = "code,product_name,product_name_en,brands,nutriments"
+    _fields = "code,product_name,product_name_en,brands,nutriments,quantity,product_quantity,product_quantity_unit"
 
     def __init__(self) -> None:
         self._headers = {"User-Agent": settings.OFF_USER_AGENT}

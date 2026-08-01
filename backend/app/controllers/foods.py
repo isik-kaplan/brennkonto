@@ -17,6 +17,8 @@ def _cache_out(cache: ProductCache) -> FoodSearchResultOut:
         protein_per_100g=cache.protein_per_100g,
         carbs_per_100g=cache.carbs_per_100g,
         fat_per_100g=cache.fat_per_100g,
+        suggested_unit=cache.suggested_unit,
+        unit_to_grams=cache.unit_to_grams,
     )
 
 
@@ -31,6 +33,8 @@ async def _upsert_cache(db_session: AsyncSession, result: FoodSearchResultOut) -
     cache.protein_per_100g = result.protein_per_100g
     cache.carbs_per_100g = result.carbs_per_100g
     cache.fat_per_100g = result.fat_per_100g
+    cache.suggested_unit = result.suggested_unit
+    cache.unit_to_grams = result.unit_to_grams
     await db_session.commit()
 
 

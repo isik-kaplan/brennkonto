@@ -20,6 +20,23 @@ async def test_create_entry(authed_client) -> None:
     assert body["barcode"] is None
 
 
+async def test_create_entry_defaults_input_amount_to_grams(authed_client) -> None:
+    response = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    body = response.json()
+    assert body["input_unit"] == "g"
+    assert body["input_amount"] == 120
+    assert body["unit_to_grams"] == 1.0
+
+
+async def test_create_entry_with_a_count_based_unit(authed_client) -> None:
+    payload = {**ENTRY_PAYLOAD, "input_unit": "count", "input_amount": 2, "unit_to_grams": 60}
+    response = await authed_client.post("/api/entries/", json=payload)
+    body = response.json()
+    assert body["input_unit"] == "count"
+    assert body["input_amount"] == 2
+    assert body["unit_to_grams"] == 60
+
+
 async def test_create_entry_requires_authentication(client) -> None:
     response = await client.post("/api/entries/", json=ENTRY_PAYLOAD)
     assert response.status_code == 401

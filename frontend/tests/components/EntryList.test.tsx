@@ -12,6 +12,9 @@ function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
     brand: 'Chiquita',
     barcode: '123',
     grams: 120,
+    input_unit: 'g',
+    input_amount: 120,
+    unit_to_grams: 1,
     calories_per_100g: 89,
     protein_per_100g: 1.1,
     carbs_per_100g: 22.8,
@@ -49,6 +52,11 @@ describe('EntryList', () => {
   it('renders an entry without a brand', () => {
     render(<EntryList entries={[makeEntry({ brand: null })]} onDelete={vi.fn()} />)
     expect(screen.getByText(/^120g/)).toBeInTheDocument()
+  })
+
+  it('annotates a non-gram entry with its grams equivalent', () => {
+    render(<EntryList entries={[makeEntry({ input_unit: 'count', input_amount: 2, grams: 106 })]} onDelete={vi.fn()} />)
+    expect(screen.getByText(/2 count \(≈106g\)/)).toBeInTheDocument()
   })
 
   it('calls onDelete with the entry when Remove is clicked', async () => {

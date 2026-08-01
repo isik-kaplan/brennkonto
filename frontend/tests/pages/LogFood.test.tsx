@@ -32,6 +32,32 @@ const nutella: FoodSearchResult = {
   protein_per_100g: 6.3,
   carbs_per_100g: 57.5,
   fat_per_100g: 30.9,
+  suggested_unit: 'g',
+  unit_to_grams: 1,
+}
+
+const eggs: FoodSearchResult = {
+  barcode: '4',
+  name: 'Eggs',
+  brand: null,
+  calories_per_100g: 155,
+  protein_per_100g: 13,
+  carbs_per_100g: 1.1,
+  fat_per_100g: 11,
+  suggested_unit: 'count',
+  unit_to_grams: 53,
+}
+
+const milk: FoodSearchResult = {
+  barcode: '5',
+  name: 'Milk',
+  brand: null,
+  calories_per_100g: 42,
+  protein_per_100g: 3.4,
+  carbs_per_100g: 5,
+  fat_per_100g: 1,
+  suggested_unit: 'l',
+  unit_to_grams: 1000,
 }
 
 beforeEach(() => {
@@ -216,6 +242,113 @@ describe('LogFood save form', () => {
     expect(screen.getByText('270')).toBeInTheDocument() // 539 * 0.5, rounded
   })
 
+  it('clearing the amount field leaves it empty rather than stuck at 0', async () => {
+    const user = userEvent.setup()
+    await openSaveForm(user)
+
+    const amountInput = screen.getByLabelText('Amount (grams)') as HTMLInputElement
+    await user.clear(amountInput)
+    expect(amountInput.value).toBe('')
+  })
+
+  it('typing after the field is cleared does not leave a stuck leading zero', async () => {
+    const user = userEvent.setup()
+    await openSaveForm(user)
+
+    const amountInput = screen.getByLabelText('Amount (grams)') as HTMLInputElement
+    await user.clear(amountInput)
+    await user.type(amountInput, '0521')
+    expect(amountInput.value).toBe('521')
+  })
+
+  it('does not offer a unit toggle for a plain-grams product', async () => {
+    const user = userEvent.setup()
+    await openSaveForm(user)
+    expect(screen.queryByRole('button', { name: /Use .* instead/ })).not.toBeInTheDocument()
+  })
+
+  it('defaults to the suggested unit and can switch to grams and back', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.lookupBarcode).mockResolvedValue(eggs)
+    renderLogFood()
+    await user.type(screen.getByLabelText('Barcode'), '4')
+    await user.click(screen.getByRole('button', { name: 'Look up' }))
+    await screen.findByRole('heading', { name: 'Eggs' })
+
+    const howMany = screen.getByLabelText('How many?') as HTMLInputElement
+    expect(howMany.value).toBe('1')
+    // one egg (53g) at 155 kcal/100g -> ~82 kcal
+    expect(screen.getByText('82')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+    expect(screen.getByLabelText('Amount (grams)')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Use count instead' }))
+    expect(screen.getByLabelText('How many?')).toBeInTheDocument()
+  })
+
+  it('sends input_unit/input_amount/unit_to_grams for a count-based entry', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.lookupBarcode).mockResolvedValue(eggs)
+    vi.mocked(endpoints.createEntry).mockResolvedValue({
+      id: 1,
+      name: 'Eggs',
+      brand: null,
+      barcode: '4',
+      grams: 106,
+      input_unit: 'count',
+      input_amount: 2,
+      unit_to_grams: 53,
+      calories_per_100g: 155,
+      protein_per_100g: 13,
+      carbs_per_100g: 1.1,
+      fat_per_100g: 11,
+      calories: 164.3,
+      protein_g: 13.78,
+      carbs_g: 1.17,
+      fat_g: 11.66,
+      consumed_at: '2026-08-01',
+      created_at: '2026-08-01T12:00:00Z',
+    })
+    renderLogFood()
+    await user.type(screen.getByLabelText('Barcode'), '4')
+    await user.click(screen.getByRole('button', { name: 'Look up' }))
+    await screen.findByRole('heading', { name: 'Eggs' })
+
+    const howMany = screen.getByLabelText('How many?')
+    await user.clear(howMany)
+    await user.type(howMany, '2')
+    await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+    expect(endpoints.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ grams: 106, input_unit: 'count', input_amount: 2, unit_to_grams: 53 })
+    )
+  })
+
+  it('labels a non-count, non-gram unit with its unit name', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.lookupBarcode).mockResolvedValue(milk)
+    renderLogFood()
+    await user.type(screen.getByLabelText('Barcode'), '5')
+    await user.click(screen.getByRole('button', { name: 'Look up' }))
+    await screen.findByRole('heading', { name: 'Milk' })
+
+    expect(screen.getByLabelText('Amount (l)')).toBeInTheDocument()
+  })
+
+  it('does not submit when the amount is cleared to empty, even bypassing native validation', async () => {
+    const user = userEvent.setup()
+    await openSaveForm(user)
+
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountInput)
+    // fireEvent.submit dispatches the submit event directly, bypassing the browser's own
+    // required/min constraint validation - this exercises the app's own defensive guard.
+    fireEvent.submit(amountInput.closest('form')!)
+
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+  })
+
   it('allows changing the consumed-at date', async () => {
     const user = userEvent.setup()
     await openSaveForm(user)
@@ -233,6 +366,9 @@ describe('LogFood save form', () => {
       brand: nutella.brand,
       barcode: nutella.barcode,
       grams: 100,
+      input_unit: 'g',
+      input_amount: 100,
+      unit_to_grams: 1,
       calories_per_100g: nutella.calories_per_100g,
       protein_per_100g: nutella.protein_per_100g,
       carbs_per_100g: nutella.carbs_per_100g,

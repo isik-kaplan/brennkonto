@@ -52,6 +52,8 @@ class FoodSearchResultOut(msgspec.Struct):
     protein_per_100g: float
     carbs_per_100g: float
     fat_per_100g: float
+    suggested_unit: str = "g"
+    unit_to_grams: float = 1.0
 
 
 class CreateFoodEntryRequest(msgspec.Struct):
@@ -64,6 +66,11 @@ class CreateFoodEntryRequest(msgspec.Struct):
     consumed_at: date
     brand: str | None = None
     barcode: str | None = None
+    input_unit: str = "g"
+    # Defaults to `grams` in the controller when omitted - kept optional here so any direct API
+    # caller that only sends `grams` still works.
+    input_amount: float | None = None
+    unit_to_grams: float = 1.0
 
 
 class UpdateFoodEntryRequest(msgspec.Struct):
@@ -77,6 +84,9 @@ class FoodEntryOut(msgspec.Struct):
     brand: str | None
     barcode: str | None
     grams: float
+    input_unit: str
+    input_amount: float
+    unit_to_grams: float
     calories_per_100g: float
     protein_per_100g: float
     carbs_per_100g: float

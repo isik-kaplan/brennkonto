@@ -33,10 +33,30 @@ def _add_username_column_if_missing(connection: Connection) -> None:
         connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_username ON users (username)"))
 
 
+def _add_unit_input_columns_if_missing(connection: Connection) -> None:
+    columns = {column["name"] for column in inspect(connection).get_columns("food_entries")}
+    if "input_unit" not in columns:
+        connection.execute(text("ALTER TABLE food_entries ADD COLUMN input_unit VARCHAR(16) DEFAULT 'g'"))
+        connection.execute(text("ALTER TABLE food_entries ADD COLUMN input_amount FLOAT"))
+        connection.execute(text("ALTER TABLE food_entries ADD COLUMN unit_to_grams FLOAT DEFAULT 1.0"))
+        # Every pre-existing entry was always logged in grams - input_amount mirrors grams for
+        # those rows rather than being left null.
+        connection.execute(text("UPDATE food_entries SET input_amount = grams WHERE input_amount IS NULL"))
+
+
+def _add_product_cache_unit_columns_if_missing(connection: Connection) -> None:
+    columns = {column["name"] for column in inspect(connection).get_columns("product_cache")}
+    if "suggested_unit" not in columns:
+        connection.execute(text("ALTER TABLE product_cache ADD COLUMN suggested_unit VARCHAR(16) DEFAULT 'g'"))
+        connection.execute(text("ALTER TABLE product_cache ADD COLUMN unit_to_grams FLOAT DEFAULT 1.0"))
+
+
 async def create_tables() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.run_sync(_add_username_column_if_missing)
+        await connection.run_sync(_add_unit_input_columns_if_missing)
+        await connection.run_sync(_add_product_cache_unit_columns_if_missing)
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:
