@@ -21,26 +21,37 @@ COPY backend/pyproject.toml backend/uv.lock backend/README.md ./
 RUN uv sync --frozen --no-install-project --no-dev
 COPY backend/app ./app
 
+# `litestar run` (used below) already serves the app through uvicorn - a real ASGI server, not
+# litestar's dev-only fallback - so the only thing missing for a conventional prod setup was a
+# reverse proxy in front of it. nginx here serves the built static assets directly (with far-
+# future caching on hashed filenames) and proxies /api + /health through to uvicorn, which binds
+# 127.0.0.1 only and is never reachable directly from outside the container.
 FROM python:3.12-slim AS runtime
-RUN useradd --create-home --uid 1000 brennkonto
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends nginx \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --uid 1000 brennkonto
+
 WORKDIR /app
 COPY --from=backend /app /app
 COPY --from=frontend /frontend/dist /app/static
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    DATABASE_PATH=/app/data/brennkonto.sqlite3 \
-    HOST=0.0.0.0 \
-    PORT=8000
-RUN mkdir -p /app/data && chown -R brennkonto:brennkonto /app
-USER brennkonto
+    DATABASE_PATH=/app/data/brennkonto.sqlite3
 
-EXPOSE 8000
+RUN mkdir -p /app/data && chown -R brennkonto:brennkonto /app
+# nginx's master process stays root (only way to bind the privileged port 80) and its workers
+# drop to the package's own default unprivileged user - the app process is dropped to
+# `brennkonto` explicitly in entrypoint.sh instead of running the whole container as root.
+
+EXPOSE 80
 VOLUME ["/app/data"]
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:${PORT}/health')" || exit 1
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1/health')" || exit 1
 
-# Shell form (not exec-form JSON) is deliberate - it's what lets ${HOST}/${PORT} expand from
-# the environment; `exec` in front still hands PID 1 to litestar so it receives SIGTERM directly
-# from `docker stop` instead of a wrapping shell swallowing it.
-CMD exec litestar --app app.main:app run --host ${HOST} --port ${PORT}
+ENTRYPOINT ["/entrypoint.sh"]

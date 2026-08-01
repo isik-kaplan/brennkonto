@@ -1,5 +1,5 @@
 from dotenv import load_dotenv
-from isik.common.config import boolean, comma_separated_list, config, integer, string
+from isik.common.config import boolean, comma_separated_list, config, string
 
 
 load_dotenv()
@@ -7,8 +7,6 @@ load_dotenv()
 settings = config(
     {
         "SECRET_KEY": string(),
-        "HOST": string(missing_default="0.0.0.0"),
-        "PORT": integer(missing_default=8000),
         "DATABASE_PATH": string(missing_default="./data/brennkonto.sqlite3"),
         "SESSION_COOKIE_SECURE": boolean(missing_default=True),
         "CORS_ALLOW_ORIGINS": comma_separated_list(missing_default=[]),
