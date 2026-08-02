@@ -117,7 +117,7 @@ export default function EntryList({
     }
 
     return (
-      <li key={entry.id} className="entry-row">
+      <li key={entry.id} className={selectable ? 'entry-row entry-row--selectable' : 'entry-row'}>
         {selectable && (
           <input
             type="checkbox"
