@@ -1,4 +1,7 @@
-from sqlalchemy import inspect, text
+from datetime import UTC, datetime
+
+from sqlalchemy import inspect, select, text
+from uuid6 import uuid7
 
 from app.db import Base, _users_table_needs_uuid_migration, create_tables, engine
 
@@ -263,6 +266,70 @@ async def test_create_tables_adds_deleted_at_column_to_a_pre_existing_food_entri
     assert "deleted_at" in columns
 
 
+async def test_create_tables_backfills_a_group_of_one_for_every_ungrouped_entry() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        await connection.run_sync(Base.metadata.create_all)
+
+        users = Base.metadata.tables["users"]
+        food_entries = Base.metadata.tables["food_entries"]
+        user_id = uuid7()
+        await connection.execute(
+            users.insert(),
+            {
+                "id": user_id,
+                "email": "a@b.com",
+                "username": None,
+                "password_hash": "hash",
+                "display_name": "Ada",
+                "daily_calorie_goal": 2000,
+                "daily_protein_goal_g": 150,
+                "daily_carbs_goal_g": 200,
+                "daily_fat_goal_g": 65,
+                "created_at": datetime(2026, 7, 1, 9, tzinfo=UTC),
+            },
+        )
+        # one live ungrouped entry, one soft-deleted ungrouped entry - both need backfilling, and
+        # each needs its own group, not a shared one.
+        live_entry_id = uuid7()
+        deleted_entry_id = uuid7()
+        for entry_id, deleted_at in [(live_entry_id, None), (deleted_entry_id, datetime(2026, 8, 2, tzinfo=UTC))]:
+            await connection.execute(
+                food_entries.insert(),
+                {
+                    "id": entry_id,
+                    "user_id": user_id,
+                    "name": "Banana",
+                    "grams": 120,
+                    "input_unit": "g",
+                    "input_amount": 120,
+                    "unit_to_grams": 1.0,
+                    "calories_per_100g": 89,
+                    "protein_per_100g": 1.1,
+                    "carbs_per_100g": 22.8,
+                    "fat_per_100g": 0.3,
+                    "consumed_at": datetime(2026, 8, 1, 12, tzinfo=UTC),
+                    "created_at": datetime(2026, 8, 1, 12, tzinfo=UTC),
+                    "meal_group_id": None,
+                    "deleted_at": deleted_at,
+                },
+            )
+
+    await create_tables()
+
+    async with engine.begin() as connection:
+        food_entries = Base.metadata.tables["food_entries"]
+        meal_groups = Base.metadata.tables["meal_groups"]
+        rows = (await connection.execute(select(food_entries.c.id, food_entries.c.meal_group_id))).all()
+        group_ids_by_entry = {row.id: row.meal_group_id for row in rows}
+        all_groups = (await connection.execute(select(meal_groups.c.id))).all()
+
+    assert group_ids_by_entry[live_entry_id] is not None
+    assert group_ids_by_entry[deleted_entry_id] is not None
+    assert group_ids_by_entry[live_entry_id] != group_ids_by_entry[deleted_entry_id]
+    assert len(all_groups) == 2
+
+
 async def test_create_tables_adds_unit_columns_to_a_pre_existing_product_cache_table() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
@@ -414,13 +481,17 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
 
     async with engine.begin() as connection:
         user_rows = (await connection.execute(text("SELECT id, username FROM users"))).all()
-        entry_rows = (await connection.execute(text("SELECT id, user_id, name, consumed_at FROM food_entries"))).all()
-        group_rows = (await connection.execute(text("SELECT id, user_id FROM meal_groups"))).all()
+        entry_rows = (
+            await connection.execute(text("SELECT id, user_id, name, consumed_at, meal_group_id FROM food_entries"))
+        ).all()
+        group_rows = (await connection.execute(text("SELECT id, user_id, name FROM meal_groups"))).all()
 
     # every row survived the rebuild
     assert len(user_rows) == num_users
     assert len(entry_rows) == total_entries
-    assert len(group_rows) == 1
+    # every entry always belongs to a real group now - the one pre-existing "Breakfast" group plus
+    # a fresh singleton backfilled for every other entry, which had none before the migration.
+    assert len(group_rows) == total_entries
 
     # ids actually changed shape: 32-char UUID hex, not the original small integers
     for row in user_rows:
@@ -443,4 +514,10 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
         assert "13:00:00" in row.consumed_at
 
     # the meal group's owner was remapped to the same migrated user id its entries now point to
-    assert group_rows[0].user_id == user_id_by_username["user1"]
+    breakfast_group = next(row for row in group_rows if row.name == "Breakfast")
+    assert breakfast_group.user_id == user_id_by_username["user1"]
+
+    # every entry points at a real group, and none of the backfilled singletons collide
+    entry_group_ids = [row.meal_group_id for row in entry_rows]
+    assert all(group_id is not None for group_id in entry_group_ids)
+    assert len(set(entry_group_ids)) == len(group_rows)

@@ -80,6 +80,12 @@ class UpdateFoodEntryRequest(msgspec.Struct):
     consumed_at: datetime
 
 
+class MoveEntryToGroupRequest(msgspec.Struct):
+    # None means "give this entry a fresh group of its own" - the drag-and-drop merge always
+    # provides a real target group id; omitting it exists for API completeness/defensiveness.
+    target_group_id: uuid.UUID | None = None
+
+
 class FoodEntryOut(msgspec.Struct):
     id: uuid.UUID
     name: str

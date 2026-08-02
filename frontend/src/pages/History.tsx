@@ -3,15 +3,16 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router'
 
 import {
-  createMealGroup,
   deleteEntry,
   deleteMealGroup,
   fetchArchivedEntries,
   fetchDailyStats,
   fetchMealGroups,
+  moveEntryToGroup,
   permanentlyDeleteEntry,
   restoreEntry,
   updateEntry,
+  updateMealGroup,
 } from '../api/endpoints'
 import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -24,8 +25,6 @@ export default function History() {
   const [groups, setGroups] = useState<MealGroup[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [groupName, setGroupName] = useState('')
   const [showRemoved, setShowRemoved] = useState(false)
   const [archivedEntries, setArchivedEntries] = useState<FoodEntry[]>([])
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState<FoodEntry | null>(null)
@@ -78,22 +77,13 @@ export default function History() {
     await loadArchived()
   }
 
-  function toggleSelect(entry: FoodEntry) {
-    setSelectedIds((current) => {
-      const next = new Set(current)
-      if (next.has(entry.id)) {
-        next.delete(entry.id)
-      } else {
-        next.add(entry.id)
-      }
-      return next
-    })
+  async function handleMoveEntry(entry: FoodEntry, targetGroupId: string) {
+    await moveEntryToGroup(entry.id, targetGroupId)
+    await load()
   }
 
-  async function handleGroupSelected() {
-    await createMealGroup([...selectedIds], groupName.trim() || null)
-    setSelectedIds(new Set())
-    setGroupName('')
+  async function handleRenameGroup(groupId: string, name: string) {
+    await updateMealGroup(groupId, { name })
     await load()
   }
 
@@ -167,29 +157,14 @@ export default function History() {
             </div>
           </div>
 
-          {selectedIds.size >= 1 && (
-            <div className="form__row" style={{ marginBottom: 'var(--space-md)' }}>
-              <input
-                className="input"
-                type="text"
-                placeholder="Meal name (optional)"
-                value={groupName}
-                onChange={(event) => setGroupName(event.target.value)}
-              />
-              <button type="button" className="btn btn--primary" onClick={handleGroupSelected}>
-                Group selected
-              </button>
-            </div>
-          )}
           <EntryList
             entries={stats.entries}
             onDelete={handleDelete}
             deletingId={deletingId}
             emptyMessage={isToday ? 'Nothing logged yet today.' : 'Nothing was logged on this day.'}
             groups={groups}
-            selectable
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelect}
+            onMoveEntry={handleMoveEntry}
+            onRenameGroup={handleRenameGroup}
             onUngroup={handleUngroup}
             onUpdateConsumedAt={handleUpdateConsumedAt}
           />

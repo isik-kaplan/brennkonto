@@ -63,6 +63,10 @@ export function deleteEntry(id: string) {
   return api.delete<void>(`/entries/${id}`)
 }
 
+export function moveEntryToGroup(entryId: string, targetGroupId: string | null) {
+  return api.post<FoodEntry>(`/entries/${entryId}/group`, { target_group_id: targetGroupId })
+}
+
 export function fetchArchivedEntries(date: string) {
   return api.get<FoodEntry[]>(`/entries/archive?date=${date}`)
 }

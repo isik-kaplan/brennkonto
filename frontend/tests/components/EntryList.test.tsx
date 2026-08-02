@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import type { FoodEntry, MealGroup } from '../../src/api/types'
 import EntryList from '../../src/components/EntryList'
+import { dragEntryOnto, stubRects } from '../testUtils/dragAndDrop'
 
 function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
   return {
@@ -26,7 +27,7 @@ function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
     consumed_at: '2026-08-01T12:00:00',
     created_at: '2026-08-01T12:00:00Z',
     updated_at: null,
-    meal_group_id: null,
+    meal_group_id: 'g1',
     deleted_at: null,
     ...overrides,
   }
@@ -93,58 +94,116 @@ describe('EntryList', () => {
     expect(button.querySelector('.btn__spinner')).toBeInTheDocument()
   })
 
-  it('renders a checkbox per entry in selectable mode and calls onToggleSelect', async () => {
-    const user = userEvent.setup()
-    const onToggleSelect = vi.fn()
-    const entry = makeEntry()
-    render(
-      <EntryList
-        entries={[entry]}
-        onDelete={vi.fn()}
-        selectable
-        selectedIds={new Set()}
-        onToggleSelect={onToggleSelect}
-      />
-    )
-    const checkbox = screen.getByRole('checkbox', { name: 'Select Banana' })
-    expect(checkbox).not.toBeChecked()
-    await user.click(checkbox)
-    expect(onToggleSelect).toHaveBeenCalledWith(entry)
-  })
+  describe('grouping', () => {
+    it('clusters entries sharing a meal_group_id under a named header with an ungroup action', async () => {
+      const user = userEvent.setup()
+      const onUngroup = vi.fn()
+      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
+      const entries = [
+        makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
+        makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
+      ]
+      render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} onUngroup={onUngroup} />)
 
-  it('leaves the checkbox unchecked when no selectedIds set is provided', () => {
-    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} selectable />)
-    expect(screen.getByRole('checkbox', { name: 'Select Banana' })).not.toBeChecked()
-  })
+      expect(screen.getByText('Breakfast')).toBeInTheDocument()
+      expect(screen.getByText('Eggs')).toBeInTheDocument()
+      expect(screen.getByText('Toast')).toBeInTheDocument()
 
-  it('checks the box for an already-selected entry', () => {
-    const entry = makeEntry()
-    render(<EntryList entries={[entry]} onDelete={vi.fn()} selectable selectedIds={new Set([entry.id])} />)
-    expect(screen.getByRole('checkbox', { name: 'Select Banana' })).toBeChecked()
-  })
+      await user.click(screen.getByRole('button', { name: 'Ungroup' }))
+      expect(onUngroup).toHaveBeenCalledWith('g1')
+    })
 
-  it('clusters entries sharing a meal_group_id under a named header with an ungroup action', async () => {
-    const user = userEvent.setup()
-    const onUngroup = vi.fn()
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
-    const entries = [
-      makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
-      makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
-    ]
-    render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} onUngroup={onUngroup} />)
+    it('boxes a lone unnamed entry too, with a placeholder to name it', () => {
+      const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
+      const { container } = render(<EntryList entries={entries} onDelete={vi.fn()} onRenameGroup={vi.fn()} />)
+      expect(container.querySelector('.meal-group')).toBeInTheDocument()
+      expect(screen.getByText('Name this meal')).toBeInTheDocument()
+    })
 
-    expect(screen.getByText('Breakfast')).toBeInTheDocument()
-    expect(screen.getByText('Eggs')).toBeInTheDocument()
-    expect(screen.getByText('Toast')).toBeInTheDocument()
+    it('shows the real name instead of the placeholder once a group has one', () => {
+      const groups: MealGroup[] = [{ id: 'g2', name: 'Second breakfast', entry_ids: ['1'] }]
+      const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
+      const { container } = render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} />)
+      expect(container.querySelector('.meal-group')).toBeInTheDocument()
+      expect(screen.getByText('Second breakfast')).toBeInTheDocument()
+    })
 
-    await user.click(screen.getByRole('button', { name: 'Ungroup' }))
-    expect(onUngroup).toHaveBeenCalledWith('g1')
-  })
+    it('renames a boxed group by clicking its name', async () => {
+      const user = userEvent.setup()
+      const onRenameGroup = vi.fn()
+      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
+      const entries = [
+        makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
+        makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
+      ]
+      render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} onRenameGroup={onRenameGroup} />)
 
-  it('leaves the header nameless when the group has no name or lookup', () => {
-    const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
-    const { container } = render(<EntryList entries={entries} onDelete={vi.fn()} />)
-    expect(container.querySelector('.meal-group__header span')).toHaveTextContent('')
+      await user.click(screen.getByText('Breakfast'))
+      const input = screen.getByDisplayValue('Breakfast')
+      await user.clear(input)
+      await user.type(input, 'Brunch{Enter}')
+
+      expect(onRenameGroup).toHaveBeenCalledWith('g1', 'Brunch')
+    })
+
+    it('starts a rename with an empty value for a multi-member group with no name yet', async () => {
+      const user = userEvent.setup()
+      const onRenameGroup = vi.fn()
+      const entries = [
+        makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
+        makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
+      ]
+      const { container } = render(<EntryList entries={entries} onDelete={vi.fn()} onRenameGroup={onRenameGroup} />)
+
+      const header = container.querySelector('.meal-group__header span[role="button"]')!
+      await user.click(header)
+      const input = screen.getByRole('textbox')
+      expect(input).toHaveValue('')
+      await user.type(input, 'Breakfast{Enter}')
+
+      expect(onRenameGroup).toHaveBeenCalledWith('g1', 'Breakfast')
+    })
+
+    it('renames a lone entry by clicking its placeholder header', async () => {
+      const user = userEvent.setup()
+      const onRenameGroup = vi.fn()
+      const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
+      render(<EntryList entries={entries} onDelete={vi.fn()} onRenameGroup={onRenameGroup} />)
+
+      await user.click(screen.getByText('Name this meal'))
+      const input = screen.getByRole('textbox')
+      await user.type(input, 'Second breakfast')
+      fireEvent.blur(input)
+
+      expect(onRenameGroup).toHaveBeenCalledWith('g2', 'Second breakfast')
+    })
+
+    it('cancels a rename with Escape without calling onRenameGroup', async () => {
+      const user = userEvent.setup()
+      const onRenameGroup = vi.fn()
+      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+      const entries = [makeEntry({ id: '1', meal_group_id: 'g1' })]
+      render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} onRenameGroup={onRenameGroup} />)
+
+      await user.click(screen.getByText('Breakfast'))
+      await user.keyboard('{Escape}')
+
+      expect(onRenameGroup).not.toHaveBeenCalled()
+      expect(screen.getByText('Breakfast')).toBeInTheDocument()
+    })
+
+    it('a named group header is not clickable when onRenameGroup is not provided', async () => {
+      const user = userEvent.setup()
+      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
+      const entries = [
+        makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
+        makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
+      ]
+      render(<EntryList entries={entries} onDelete={vi.fn()} groups={groups} />)
+
+      await user.click(screen.getByText('Breakfast'))
+      expect(screen.queryByRole('textbox')).not.toBeInTheDocument()
+    })
   })
 
   it('does not show an Edit button when onUpdateConsumedAt is not provided', () => {
@@ -178,5 +237,45 @@ describe('EntryList', () => {
 
     expect(onUpdateConsumedAt).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('Logged at')).not.toBeInTheDocument()
+  })
+
+  // Runs last in this file - @dnd-kit defers some of its internal document-listener cleanup by
+  // 50ms after a drag ends, which has been observed to bleed into whichever test runs right
+  // after a drag simulation.
+  it('drags one entry onto another to merge them, and is a no-op onto its own group', () => {
+    const onMoveEntry = vi.fn()
+    const entries = [
+      makeEntry({ id: '1', name: 'Banana', meal_group_id: 'g1' }),
+      makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g2' }),
+    ]
+    render(<EntryList entries={entries} onDelete={vi.fn()} onMoveEntry={onMoveEntry} />)
+
+    const banana = screen.getByText('Banana').closest('li')!
+    const toast = screen.getByText('Toast').closest('li')!
+    stubRects(banana, toast)
+
+    dragEntryOnto(banana, toast)
+    expect(onMoveEntry).toHaveBeenCalledWith(entries[0], 'g2')
+
+    onMoveEntry.mockClear()
+    dragEntryOnto(banana, banana)
+    expect(onMoveEntry).not.toHaveBeenCalled()
+
+    onMoveEntry.mockClear()
+    const nowhere = document.createElement('div')
+    nowhere.getBoundingClientRect = () =>
+      ({
+        top: 9999,
+        bottom: 10049,
+        left: 9999,
+        right: 10299,
+        width: 300,
+        height: 50,
+        x: 9999,
+        y: 9999,
+        toJSON() {},
+      }) as DOMRect
+    dragEntryOnto(banana, nowhere)
+    expect(onMoveEntry).not.toHaveBeenCalled()
   })
 })

@@ -535,6 +535,12 @@ svg {
   padding: var(--space-lg);
 }
 
+@media (max-width: 640px) {
+  .card {
+    padding: var(--space-md);
+  }
+}
+
 .card + .card {
   margin-top: var(--space-md);
 }
@@ -721,14 +727,68 @@ svg {
 .entry-row {
   display: grid;
   grid-template-columns: 1fr auto auto;
+  grid-template-areas: 'info middle actions';
   align-items: center;
   gap: var(--space-md);
-  padding: var(--space-sm) 0;
+  /* Horizontal padding keeps the drag-over outline (below) from sitting flush against the text -
+     without it the dashed line has no breathing room from the content it's wrapping. */
+  padding: var(--space-sm) var(--space-xs);
   border-bottom: 1px solid var(--color-rule);
 }
 
-.entry-row--selectable {
-  grid-template-columns: auto 1fr auto auto;
+.entry-row__info {
+  grid-area: info;
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  min-width: 0;
+}
+
+/* Only entries rendered through EntryList are actually wired up to dnd-kit - the static archived
+   list in History reuses .entry-row for layout only, so the drag affordance is a separate
+   modifier rather than living on the base class. */
+.entry-row--draggable.is-dragging {
+  opacity: 0.4;
+}
+
+.entry-row--drag-over {
+  outline: 1.5px dashed var(--color-accent);
+  outline-offset: -1.5px;
+  background: var(--color-accent-soft);
+}
+
+/* A dedicated grab handle rather than the whole row - keeps normal touch scrolling working
+   everywhere else on the row (touch-action: none is scoped to just this button) and gives mobile
+   users, who have no hover cursor to hint at draggability, an unambiguous target. */
+.entry-row__handle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--color-neutral);
+  cursor: grab;
+  touch-action: none;
+  padding: 0;
+}
+
+.entry-row__handle:hover {
+  color: var(--color-ink);
+  background: var(--color-paper-3);
+}
+
+.entry-row__handle:active {
+  cursor: grabbing;
+}
+
+.entry-row__handle svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
 }
 
 /* The edit form's datetime field is taller than the name and actions columns (label stacked
@@ -760,6 +820,7 @@ svg {
 }
 
 .entry-row__calories {
+  grid-area: middle;
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
   font-weight: 600;
@@ -767,9 +828,34 @@ svg {
   white-space: nowrap;
 }
 
+.entry-row--editing .field {
+  grid-area: middle;
+}
+
 .entry-row__actions {
+  grid-area: actions;
   display: flex;
   gap: var(--space-2xs);
+}
+
+@media (max-width: 640px) {
+  .entry-row {
+    grid-template-columns: 1fr auto;
+    grid-template-areas:
+      'info middle'
+      'actions actions';
+    row-gap: var(--space-2xs);
+  }
+
+  .entry-row__actions {
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: var(--space-3xs);
+  }
+
+  .entry-row__actions .btn--small {
+    padding: 0 var(--space-xs);
+  }
 }
 
 .meal-group {
@@ -787,6 +873,25 @@ svg {
   font-weight: 600;
   font-size: var(--text-sm);
   color: var(--color-neutral);
+}
+
+.meal-group__header span[role='button'] {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--color-rule);
+}
+
+.meal-group__header span[role='button']:hover {
+  color: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
+.meal-group__header-placeholder {
+  color: var(--color-muted);
+}
+
+.meal-group__header .input {
+  height: var(--control-h-sm);
+  max-width: 16rem;
 }
 
 .meal-group .entry-row:last-child {
@@ -906,12 +1011,20 @@ svg {
 @media (max-width: 640px) {
   .stat-strip {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-sm);
+    margin-bottom: var(--space-lg);
   }
 }
 
 .stat-tile {
   border: 1px solid var(--color-rule);
   padding: var(--space-md);
+}
+
+@media (max-width: 640px) {
+  .stat-tile {
+    padding: var(--space-sm);
+  }
 }
 
 .stat-tile__label {
@@ -944,6 +1057,25 @@ svg {
   align-items: center;
   gap: var(--space-md);
   margin-bottom: var(--space-xl);
+}
+
+/* Without a cap, the date field's flex item grows to fill whatever row space is left (its 100%-
+   width input has no other size to resolve against), which is what was pushing Prev/Next onto
+   their own wrapped lines even though all three would fit together. */
+.range-controls .field {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.range-controls .input {
+  width: auto;
+}
+
+@media (max-width: 640px) {
+  .range-controls {
+    gap: var(--space-sm);
+    margin-bottom: var(--space-lg);
+  }
 }
 
 .segmented {

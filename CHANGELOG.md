@@ -3,6 +3,22 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.4.0]
+
+### Added
+
+- Drag-and-drop meal grouping: drag one entry onto another (or onto an existing group) to merge them, replacing the old checkbox-and-button flow.
+- Every entry always belongs to a real, nameable meal group, even a group of one, so any single entry can be renamed the same way a multi-item group can.
+- Dragging the last entry out of a group deletes the now-empty group automatically.
+- Each entry row has a dedicated drag handle instead of the whole row being draggable, so touch-scrolling through the list no longer gets hijacked on mobile.
+
+### Changed
+
+- Meal group boxes now show a "Name this meal" placeholder instead of an invisible, unclickable empty label when unnamed.
+- Entry rows on mobile no longer overflow or clip their Edit/Remove buttons off-screen; actions now wrap onto their own row on narrow widths.
+- Tightened spacing on mobile (cards, stat tiles, entry rows, date range controls) so more fits on screen.
+- The drag-over highlight now has breathing room from the row's content instead of touching it.
+
 ## [0.3.0]
 
 ### Added

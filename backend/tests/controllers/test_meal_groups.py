@@ -1,3 +1,9 @@
+import uuid
+
+from app.controllers.meal_groups import delete_group_if_empty
+from app.db import session_factory
+
+
 NOT_FOUND_ID = "11111111-1111-1111-1111-111111111111"
 
 ENTRY_PAYLOAD = {
@@ -104,7 +110,9 @@ async def test_update_meal_group_replaces_membership_retroactively(authed_client
     listing = (await authed_client.get("/api/entries/?date=2026-08-01")).json()
     by_id = {entry["id"]: entry["meal_group_id"] for entry in listing}
     assert by_id[entry_a] == group_id
-    assert by_id[entry_b] is None
+    # entry_b was dropped from the group, not left groupless - it gets a fresh group of its own.
+    assert by_id[entry_b] is not None
+    assert by_id[entry_b] != group_id
     assert by_id[entry_c] == group_id
 
 
@@ -119,7 +127,11 @@ async def test_update_meal_group_clears_all_membership(authed_client) -> None:
     assert response.json()["entry_ids"] == []
 
     listing = (await authed_client.get("/api/entries/?date=2026-08-01")).json()
-    assert all(entry["meal_group_id"] is None for entry in listing)
+    # every cleared entry gets its own fresh group instead of being left groupless.
+    new_group_ids = [entry["meal_group_id"] for entry in listing]
+    assert all(new_id is not None for new_id in new_group_ids)
+    assert group_id not in new_group_ids
+    assert len(set(new_group_ids)) == len(new_group_ids)  # each entry's fresh group is its own
 
 
 async def test_update_meal_group_not_found(authed_client) -> None:
@@ -159,12 +171,28 @@ async def test_delete_meal_group_ungroups_without_deleting_entries(authed_client
 
     listing = (await authed_client.get("/api/entries/?date=2026-08-01")).json()
     assert len(listing) == 2
-    assert all(entry["meal_group_id"] is None for entry in listing)
+    # each entry survives, now with its own fresh group instead of the deleted one.
+    new_group_ids = [entry["meal_group_id"] for entry in listing]
+    assert all(new_id is not None for new_id in new_group_ids)
+    assert group_id not in new_group_ids
+    assert len(set(new_group_ids)) == len(new_group_ids)
+
+    # and the deleted group is really gone, not just emptied.
+    remaining_groups = (await authed_client.get("/api/meal-groups/")).json()
+    assert group_id not in {group["id"] for group in remaining_groups}
 
 
 async def test_delete_meal_group_not_found(authed_client) -> None:
     response = await authed_client.delete(f"/api/meal-groups/{NOT_FOUND_ID}")
     assert response.status_code == 404
+
+
+async def test_delete_group_if_empty_is_a_no_op_when_the_group_is_already_gone() -> None:
+    # Not reachable through the API in normal use - every caller passes a group id it just looked
+    # up - but the helper must stay defensive if that ever changes.
+    async with session_factory() as db_session:
+        await delete_group_if_empty(db_session, uuid.uuid4())
+        await db_session.commit()
 
 
 async def test_meal_groups_require_authentication(client) -> None:

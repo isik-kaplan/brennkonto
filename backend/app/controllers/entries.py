@@ -7,8 +7,9 @@ from litestar.params import Parameter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FoodEntry, _utcnow
-from app.schemas import CreateFoodEntryRequest, FoodEntryOut, UpdateFoodEntryRequest
+from app.controllers.meal_groups import assign_fresh_singleton_group, delete_group_if_empty
+from app.models import FoodEntry, MealGroup, _utcnow
+from app.schemas import CreateFoodEntryRequest, FoodEntryOut, MoveEntryToGroupRequest, UpdateFoodEntryRequest
 from app.serializers import entry_out
 
 
@@ -72,6 +73,9 @@ async def create_entry(data: CreateFoodEntryRequest, db_session: AsyncSession, r
     if fields["input_amount"] is None:
         fields["input_amount"] = fields["grams"]
     entry = FoodEntry(user_id=request.user.id, **fields)
+    # Every entry always belongs to a real group - even a "group of one" - so it can be named the
+    # same way a multi-item meal can.
+    await assign_fresh_singleton_group(db_session, entry)
     db_session.add(entry)
     await db_session.commit()
     return entry_out(entry)
@@ -85,6 +89,30 @@ async def update_entry(
     entry.grams = data.grams
     entry.consumed_at = data.consumed_at
     entry.updated_at = _utcnow()
+    await db_session.commit()
+    return entry_out(entry)
+
+
+@post("/{entry_id:uuid}/group")
+async def move_entry_to_group(
+    entry_id: UUID, data: MoveEntryToGroupRequest, db_session: AsyncSession, request: Request
+) -> FoodEntryOut:
+    # This is the drag-and-drop merge action: dropping an entry onto another entry/box moves it
+    # into that group. Whatever group it leaves behind gets cleaned up if it's now empty - that's
+    # what makes a box with no more items disappear.
+    entry = await _get_owned_entry(db_session, request, entry_id)
+    old_group_id = entry.meal_group_id
+    if data.target_group_id is not None:
+        target_group = await db_session.get(MealGroup, data.target_group_id)
+        if target_group is None or target_group.user_id != request.user.id:
+            raise NotFoundException("No meal group found with this id.")
+        entry.meal_group_id = target_group.id
+    else:
+        await assign_fresh_singleton_group(db_session, entry)
+    entry.updated_at = _utcnow()
+    if old_group_id is not None and old_group_id != entry.meal_group_id:
+        # autoflush picks up the pending meal_group_id change above before this counts members.
+        await delete_group_if_empty(db_session, old_group_id)
     await db_session.commit()
     return entry_out(entry)
 
@@ -114,7 +142,10 @@ async def permanently_delete_entry(entry_id: UUID, db_session: AsyncSession, req
     if entry.deleted_at is None:
         # Hard delete is only reachable via the archive flow - never directly on a live row.
         raise NotFoundException("This entry is not archived.")
+    old_group_id = entry.meal_group_id
     await db_session.delete(entry)
+    if old_group_id is not None:
+        await delete_group_if_empty(db_session, old_group_id)
     await db_session.commit()
 
 
@@ -125,6 +156,7 @@ entries_router = Router(
         list_archived_entries,
         create_entry,
         update_entry,
+        move_entry_to_group,
         delete_entry,
         restore_entry,
         permanently_delete_entry,

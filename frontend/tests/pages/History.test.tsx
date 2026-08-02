@@ -7,6 +7,7 @@ import * as endpoints from '../../src/api/endpoints'
 import type { DailyStats, MealGroup } from '../../src/api/types'
 import { addDays, toISODate } from '../../src/lib/dates'
 import History from '../../src/pages/History'
+import { dragEntryOnto, stubRects } from '../testUtils/dragAndDrop'
 
 vi.mock('../../src/api/endpoints')
 
@@ -36,6 +37,9 @@ beforeEach(() => {
   vi.mocked(endpoints.fetchArchivedEntries).mockReset().mockResolvedValue([])
   vi.mocked(endpoints.restoreEntry).mockReset()
   vi.mocked(endpoints.permanentlyDeleteEntry).mockReset()
+  vi.mocked(endpoints.moveEntryToGroup).mockReset()
+  vi.mocked(endpoints.updateMealGroup).mockReset()
+  vi.mocked(endpoints.deleteMealGroup).mockReset()
 })
 
 function renderHistory() {
@@ -169,9 +173,9 @@ describe('History', () => {
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 
-  it('groups two selected entries into a named meal', async () => {
+  it('renames a meal group', async () => {
     const user = userEvent.setup()
-    const entryA = {
+    const entry = {
       id: '1',
       name: 'Eggs',
       brand: null,
@@ -191,63 +195,23 @@ describe('History', () => {
       consumed_at: today,
       created_at: `${today}T08:00:00Z`,
       updated_at: null,
-      meal_group_id: null,
+      meal_group_id: 'g1',
       deleted_at: null,
     }
-    const entryB = { ...entryA, id: '2', name: 'Toast' }
-    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryA, entryB]))
-    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] })
+    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entry]))
+    vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
+    vi.mocked(endpoints.updateMealGroup).mockResolvedValue({ ...groups[0], name: 'Brunch' })
     renderHistory()
 
-    await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
-    // click twice on one to exercise the deselect branch too, before settling on the final pick
-    await user.click(screen.getByRole('checkbox', { name: 'Select Eggs' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Select Eggs' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Select Eggs' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Select Toast' }))
-    await user.type(screen.getByPlaceholderText('Meal name (optional)'), 'Breakfast')
-    await user.click(screen.getByRole('button', { name: 'Group selected' }))
+    await waitFor(() => expect(screen.getByText('Breakfast')).toBeInTheDocument())
+    await user.click(screen.getByText('Breakfast'))
+    const input = screen.getByDisplayValue('Breakfast')
+    await user.clear(input)
+    await user.type(input, 'Brunch{Enter}')
 
-    expect(endpoints.createMealGroup).toHaveBeenCalledWith(['1', '2'], 'Breakfast')
+    expect(endpoints.updateMealGroup).toHaveBeenCalledWith('g1', { name: 'Brunch' })
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
-  })
-
-  it('groups selected entries with no name typed', async () => {
-    const user = userEvent.setup()
-    const entryA = {
-      id: '1',
-      name: 'Eggs',
-      brand: null,
-      barcode: null,
-      grams: 100,
-      input_unit: 'g',
-      input_amount: 100,
-      unit_to_grams: 1,
-      calories_per_100g: 155,
-      protein_per_100g: 13,
-      carbs_per_100g: 1.1,
-      fat_per_100g: 11,
-      calories: 155,
-      protein_g: 13,
-      carbs_g: 1.1,
-      fat_g: 11,
-      consumed_at: today,
-      created_at: `${today}T08:00:00Z`,
-      updated_at: null,
-      meal_group_id: null,
-      deleted_at: null,
-    }
-    const entryB = { ...entryA, id: '2', name: 'Toast' }
-    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryA, entryB]))
-    vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g1', name: null, entry_ids: ['1', '2'] })
-    renderHistory()
-
-    await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
-    await user.click(screen.getByRole('checkbox', { name: 'Select Eggs' }))
-    await user.click(screen.getByRole('checkbox', { name: 'Select Toast' }))
-    await user.click(screen.getByRole('button', { name: 'Group selected' }))
-
-    expect(endpoints.createMealGroup).toHaveBeenCalledWith(['1', '2'], null)
   })
 
   it('ungroups a meal', async () => {
@@ -399,5 +363,47 @@ describe('History', () => {
     await user.click(screen.getByRole('button', { name: 'Remove' }))
 
     await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(2))
+  })
+
+  // Runs last in this file - @dnd-kit defers some of its internal document-listener cleanup by
+  // 50ms after a drag ends, which has been observed to bleed into whichever test runs right
+  // after a drag simulation.
+  it('drags one entry onto another to merge them into a group', async () => {
+    const entryA = {
+      id: '1',
+      name: 'Eggs',
+      brand: null,
+      barcode: null,
+      grams: 100,
+      input_unit: 'g',
+      input_amount: 100,
+      unit_to_grams: 1,
+      calories_per_100g: 155,
+      protein_per_100g: 13,
+      carbs_per_100g: 1.1,
+      fat_per_100g: 11,
+      calories: 155,
+      protein_g: 13,
+      carbs_g: 1.1,
+      fat_g: 11,
+      consumed_at: today,
+      created_at: `${today}T08:00:00Z`,
+      updated_at: null,
+      meal_group_id: 'g1',
+      deleted_at: null,
+    }
+    const entryB = { ...entryA, id: '2', name: 'Toast', meal_group_id: 'g2' }
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryA, entryB]))
+    vi.mocked(endpoints.moveEntryToGroup).mockResolvedValue(entryA)
+    renderHistory()
+
+    await waitFor(() => expect(screen.getByText('Toast')).toBeInTheDocument())
+    const eggs = screen.getByText('Eggs').closest('li')!
+    const toast = screen.getByText('Toast').closest('li')!
+    stubRects(eggs, toast)
+    dragEntryOnto(eggs, toast)
+
+    expect(endpoints.moveEntryToGroup).toHaveBeenCalledWith('1', 'g2')
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 })

@@ -157,6 +157,26 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
         )
 
 
+def _backfill_meal_group_id_for_ungrouped_entries(connection: Connection) -> None:
+    # Every entry must always belong to a real MealGroup (even a "group of one") so it can be
+    # named the same way a multi-item meal can - this gives every pre-existing ungrouped entry
+    # (including soft-deleted ones, so a later restore always has a group waiting) its own fresh
+    # singleton group. Naturally idempotent: a second run finds nothing left with a null id. Runs
+    # after Base.metadata.create_all in the chain, so food_entries always exists by this point.
+    food_entries = Base.metadata.tables["food_entries"]
+    meal_groups = Base.metadata.tables["meal_groups"]
+    ungrouped = connection.execute(
+        select(food_entries.c.id, food_entries.c.user_id).where(food_entries.c.meal_group_id.is_(None))
+    ).all()
+    for entry_id, user_id in ungrouped:
+        group_id = uuid7()
+        connection.execute(
+            meal_groups.insert(),
+            {"id": group_id, "user_id": user_id, "name": None, "created_at": datetime.now(UTC), "updated_at": None},
+        )
+        connection.execute(food_entries.update().where(food_entries.c.id == entry_id).values(meal_group_id=group_id))
+
+
 async def create_tables() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -166,6 +186,7 @@ async def create_tables() -> None:
         await connection.run_sync(_add_meal_group_id_column_if_missing)
         await connection.run_sync(_add_deleted_at_column_if_missing)
         await connection.run_sync(_migrate_users_and_entries_to_uuid_ids)
+        await connection.run_sync(_backfill_meal_group_id_for_ungrouped_entries)
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:

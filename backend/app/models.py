@@ -55,9 +55,10 @@ class ProductCache(Base):
 
 
 class MealGroup(Base):
-    """A user-defined cluster of food entries logged together as one meal - purely a display/
-    organizational grouping, entries survive independently of the group (see ondelete="SET NULL"
-    on FoodEntry.meal_group_id)."""
+    """A cluster of food entries logged together as one meal. Every entry always belongs to one -
+    even a "group of one" - so a single entry can be named the same way a multi-item meal can;
+    see app/controllers/entries.py's create_entry and app/controllers/meal_groups.py's
+    assign_fresh_singleton_group/delete_group_if_empty for how that invariant is kept."""
 
     __tablename__ = "meal_groups"
 
@@ -99,8 +100,9 @@ class FoodEntry(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
     # Plain scalar FK, not a relationship() - group membership is always read/written via direct
     # queries in the meal-groups controller rather than ORM collection traversal, which sidesteps
-    # async lazy-loading pitfalls on a relationship that's frequently untouched (e.g. an entry
-    # with no group at all).
+    # async lazy-loading pitfalls on a relationship. Nullable at the schema level only to avoid a
+    # disruptive NOT NULL migration on SQLite - every code path that creates or moves an entry
+    # always assigns a real group, so in practice this is never null (see MealGroup's docstring).
     meal_group_id: Mapped[uuid_module.UUID | None] = mapped_column(
         ForeignKey("meal_groups.id", ondelete="SET NULL"), nullable=True
     )

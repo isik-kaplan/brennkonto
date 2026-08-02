@@ -109,6 +109,11 @@ describe('entry endpoints', () => {
     expect(api.delete).toHaveBeenCalledWith('/entries/5')
   })
 
+  it('moveEntryToGroup posts the target group id', () => {
+    endpoints.moveEntryToGroup('5', 'g1')
+    expect(api.post).toHaveBeenCalledWith('/entries/5/group', { target_group_id: 'g1' })
+  })
+
   it('fetchArchivedEntries gets the archive endpoint with a date query', () => {
     endpoints.fetchArchivedEntries('2026-08-01')
     expect(api.get).toHaveBeenCalledWith('/entries/archive?date=2026-08-01')

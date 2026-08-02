@@ -14,9 +14,11 @@ import random
 import sys
 from datetime import date, timedelta
 
+from uuid6 import uuid7
+
 from app.auth import hash_password
 from app.db import Base, engine, session_factory
-from app.models import FoodEntry, User
+from app.models import FoodEntry, MealGroup, User
 
 
 # (name, brand, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g)
@@ -88,6 +90,10 @@ async def seed(email: str, password: str, display_name: str, days: int) -> None:
 
             target = max(1200, random.gauss(2200, 350))
             for name, brand, grams, cal100, protein100, carbs100, fat100 in _generate_day(target):
+                # Every entry always belongs to its own real group (id generated up front so this
+                # doesn't need a flush per entry), same as app.controllers.entries.create_entry.
+                group_id = uuid7()
+                session.add(MealGroup(id=group_id, user_id=user.id))
                 session.add(
                     FoodEntry(
                         user_id=user.id,
@@ -100,6 +106,7 @@ async def seed(email: str, password: str, display_name: str, days: int) -> None:
                         carbs_per_100g=carbs100,
                         fat_per_100g=fat100,
                         consumed_at=day,
+                        meal_group_id=group_id,
                     )
                 )
                 total_entries += 1
