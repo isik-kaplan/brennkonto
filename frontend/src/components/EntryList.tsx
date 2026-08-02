@@ -79,8 +79,7 @@ export default function EntryList({
       <div>
         <div className="entry-row__name">{entry.name}</div>
         <div className="entry-row__meta">
-          <span className="numeral">{displayTime(entry.consumed_at)}</span> ·{' '}
-          {entry.brand ? `${entry.brand} · ` : ''}
+          <span className="numeral">{displayTime(entry.consumed_at)}</span> · {entry.brand ? `${entry.brand} · ` : ''}
           {entry.input_unit === 'g' ? (
             `${entry.grams}g`
           ) : (
