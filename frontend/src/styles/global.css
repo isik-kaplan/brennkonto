@@ -717,6 +717,21 @@ svg {
   grid-template-columns: auto 1fr auto auto;
 }
 
+/* The edit form's datetime field is taller than the name and actions columns (label stacked
+   above input), so align-items: center leaves those columns floating between the label and the
+   input instead of lining up with the input row. */
+.entry-row--editing {
+  align-items: end;
+}
+
+.entry-row--editing .input {
+  height: var(--control-h-sm);
+}
+
+.entry-row--editing input[type='datetime-local'] {
+  width: 13rem;
+}
+
 .entry-row:last-child {
   border-bottom: none;
 }

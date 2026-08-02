@@ -6,8 +6,9 @@ import {
   combineDateAndTime,
   displayDate,
   displayDateLong,
+  fromDatetimeLocalValue,
   fromISODate,
-  splitDateAndTime,
+  toDatetimeLocalValue,
   toISODate,
   toISOTime,
 } from '../../src/lib/dates'
@@ -78,23 +79,26 @@ describe('toISOTime', () => {
   })
 })
 
-describe('combineDateAndTime / splitDateAndTime', () => {
+describe('combineDateAndTime', () => {
   it('combines a date and time into an ISO-shaped string', () => {
     expect(combineDateAndTime('2026-08-01', '13:45')).toBe('2026-08-01T13:45:00')
   })
+})
 
-  it('splits an ISO datetime string back into date and time', () => {
-    expect(splitDateAndTime('2026-08-01T13:45:00')).toEqual({ date: '2026-08-01', time: '13:45' })
+describe('toDatetimeLocalValue / fromDatetimeLocalValue', () => {
+  it('strips seconds for a datetime-local input value', () => {
+    expect(toDatetimeLocalValue('2026-08-01T13:45:00')).toBe('2026-08-01T13:45')
   })
 
-  it('splits a datetime string carrying seconds/microseconds', () => {
-    expect(splitDateAndTime('2026-08-01T13:45:00.000000')).toEqual({ date: '2026-08-01', time: '13:45' })
+  it('strips microseconds too', () => {
+    expect(toDatetimeLocalValue('2026-08-01T13:45:00.000000')).toBe('2026-08-01T13:45')
   })
 
-  it('round-trips combine -> split', () => {
-    expect(splitDateAndTime(combineDateAndTime('2026-08-01', '09:30'))).toEqual({
-      date: '2026-08-01',
-      time: '09:30',
-    })
+  it('adds seconds back for the backend', () => {
+    expect(fromDatetimeLocalValue('2026-08-01T13:45')).toBe('2026-08-01T13:45:00')
+  })
+
+  it('round-trips to -> from', () => {
+    expect(fromDatetimeLocalValue(toDatetimeLocalValue('2026-08-01T09:30:00'))).toBe('2026-08-01T09:30:00')
   })
 })

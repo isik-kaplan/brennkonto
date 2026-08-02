@@ -1,7 +1,7 @@
 import { useState } from 'react'
 
 import type { FoodEntry, MealGroup } from '../api/types'
-import { combineDateAndTime, splitDateAndTime } from '../lib/dates'
+import { displayTime, fromDatetimeLocalValue, toDatetimeLocalValue } from '../lib/dates'
 import ConfirmDialog from './ConfirmDialog'
 
 interface EntryListProps {
@@ -57,8 +57,7 @@ export default function EntryList({
   onUpdateConsumedAt,
 }: EntryListProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editDate, setEditDate] = useState('')
-  const [editTime, setEditTime] = useState('')
+  const [editDatetime, setEditDatetime] = useState('')
   const [pendingDelete, setPendingDelete] = useState<FoodEntry | null>(null)
 
   if (entries.length === 0) {
@@ -66,43 +65,49 @@ export default function EntryList({
   }
 
   function startEditing(entry: FoodEntry) {
-    const { date, time } = splitDateAndTime(entry.consumed_at)
     setEditingId(entry.id)
-    setEditDate(date)
-    setEditTime(time)
+    setEditDatetime(toDatetimeLocalValue(entry.consumed_at))
   }
 
   function saveEdit(entry: FoodEntry) {
-    onUpdateConsumedAt?.(entry, combineDateAndTime(editDate, editTime))
+    onUpdateConsumedAt?.(entry, fromDatetimeLocalValue(editDatetime))
     setEditingId(null)
+  }
+
+  function renderNameAndMeta(entry: FoodEntry) {
+    return (
+      <div>
+        <div className="entry-row__name">{entry.name}</div>
+        <div className="entry-row__meta">
+          <span className="numeral">{displayTime(entry.consumed_at)}</span> ·{' '}
+          {entry.brand ? `${entry.brand} · ` : ''}
+          {entry.input_unit === 'g' ? (
+            `${entry.grams}g`
+          ) : (
+            <>
+              {entry.input_amount} {entry.input_unit} (≈{Math.round(entry.grams)}g)
+            </>
+          )}{' '}
+          · P{Math.round(entry.protein_g)} C{Math.round(entry.carbs_g)} F{Math.round(entry.fat_g)}
+        </div>
+      </div>
+    )
   }
 
   function renderRow(entry: FoodEntry) {
     if (editingId === entry.id) {
       return (
         <li key={entry.id} className="entry-row entry-row--editing">
-          <div className="entry-row__name">{entry.name}</div>
-          <div className="form__row">
-            <div className="field">
-              <label htmlFor={`edit-date-${entry.id}`}>Date</label>
-              <input
-                id={`edit-date-${entry.id}`}
-                className="input"
-                type="date"
-                value={editDate}
-                onChange={(event) => setEditDate(event.target.value)}
-              />
-            </div>
-            <div className="field">
-              <label htmlFor={`edit-time-${entry.id}`}>Time</label>
-              <input
-                id={`edit-time-${entry.id}`}
-                className="input"
-                type="time"
-                value={editTime}
-                onChange={(event) => setEditTime(event.target.value)}
-              />
-            </div>
+          {renderNameAndMeta(entry)}
+          <div className="field">
+            <label htmlFor={`edit-datetime-${entry.id}`}>Logged at</label>
+            <input
+              id={`edit-datetime-${entry.id}`}
+              className="input"
+              type="datetime-local"
+              value={editDatetime}
+              onChange={(event) => setEditDatetime(event.target.value)}
+            />
           </div>
           <div className="entry-row__actions">
             <button type="button" className="btn btn--primary btn--small" onClick={() => saveEdit(entry)}>
@@ -126,20 +131,7 @@ export default function EntryList({
             onChange={() => onToggleSelect?.(entry)}
           />
         )}
-        <div>
-          <div className="entry-row__name">{entry.name}</div>
-          <div className="entry-row__meta">
-            {entry.brand ? `${entry.brand} · ` : ''}
-            {entry.input_unit === 'g' ? (
-              `${entry.grams}g`
-            ) : (
-              <>
-                {entry.input_amount} {entry.input_unit} (≈{Math.round(entry.grams)}g)
-              </>
-            )}{' '}
-            · P{Math.round(entry.protein_g)} C{Math.round(entry.carbs_g)} F{Math.round(entry.fat_g)}
-          </div>
-        </div>
+        {renderNameAndMeta(entry)}
         <div className="entry-row__calories numeral">{Math.round(entry.calories)} kcal</div>
         <div className="entry-row__actions">
           {onUpdateConsumedAt && (

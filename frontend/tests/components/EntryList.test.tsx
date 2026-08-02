@@ -43,18 +43,19 @@ describe('EntryList', () => {
     expect(screen.getByText('Nothing today.')).toBeInTheDocument()
   })
 
-  it('renders an entry with brand, grams, macros, and calories', () => {
+  it('renders an entry with its logged time, brand, grams, macros, and calories', () => {
     render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} />)
     expect(screen.getByText('Banana')).toBeInTheDocument()
+    expect(screen.getByText('12:00')).toBeInTheDocument()
     expect(screen.getByText(/Chiquita/)).toBeInTheDocument()
     expect(screen.getByText(/120g/)).toBeInTheDocument()
     expect(screen.getByText(/P1 C27 F0/)).toBeInTheDocument()
     expect(screen.getByText('107 kcal')).toBeInTheDocument()
   })
 
-  it('renders an entry without a brand', () => {
-    render(<EntryList entries={[makeEntry({ brand: null })]} onDelete={vi.fn()} />)
-    expect(screen.getByText(/^120g/)).toBeInTheDocument()
+  it('renders an entry without a brand, leaving no stray separator behind', () => {
+    const { container } = render(<EntryList entries={[makeEntry({ brand: null })]} onDelete={vi.fn()} />)
+    expect(container.querySelector('.entry-row__meta')).toHaveTextContent(/^12:00 · 120g/)
   })
 
   it('annotates a non-gram entry with its grams equivalent', () => {
@@ -158,15 +159,13 @@ describe('EntryList', () => {
     render(<EntryList entries={[entry]} onDelete={vi.fn()} onUpdateConsumedAt={onUpdateConsumedAt} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
-    expect(screen.getByLabelText('Date')).toHaveValue('2026-08-01')
-    expect(screen.getByLabelText('Time')).toHaveValue('09:15')
+    expect(screen.getByLabelText('Logged at')).toHaveValue('2026-08-01T09:15')
 
-    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '2026-08-02' } })
-    fireEvent.change(screen.getByLabelText('Time'), { target: { value: '13:30' } })
+    fireEvent.change(screen.getByLabelText('Logged at'), { target: { value: '2026-08-02T13:30' } })
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(onUpdateConsumedAt).toHaveBeenCalledWith(entry, '2026-08-02T13:30:00')
-    expect(screen.queryByLabelText('Date')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Logged at')).not.toBeInTheDocument()
   })
 
   it('cancels editing without calling onUpdateConsumedAt', async () => {
@@ -178,6 +177,6 @@ describe('EntryList', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
     expect(onUpdateConsumedAt).not.toHaveBeenCalled()
-    expect(screen.queryByLabelText('Date')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Logged at')).not.toBeInTheDocument()
   })
 })

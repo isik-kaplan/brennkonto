@@ -1,6 +1,6 @@
 [project]
 name = "brennkonto"
-version = "0.2.0"
+version = "0.3.0"
 description = "Calorie and macro tracker backed by Open Food Facts."
 authors = [
   { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }

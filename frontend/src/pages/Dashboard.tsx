@@ -109,7 +109,7 @@ export default function Dashboard() {
 
           <div className="card">
             <h2 className="card__title">Logged today</h2>
-            {selectedIds.size >= 2 && (
+            {selectedIds.size >= 1 && (
               <div className="form__row" style={{ marginBottom: 'var(--space-md)' }}>
                 <input
                   className="input"

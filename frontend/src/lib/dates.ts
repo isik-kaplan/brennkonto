@@ -44,9 +44,20 @@ export function combineDateAndTime(dateValue: string, timeValue: string): string
   return `${dateValue}T${timeValue}:00`
 }
 
-// Splits an ISO datetime string (as returned by the API) back into separate date/time input
-// values - the inverse of combineDateAndTime.
-export function splitDateAndTime(value: string): { date: string; time: string } {
-  const [date, time] = value.split('T')
-  return { date, time: time.slice(0, 5) }
+// Converts an ISO datetime string ("YYYY-MM-DDTHH:MM:SS") to the value a single
+// <input type="datetime-local"> expects ("YYYY-MM-DDTHH:MM") - just the seconds dropped.
+export function toDatetimeLocalValue(value: string): string {
+  return value.slice(0, 16)
+}
+
+// HH:MM straight out of the naive ISO string, for showing an entry's logged time in the list -
+// a plain slice rather than a `new Date()` parse, matching toDatetimeLocalValue's approach so it
+// can't drift on timezone parsing quirks for a string that was never meant to carry one.
+export function displayTime(value: string): string {
+  return value.slice(11, 16)
+}
+
+// Inverse of toDatetimeLocalValue - appends the seconds back on for the backend.
+export function fromDatetimeLocalValue(value: string): string {
+  return `${value}:00`
 }
