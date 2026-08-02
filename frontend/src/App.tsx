@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 
-import { Navigate, Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router'
 
 import AppShell from './components/AppShell'
 import { useAuth } from './hooks/useAuth'

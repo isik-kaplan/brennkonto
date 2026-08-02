@@ -2,7 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { useFormState } from '@isik-kaplan/core/hooks'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router'
 
 import { ApiError } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
