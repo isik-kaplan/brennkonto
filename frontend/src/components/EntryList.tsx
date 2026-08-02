@@ -167,7 +167,7 @@ export default function EntryList({
           ) : (
             <li key={cluster.groupId} className="meal-group">
               <div className="meal-group__header">
-                <span>{groups?.find((group) => group.id === cluster.groupId)?.name ?? 'Meal'}</span>
+                <span>{groups?.find((group) => group.id === cluster.groupId)?.name}</span>
                 <button
                   type="button"
                   className="btn btn--ghost btn--small"

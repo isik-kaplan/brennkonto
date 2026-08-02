@@ -6,10 +6,19 @@ import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
 import type { User } from '../../src/api/types'
 import { useAuth } from '../../src/hooks/useAuth'
+import { ThemeProvider } from '../../src/hooks/useTheme'
 import Settings from '../../src/pages/Settings'
 
 vi.mock('../../src/api/endpoints')
 vi.mock('../../src/hooks/useAuth')
+
+function renderSettings() {
+  return render(
+    <ThemeProvider>
+      <Settings />
+    </ThemeProvider>
+  )
+}
 
 const user: User = {
   id: '1',
@@ -46,14 +55,14 @@ beforeEach(() => {
 describe('Settings', () => {
   it('renders nothing when there is no authenticated user', () => {
     mockAuth({ user: null })
-    const { container } = render(<Settings />)
+    const { container } = renderSettings()
     expect(container).toBeEmptyDOMElement()
   })
 
   it('shows the signed-in email and logs out from the session card', async () => {
     const clickUser = userEvent.setup()
     const auth = mockAuth()
-    render(<Settings />)
+    renderSettings()
 
     expect(screen.getByText('Signed in as demo@brennkonto.local.')).toBeInTheDocument()
     await clickUser.click(screen.getByRole('button', { name: 'Log out' }))
@@ -66,7 +75,7 @@ describe('Settings', () => {
       const auth = mockAuth()
       const updated = { ...user, display_name: 'New Name' }
       vi.mocked(endpoints.updateProfile).mockResolvedValue(updated)
-      render(<Settings />)
+      renderSettings()
 
       const nameInput = screen.getByLabelText('Name')
       await clickUser.clear(nameInput)
@@ -82,7 +91,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.updateProfile).mockRejectedValue(new ApiError('Name is required.', 400))
-      render(<Settings />)
+      renderSettings()
 
       await clickUser.click(screen.getByRole('button', { name: 'Save' }))
       expect(await screen.findByText('Name is required.')).toBeInTheDocument()
@@ -92,7 +101,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.updateProfile).mockRejectedValue(new Error('boom'))
-      render(<Settings />)
+      renderSettings()
 
       await clickUser.click(screen.getByRole('button', { name: 'Save' }))
       expect(await screen.findByText('Could not save.')).toBeInTheDocument()
@@ -105,7 +114,7 @@ describe('Settings', () => {
       const auth = mockAuth()
       const updated = { ...user, daily_calorie_goal: 2200 }
       vi.mocked(endpoints.updateGoals).mockResolvedValue(updated)
-      render(<Settings />)
+      renderSettings()
 
       const caloriesInput = screen.getByLabelText('Calories')
       await clickUser.clear(caloriesInput)
@@ -126,7 +135,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.updateGoals).mockRejectedValue(new ApiError('Goals must be positive.', 400))
-      render(<Settings />)
+      renderSettings()
 
       await clickUser.click(screen.getByRole('button', { name: 'Save goals' }))
       expect(await screen.findByText('Goals must be positive.')).toBeInTheDocument()
@@ -136,7 +145,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.updateGoals).mockRejectedValue(new Error('boom'))
-      render(<Settings />)
+      renderSettings()
 
       await clickUser.click(screen.getByRole('button', { name: 'Save goals' }))
       expect(await screen.findByText('Could not save.')).toBeInTheDocument()
@@ -148,7 +157,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.changePassword).mockResolvedValue(user)
-      render(<Settings />)
+      renderSettings()
 
       const current = screen.getByLabelText('Current password') as HTMLInputElement
       const next = screen.getByLabelText('New password') as HTMLInputElement
@@ -166,7 +175,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.changePassword).mockRejectedValue(new ApiError('Current password is incorrect.', 401))
-      render(<Settings />)
+      renderSettings()
 
       await clickUser.type(screen.getByLabelText('Current password'), 'wrong')
       await clickUser.type(screen.getByLabelText('New password'), 'new-password-123')
@@ -179,7 +188,7 @@ describe('Settings', () => {
       const clickUser = userEvent.setup()
       mockAuth()
       vi.mocked(endpoints.changePassword).mockRejectedValue(new Error('boom'))
-      render(<Settings />)
+      renderSettings()
 
       await clickUser.type(screen.getByLabelText('Current password'), 'wrong')
       await clickUser.type(screen.getByLabelText('New password'), 'new-password-123')

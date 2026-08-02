@@ -6,6 +6,7 @@ import { useFormState } from '@isik-kaplan/core/hooks'
 import { ApiError } from '../api/client'
 import { changePassword, updateGoals, updateProfile } from '../api/endpoints'
 import type { User } from '../api/types'
+import ThemeToggle from '../components/ThemeToggle'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Settings() {
@@ -30,6 +31,10 @@ export default function Settings() {
           onSaved={setUser}
         />
         <PasswordCard />
+        <div className="card">
+          <h2 className="card__title">Appearance</h2>
+          <ThemeToggle />
+        </div>
         <div className="card">
           <h2 className="card__title">Session</h2>
           <p style={{ marginBottom: 'var(--space-md)' }}>Signed in as {user.email}.</p>

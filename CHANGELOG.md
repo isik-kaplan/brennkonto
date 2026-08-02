@@ -10,10 +10,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Favicon using the app's green brand mark.
 - Meal groups can now be created from a single selected entry, not just two or more.
 - Every logged entry always shows its logged time, not just while editing it.
+- Appearance setting with a Light/Auto/Dark theme switch on the Settings page.
 
 ### Changed
 
 - Editing an entry's logged date/time now uses a single combined field instead of separate Date and Time inputs.
+- Log out is now an icon-only button instead of a text button.
+- A meal group with no name is shown nameless instead of falling back to a generic "Meal" label.
 
 ## [0.2.0]
 

@@ -141,10 +141,10 @@ describe('EntryList', () => {
     expect(onUngroup).toHaveBeenCalledWith('g1')
   })
 
-  it('falls back to a generic "Meal" header when the group has no name or lookup', () => {
+  it('leaves the header nameless when the group has no name or lookup', () => {
     const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
-    render(<EntryList entries={entries} onDelete={vi.fn()} />)
-    expect(screen.getByText('Meal')).toBeInTheDocument()
+    const { container } = render(<EntryList entries={entries} onDelete={vi.fn()} />)
+    expect(container.querySelector('.meal-group__header span')).toHaveTextContent('')
   })
 
   it('does not show an Edit button when onUpdateConsumedAt is not provided', () => {

@@ -385,6 +385,20 @@ svg {
   width: 100%;
 }
 
+.btn--icon {
+  width: var(--control-h);
+  padding: 0;
+}
+
+.btn--icon.btn--small {
+  width: var(--control-h-sm);
+}
+
+.btn--icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
 .btn__spinner {
   width: 0.7rem;
   height: 0.7rem;
