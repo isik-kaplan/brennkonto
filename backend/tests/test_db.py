@@ -196,6 +196,73 @@ async def test_create_tables_adds_meal_group_id_column_to_a_pre_existing_food_en
     assert "meal_group_id" in columns
 
 
+async def test_create_tables_adds_deleted_at_column_to_a_pre_existing_food_entries_table() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        # Simulates a deployment from before soft delete existed.
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE,
+                    username VARCHAR(120) UNIQUE,
+                    password_hash VARCHAR(255),
+                    display_name VARCHAR(120),
+                    daily_calorie_goal INTEGER,
+                    daily_protein_goal_g INTEGER,
+                    daily_carbs_goal_g INTEGER,
+                    daily_fat_goal_g INTEGER,
+                    created_at DATETIME
+                )
+                """
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO users (id, email, username, password_hash, display_name, daily_calorie_goal, "
+                "daily_protein_goal_g, daily_carbs_goal_g, daily_fat_goal_g, created_at) VALUES "
+                "(1, 'a@b.com', 'ada', 'hash', 'Ada', 2000, 150, 200, 65, '2026-07-01 09:00:00')"
+            )
+        )
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE food_entries (
+                    id INTEGER PRIMARY KEY,
+                    user_id INTEGER,
+                    name VARCHAR(255),
+                    grams FLOAT,
+                    input_unit VARCHAR(16) DEFAULT 'g',
+                    input_amount FLOAT,
+                    unit_to_grams FLOAT DEFAULT 1.0,
+                    calories_per_100g FLOAT,
+                    protein_per_100g FLOAT,
+                    carbs_per_100g FLOAT,
+                    fat_per_100g FLOAT,
+                    consumed_at DATE,
+                    created_at DATETIME,
+                    meal_group_id CHAR(32)
+                )
+                """
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO food_entries "
+                "(id, user_id, name, grams, input_unit, input_amount, unit_to_grams, calories_per_100g, "
+                "protein_per_100g, carbs_per_100g, fat_per_100g, consumed_at, created_at) "
+                "VALUES (1, 1, 'Banana', 120, 'g', 120, 1.0, 89, 1.1, 22.8, 0.3, '2026-08-01', '2026-08-01 12:00:00')"
+            )
+        )
+
+    await create_tables()
+
+    async with engine.begin() as connection:
+        columns = await connection.run_sync(lambda conn: {c["name"] for c in inspect(conn).get_columns("food_entries")})
+    assert "deleted_at" in columns
+
+
 async def test_create_tables_adds_unit_columns_to_a_pre_existing_product_cache_table() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)

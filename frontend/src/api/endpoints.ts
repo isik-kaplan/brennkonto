@@ -63,6 +63,18 @@ export function deleteEntry(id: string) {
   return api.delete<void>(`/entries/${id}`)
 }
 
+export function fetchArchivedEntries(date: string) {
+  return api.get<FoodEntry[]>(`/entries/archive?date=${date}`)
+}
+
+export function restoreEntry(id: string) {
+  return api.post<FoodEntry>(`/entries/${id}/restore`)
+}
+
+export function permanentlyDeleteEntry(id: string) {
+  return api.delete<void>(`/entries/${id}/permanent`)
+}
+
 export function fetchMealGroups() {
   return api.get<MealGroup[]>('/meal-groups/')
 }

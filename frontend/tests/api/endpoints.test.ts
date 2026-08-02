@@ -108,6 +108,21 @@ describe('entry endpoints', () => {
     endpoints.deleteEntry('5')
     expect(api.delete).toHaveBeenCalledWith('/entries/5')
   })
+
+  it('fetchArchivedEntries gets the archive endpoint with a date query', () => {
+    endpoints.fetchArchivedEntries('2026-08-01')
+    expect(api.get).toHaveBeenCalledWith('/entries/archive?date=2026-08-01')
+  })
+
+  it('restoreEntry posts to the restore endpoint by id', () => {
+    endpoints.restoreEntry('5')
+    expect(api.post).toHaveBeenCalledWith('/entries/5/restore')
+  })
+
+  it('permanentlyDeleteEntry deletes the permanent endpoint by id', () => {
+    endpoints.permanentlyDeleteEntry('5')
+    expect(api.delete).toHaveBeenCalledWith('/entries/5/permanent')
+  })
 })
 
 describe('meal group endpoints', () => {

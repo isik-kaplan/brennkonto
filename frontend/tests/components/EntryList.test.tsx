@@ -27,6 +27,7 @@ function makeEntry(overrides: Partial<FoodEntry> = {}): FoodEntry {
     created_at: '2026-08-01T12:00:00Z',
     updated_at: null,
     meal_group_id: null,
+    deleted_at: null,
     ...overrides,
   }
 }
@@ -61,13 +62,26 @@ describe('EntryList', () => {
     expect(screen.getByText(/2 count \(≈106g\)/)).toBeInTheDocument()
   })
 
-  it('calls onDelete with the entry when Remove is clicked', async () => {
+  it('asks for confirmation before calling onDelete', async () => {
     const user = userEvent.setup()
     const onDelete = vi.fn()
     const entry = makeEntry()
     render(<EntryList entries={[entry]} onDelete={onDelete} />)
     await user.click(screen.getByRole('button', { name: 'Delete Banana' }))
+    expect(onDelete).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
     expect(onDelete).toHaveBeenCalledWith(entry)
+  })
+
+  it('cancels the delete confirmation without calling onDelete', async () => {
+    const user = userEvent.setup()
+    const onDelete = vi.fn()
+    render(<EntryList entries={[makeEntry()]} onDelete={onDelete} />)
+    await user.click(screen.getByRole('button', { name: 'Delete Banana' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(screen.queryByText('Remove this entry?')).not.toBeInTheDocument()
   })
 
   it('shows a spinner and disables the button for the entry being deleted', () => {

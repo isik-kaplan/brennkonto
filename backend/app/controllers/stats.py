@@ -48,6 +48,7 @@ async def daily_stats(
                 FoodEntry.user_id == request.user.id,
                 FoodEntry.consumed_at >= day_start,
                 FoodEntry.consumed_at < day_end,
+                FoodEntry.deleted_at.is_(None),
             )
             .order_by(FoodEntry.created_at)
         )
@@ -93,6 +94,7 @@ async def range_stats(
                 FoodEntry.user_id == request.user.id,
                 FoodEntry.consumed_at >= range_start,
                 FoodEntry.consumed_at < range_end,
+                FoodEntry.deleted_at.is_(None),
             )
         )
     )

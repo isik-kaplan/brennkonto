@@ -101,6 +101,7 @@ class FoodEntryOut(msgspec.Struct):
     created_at: datetime
     updated_at: datetime | None
     meal_group_id: uuid.UUID | None
+    deleted_at: datetime | None
 
 
 class MealGroupOut(msgspec.Struct):

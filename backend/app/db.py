@@ -63,6 +63,12 @@ def _add_meal_group_id_column_if_missing(connection: Connection) -> None:
         connection.execute(text("ALTER TABLE food_entries ADD COLUMN meal_group_id CHAR(32)"))
 
 
+def _add_deleted_at_column_if_missing(connection: Connection) -> None:
+    columns = {column["name"] for column in inspect(connection).get_columns("food_entries")}
+    if "deleted_at" not in columns:
+        connection.execute(text("ALTER TABLE food_entries ADD COLUMN deleted_at DATETIME"))
+
+
 def _column_type_str(connection: Connection, table_name: str, column_name: str) -> str:
     columns = {column["name"]: column for column in inspect(connection).get_columns(table_name)}
     column = columns.get(column_name)
@@ -158,6 +164,7 @@ async def create_tables() -> None:
         await connection.run_sync(_add_unit_input_columns_if_missing)
         await connection.run_sync(_add_product_cache_unit_columns_if_missing)
         await connection.run_sync(_add_meal_group_id_column_if_missing)
+        await connection.run_sync(_add_deleted_at_column_if_missing)
         await connection.run_sync(_migrate_users_and_entries_to_uuid_ids)
 
 

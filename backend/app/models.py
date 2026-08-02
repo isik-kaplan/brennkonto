@@ -104,6 +104,9 @@ class FoodEntry(Base):
     meal_group_id: Mapped[uuid_module.UUID | None] = mapped_column(
         ForeignKey("meal_groups.id", ondelete="SET NULL"), nullable=True
     )
+    # Soft delete: set instead of removing the row on a normal delete. Restore clears it; a
+    # permanent delete (only reachable once this is already set) removes the row for real.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     user: Mapped[User] = relationship(back_populates="entries")
 

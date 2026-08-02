@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 import type { FoodEntry, MealGroup } from '../api/types'
 import { combineDateAndTime, splitDateAndTime } from '../lib/dates'
+import ConfirmDialog from './ConfirmDialog'
 
 interface EntryListProps {
   entries: FoodEntry[]
@@ -58,6 +59,7 @@ export default function EntryList({
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
+  const [pendingDelete, setPendingDelete] = useState<FoodEntry | null>(null)
 
   if (entries.length === 0) {
     return <div className="empty-state">{emptyMessage ?? 'Nothing logged yet.'}</div>
@@ -153,7 +155,7 @@ export default function EntryList({
           <button
             type="button"
             className="btn btn--ghost btn--small"
-            onClick={() => onDelete(entry)}
+            onClick={() => setPendingDelete(entry)}
             disabled={deletingId === entry.id}
             aria-label={`Delete ${entry.name}`}
           >
@@ -165,22 +167,41 @@ export default function EntryList({
   }
 
   return (
-    <ul className="entry-list">
-      {clusterEntries(entries).map((cluster) =>
-        cluster.groupId === null ? (
-          renderRow(cluster.entries[0])
-        ) : (
-          <li key={cluster.groupId} className="meal-group">
-            <div className="meal-group__header">
-              <span>{groups?.find((group) => group.id === cluster.groupId)?.name ?? 'Meal'}</span>
-              <button type="button" className="btn btn--ghost btn--small" onClick={() => onUngroup?.(cluster.groupId!)}>
-                Ungroup
-              </button>
-            </div>
-            <ul className="entry-list">{cluster.entries.map((entry) => renderRow(entry))}</ul>
-          </li>
-        )
+    <>
+      <ul className="entry-list">
+        {clusterEntries(entries).map((cluster) =>
+          cluster.groupId === null ? (
+            renderRow(cluster.entries[0])
+          ) : (
+            <li key={cluster.groupId} className="meal-group">
+              <div className="meal-group__header">
+                <span>{groups?.find((group) => group.id === cluster.groupId)?.name ?? 'Meal'}</span>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  onClick={() => onUngroup?.(cluster.groupId!)}
+                >
+                  Ungroup
+                </button>
+              </div>
+              <ul className="entry-list">{cluster.entries.map((entry) => renderRow(entry))}</ul>
+            </li>
+          )
+        )}
+      </ul>
+      {pendingDelete && (
+        <ConfirmDialog
+          title="Remove this entry?"
+          message={`"${pendingDelete.name}" will be moved to your archive, where you can restore or permanently delete it.`}
+          confirmLabel="Remove"
+          isDestructive
+          onConfirm={() => {
+            onDelete(pendingDelete)
+            setPendingDelete(null)
+          }}
+          onCancel={() => setPendingDelete(null)}
+        />
       )}
-    </ul>
+    </>
   )
 }

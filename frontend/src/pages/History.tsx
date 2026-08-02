@@ -6,11 +6,15 @@ import {
   createMealGroup,
   deleteEntry,
   deleteMealGroup,
+  fetchArchivedEntries,
   fetchDailyStats,
   fetchMealGroups,
+  permanentlyDeleteEntry,
+  restoreEntry,
   updateEntry,
 } from '../api/endpoints'
 import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
+import ConfirmDialog from '../components/ConfirmDialog'
 import EntryList from '../components/EntryList'
 import { addDays, displayDate, toISODate } from '../lib/dates'
 
@@ -22,6 +26,9 @@ export default function History() {
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [groupName, setGroupName] = useState('')
+  const [showRemoved, setShowRemoved] = useState(false)
+  const [archivedEntries, setArchivedEntries] = useState<FoodEntry[]>([])
+  const [pendingPermanentDelete, setPendingPermanentDelete] = useState<FoodEntry | null>(null)
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -38,14 +45,37 @@ export default function History() {
     load()
   }, [load])
 
+  const loadArchived = useCallback(async () => {
+    setArchivedEntries(await fetchArchivedEntries(date))
+  }, [date])
+
+  useEffect(() => {
+    if (showRemoved) {
+      loadArchived()
+    }
+  }, [showRemoved, loadArchived])
+
   async function handleDelete(entry: FoodEntry) {
     setDeletingId(entry.id)
     try {
       await deleteEntry(entry.id)
       await load()
+      if (showRemoved) await loadArchived()
     } finally {
       setDeletingId(null)
     }
+  }
+
+  async function handleRestore(entry: FoodEntry) {
+    await restoreEntry(entry.id)
+    await load()
+    await loadArchived()
+  }
+
+  async function handlePermanentDelete(entry: FoodEntry) {
+    await permanentlyDeleteEntry(entry.id)
+    setPendingPermanentDelete(null)
+    await loadArchived()
   }
 
   function toggleSelect(entry: FoodEntry) {
@@ -171,7 +201,61 @@ export default function History() {
               </Link>
             </p>
           )}
+
+          <p style={{ marginTop: 'var(--space-lg)' }}>
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => setShowRemoved((v) => !v)}>
+              {showRemoved ? 'Hide removed' : 'Show removed'}
+            </button>
+          </p>
+
+          {showRemoved && (
+            <div style={{ marginTop: 'var(--space-md)' }}>
+              <h3 className="card__title">Removed on {displayDate(date)}</h3>
+              {archivedEntries.length === 0 ? (
+                <div className="empty-state">Nothing removed on this day.</div>
+              ) : (
+                <ul className="entry-list">
+                  {archivedEntries.map((entry) => (
+                    <li key={entry.id} className="entry-row">
+                      <div>
+                        <div className="entry-row__name">{entry.name}</div>
+                        <div className="entry-row__meta">{entry.grams}g</div>
+                      </div>
+                      <div className="entry-row__calories numeral">{Math.round(entry.calories)} kcal</div>
+                      <div className="entry-row__actions">
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => handleRestore(entry)}
+                        >
+                          Restore
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => setPendingPermanentDelete(entry)}
+                        >
+                          Delete permanently
+                        </button>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
         </div>
+      )}
+
+      {pendingPermanentDelete && (
+        <ConfirmDialog
+          title="Permanently delete this entry?"
+          message={`"${pendingPermanentDelete.name}" will be permanently deleted. This cannot be undone.`}
+          confirmLabel="Delete permanently"
+          isDestructive
+          onConfirm={() => handlePermanentDelete(pendingPermanentDelete)}
+          onCancel={() => setPendingPermanentDelete(null)}
+        />
       )}
     </>
   )

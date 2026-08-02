@@ -40,6 +40,7 @@ def entry_out(entry: FoodEntry) -> FoodEntryOut:
         created_at=entry.created_at,
         updated_at=entry.updated_at,
         meal_group_id=entry.meal_group_id,
+        deleted_at=entry.deleted_at,
     )
 
 

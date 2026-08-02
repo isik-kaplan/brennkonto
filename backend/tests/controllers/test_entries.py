@@ -121,6 +121,18 @@ async def test_delete_entry(authed_client) -> None:
     assert listing.json() == []
 
 
+async def test_delete_entry_soft_deletes_rather_than_removing_the_row(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    archived = (await authed_client.get("/api/entries/archive?date=2026-08-01")).json()
+    assert len(archived) == 1
+    assert archived[0]["id"] == entry_id
+    assert archived[0]["deleted_at"] is not None
+
+
 async def test_delete_entry_not_found(authed_client) -> None:
     response = await authed_client.delete(f"/api/entries/{NOT_FOUND_ID}")
     assert response.status_code == 404
@@ -134,4 +146,123 @@ async def test_delete_entry_owned_by_another_user_is_not_found(authed_client) ->
         "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
     )
     response = await authed_client.delete(f"/api/entries/{entry_id}")
+    assert response.status_code == 404
+
+
+async def test_deleted_entries_are_excluded_from_stats(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    daily = (await authed_client.get("/api/stats/daily?date=2026-08-01")).json()
+    assert daily["calories"] == 0
+    assert daily["entries"] == []
+
+    range_stats = (await authed_client.get("/api/stats/range?start=2026-08-01&end=2026-08-01&group_by=day")).json()
+    assert range_stats["points"] == []
+
+
+async def test_update_entry_on_a_deleted_entry_is_not_found(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    response = await authed_client.patch(
+        f"/api/entries/{entry_id}", json={"grams": 1, "consumed_at": "2026-08-01T12:00:00Z"}
+    )
+    assert response.status_code == 404
+
+
+async def test_list_archived_entries_only_returns_the_current_users_entries(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    await authed_client.post(
+        "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
+    )
+    response = await authed_client.get("/api/entries/archive?date=2026-08-01")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_restore_entry(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    response = await authed_client.post(f"/api/entries/{entry_id}/restore")
+    assert response.status_code == 201
+    body = response.json()
+    assert body["deleted_at"] is None
+    assert body["updated_at"] is not None
+
+    listing = (await authed_client.get("/api/entries/?date=2026-08-01")).json()
+    assert len(listing) == 1
+    archived = (await authed_client.get("/api/entries/archive?date=2026-08-01")).json()
+    assert archived == []
+
+
+async def test_restore_entry_rejects_a_live_entry(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+
+    response = await authed_client.post(f"/api/entries/{entry_id}/restore")
+    assert response.status_code == 404
+
+
+async def test_restore_entry_not_found(authed_client) -> None:
+    response = await authed_client.post(f"/api/entries/{NOT_FOUND_ID}/restore")
+    assert response.status_code == 404
+
+
+async def test_restore_entry_owned_by_another_user_is_not_found(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    await authed_client.post(
+        "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
+    )
+    response = await authed_client.post(f"/api/entries/{entry_id}/restore")
+    assert response.status_code == 404
+
+
+async def test_permanently_delete_entry(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    response = await authed_client.delete(f"/api/entries/{entry_id}/permanent")
+    assert response.status_code == 204
+
+    archived = (await authed_client.get("/api/entries/archive?date=2026-08-01")).json()
+    assert archived == []
+
+
+async def test_permanently_delete_entry_rejects_a_live_entry(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+
+    response = await authed_client.delete(f"/api/entries/{entry_id}/permanent")
+    assert response.status_code == 404
+
+    listing = (await authed_client.get("/api/entries/?date=2026-08-01")).json()
+    assert len(listing) == 1
+
+
+async def test_permanently_delete_entry_not_found(authed_client) -> None:
+    response = await authed_client.delete(f"/api/entries/{NOT_FOUND_ID}/permanent")
+    assert response.status_code == 404
+
+
+async def test_permanently_delete_entry_owned_by_another_user_is_not_found(authed_client) -> None:
+    created = await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)
+    entry_id = created.json()["id"]
+    await authed_client.delete(f"/api/entries/{entry_id}")
+
+    await authed_client.post(
+        "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
+    )
+    response = await authed_client.delete(f"/api/entries/{entry_id}/permanent")
     assert response.status_code == 404

@@ -43,6 +43,7 @@ export interface FoodEntry {
   created_at: string
   updated_at: string | null
   meal_group_id: string | null
+  deleted_at: string | null
 }
 
 export interface MealGroup {

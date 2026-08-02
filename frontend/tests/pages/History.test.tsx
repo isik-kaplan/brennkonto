@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -33,6 +33,9 @@ beforeEach(() => {
   vi.mocked(endpoints.deleteEntry).mockReset()
   vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue([])
   vi.mocked(endpoints.updateEntry).mockReset()
+  vi.mocked(endpoints.fetchArchivedEntries).mockReset().mockResolvedValue([])
+  vi.mocked(endpoints.restoreEntry).mockReset()
+  vi.mocked(endpoints.permanentlyDeleteEntry).mockReset()
 })
 
 function renderHistory() {
@@ -113,6 +116,7 @@ describe('History', () => {
       created_at: `${today}T08:00:00Z`,
       updated_at: null,
       meal_group_id: null,
+      deleted_at: null,
     }
     vi.mocked(endpoints.fetchDailyStats)
       .mockResolvedValueOnce(makeStats(today, [entry]))
@@ -122,6 +126,7 @@ describe('History', () => {
 
     await waitFor(() => expect(screen.getByText('Oatmeal')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Delete Oatmeal' }))
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
 
     expect(endpoints.deleteEntry).toHaveBeenCalledWith('9')
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
@@ -150,6 +155,7 @@ describe('History', () => {
       created_at: `${today}T08:00:00Z`,
       updated_at: null,
       meal_group_id: null,
+      deleted_at: null,
     }
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entry]))
     vi.mocked(endpoints.updateEntry).mockResolvedValue(entry)
@@ -186,6 +192,7 @@ describe('History', () => {
       created_at: `${today}T08:00:00Z`,
       updated_at: null,
       meal_group_id: null,
+      deleted_at: null,
     }
     const entryB = { ...entryA, id: '2', name: 'Toast' }
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryA, entryB]))
@@ -228,6 +235,7 @@ describe('History', () => {
       created_at: `${today}T08:00:00Z`,
       updated_at: null,
       meal_group_id: null,
+      deleted_at: null,
     }
     const entryB = { ...entryA, id: '2', name: 'Toast' }
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryA, entryB]))
@@ -265,6 +273,7 @@ describe('History', () => {
       created_at: `${today}T08:00:00Z`,
       updated_at: null,
       meal_group_id: 'g1',
+      deleted_at: null,
     }
     const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entry]))
@@ -277,5 +286,118 @@ describe('History', () => {
 
     expect(endpoints.deleteMealGroup).toHaveBeenCalledWith('g1')
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+  })
+
+  function makeArchivedEntry(overrides: Partial<DailyStats['entries'][number]> = {}) {
+    return {
+      id: '3',
+      name: 'Chips',
+      brand: null,
+      barcode: null,
+      grams: 50,
+      input_unit: 'g',
+      input_amount: 50,
+      unit_to_grams: 1,
+      calories_per_100g: 500,
+      protein_per_100g: 6,
+      carbs_per_100g: 50,
+      fat_per_100g: 30,
+      calories: 250,
+      protein_g: 3,
+      carbs_g: 25,
+      fat_g: 15,
+      consumed_at: `${today}T08:00:00`,
+      created_at: `${today}T08:00:00Z`,
+      updated_at: null,
+      meal_group_id: null,
+      deleted_at: `${today}T09:00:00Z`,
+      ...overrides,
+    }
+  }
+
+  it('shows nothing-removed empty state when toggled with no archived entries', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    renderHistory()
+    await waitFor(() => expect(screen.getByText('Nothing logged yet today.')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Show removed' }))
+    expect(endpoints.fetchArchivedEntries).toHaveBeenCalledWith(today)
+    await waitFor(() => expect(screen.getByText('Nothing removed on this day.')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Hide removed' }))
+    expect(screen.queryByText('Nothing removed on this day.')).not.toBeInTheDocument()
+  })
+
+  it('lists archived entries and restores one', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchArchivedEntries).mockResolvedValue([makeArchivedEntry()])
+    vi.mocked(endpoints.restoreEntry).mockResolvedValue(makeArchivedEntry({ deleted_at: null }))
+    renderHistory()
+    await waitFor(() => expect(screen.getByText('Nothing logged yet today.')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Show removed' }))
+    await waitFor(() => expect(screen.getByText('Chips')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Restore' }))
+    expect(endpoints.restoreEntry).toHaveBeenCalledWith('3')
+    await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(2))
+  })
+
+  it('permanently deletes an archived entry after confirming', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchArchivedEntries).mockResolvedValue([makeArchivedEntry()])
+    vi.mocked(endpoints.permanentlyDeleteEntry).mockResolvedValue(undefined)
+    renderHistory()
+    await waitFor(() => expect(screen.getByText('Nothing logged yet today.')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Show removed' }))
+    await waitFor(() => expect(screen.getByText('Chips')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
+    expect(screen.getByText('Permanently delete this entry?')).toBeInTheDocument()
+    expect(endpoints.permanentlyDeleteEntry).not.toHaveBeenCalled()
+
+    const dialog = screen.getByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete permanently' }))
+    expect(endpoints.permanentlyDeleteEntry).toHaveBeenCalledWith('3')
+    await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(2))
+  })
+
+  it('cancels the permanent-delete confirmation without deleting', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchArchivedEntries).mockResolvedValue([makeArchivedEntry()])
+    renderHistory()
+    await waitFor(() => expect(screen.getByText('Nothing logged yet today.')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Show removed' }))
+    await waitFor(() => expect(screen.getByText('Chips')).toBeInTheDocument())
+    await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(endpoints.permanentlyDeleteEntry).not.toHaveBeenCalled()
+    expect(screen.queryByText('Permanently delete this entry?')).not.toBeInTheDocument()
+  })
+
+  it('reloads the archive after soft-deleting an entry while it is shown', async () => {
+    const user = userEvent.setup()
+    const entry = makeArchivedEntry({ id: '4', name: 'Oatmeal', deleted_at: null })
+    vi.mocked(endpoints.fetchDailyStats)
+      .mockResolvedValueOnce(makeStats(today, [entry]))
+      .mockResolvedValueOnce(makeStats(today, []))
+    vi.mocked(endpoints.deleteEntry).mockResolvedValue(undefined)
+    renderHistory()
+    await waitFor(() => expect(screen.getByText('Oatmeal')).toBeInTheDocument())
+
+    await user.click(screen.getByRole('button', { name: 'Show removed' }))
+    await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(1))
+
+    await user.click(screen.getByRole('button', { name: 'Delete Oatmeal' }))
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+
+    await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(2))
   })
 })

@@ -44,6 +44,7 @@ const stats: DailyStats = {
       created_at: `${today}T12:00:00Z`,
       updated_at: null,
       meal_group_id: null,
+      deleted_at: null,
     },
   ],
 }
@@ -92,6 +93,7 @@ describe('Dashboard', () => {
 
     await waitFor(() => expect(screen.getByText('Banana')).toBeInTheDocument())
     await user.click(screen.getByRole('button', { name: 'Delete Banana' }))
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
 
     expect(endpoints.deleteEntry).toHaveBeenCalledWith('1')
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
