@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.5.0]
+
+### Changed
+
+- Further tightened mobile spacing: shrunk button/input heights and the page heading, shrunk the calorie ring, and reduced padding and margins across cards, entry rows, meal groups, macro bars, and form fields.
+- Removed the excess empty space below the last card on every mobile page, which was over-padded to clear the fixed tab bar.
+- The History date range controls (Prev / date / Next) are now centered on mobile instead of left-aligned.
+
 ## [0.4.0]
 
 ### Added

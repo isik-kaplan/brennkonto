@@ -216,8 +216,20 @@ svg {
 }
 
 @media (max-width: 768px) {
+  :root {
+    /* Shrinks every button/input/select and the page-header h1 uniformly - the single biggest
+       lever for "more compact" since it's referenced everywhere rather than needing per-component
+       overrides. */
+    --control-h: 2.375rem;
+    --control-h-sm: 2rem;
+    --text-xl: 1.625rem;
+  }
+
   .app-shell {
-    padding: 0 0 calc(var(--space-2xl) + 4rem);
+    /* Just enough to clear the fixed tabbar (0.75rem top pad + 3rem link height + 0.75rem bottom
+       pad, plus the safe area) - the old calc(space-2xl + 4rem) left ~40px of dead space below
+       the last card on every page for no reason. */
+    padding: 0 0 calc(4.5rem + env(safe-area-inset-bottom, 0px));
   }
 
   .app-floating-nav {
@@ -243,7 +255,7 @@ svg {
   }
 
   .app-main {
-    padding: var(--space-lg) var(--space-md);
+    padding: var(--space-md) var(--space-sm);
   }
 
   .app-tabbar {
@@ -294,6 +306,12 @@ svg {
   justify-content: space-between;
   gap: var(--space-md);
   margin-bottom: var(--space-xl);
+}
+
+@media (max-width: 640px) {
+  .page-header {
+    margin-bottom: var(--space-md);
+  }
 }
 
 .page-header h1 {
@@ -432,6 +450,12 @@ svg {
   margin-top: var(--space-md);
 }
 
+@media (max-width: 640px) {
+  .field + .field {
+    margin-top: var(--space-sm);
+  }
+}
+
 /* Same bug as .grid > .card + .card: inside a .form__row grid, fields sit side by side, not
    stacked - the sibling margin above was shrinking the second field's stretched grid-cell
    height, offsetting it vertically from its row partner. */
@@ -537,12 +561,18 @@ svg {
 
 @media (max-width: 640px) {
   .card {
-    padding: var(--space-md);
+    padding: var(--space-sm);
   }
 }
 
 .card + .card {
   margin-top: var(--space-md);
+}
+
+@media (max-width: 640px) {
+  .card + .card {
+    margin-top: var(--space-sm);
+  }
 }
 
 /* Inside a .grid, spacing between cards comes from the grid's own `gap` - the sibling margin
@@ -558,6 +588,12 @@ svg {
   font-weight: 700;
   font-size: var(--text-md);
   margin-bottom: var(--space-md);
+}
+
+@media (max-width: 640px) {
+  .card__title {
+    margin-bottom: var(--space-sm);
+  }
 }
 
 .grid {
@@ -626,6 +662,19 @@ svg {
   flex-shrink: 0;
 }
 
+@media (max-width: 640px) {
+  .calorie-ring {
+    gap: var(--space-lg);
+  }
+
+  .calorie-ring__svg {
+    /* The ring's text/circles share its 100x100 viewBox, so shrinking the rendered size scales
+       everything inside proportionally too - no separate font-size overrides needed. */
+    width: 7rem;
+    height: 7rem;
+  }
+}
+
 .calorie-ring__track {
   fill: none;
   stroke: var(--color-paper-3);
@@ -673,6 +722,12 @@ svg {
   gap: var(--space-sm);
   flex: 1;
   min-width: 12rem;
+}
+
+@media (max-width: 640px) {
+  .macro-bars {
+    gap: var(--space-2xs);
+  }
 }
 
 .macro-bar__row {
@@ -844,7 +899,9 @@ svg {
     grid-template-areas:
       'info middle'
       'actions actions';
+    gap: var(--space-sm);
     row-gap: var(--space-2xs);
+    padding: var(--space-xs) var(--space-2xs);
   }
 
   .entry-row__actions {
@@ -863,6 +920,13 @@ svg {
   border-radius: var(--radius);
   padding: 0 var(--space-md);
   margin: var(--space-sm) 0;
+}
+
+@media (max-width: 640px) {
+  .meal-group {
+    padding: 0 var(--space-sm);
+    margin: var(--space-xs) 0;
+  }
 }
 
 .meal-group__header {
@@ -1073,6 +1137,7 @@ svg {
 
 @media (max-width: 640px) {
   .range-controls {
+    justify-content: center;
     gap: var(--space-sm);
     margin-bottom: var(--space-lg);
   }
