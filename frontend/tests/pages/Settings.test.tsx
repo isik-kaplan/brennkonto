@@ -1,10 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
-import type { User } from '../../src/api/types'
+import type { DailyStats, User } from '../../src/api/types'
 import { useAuth } from '../../src/hooks/useAuth'
 import { ThemeProvider } from '../../src/hooks/useTheme'
 import Settings from '../../src/pages/Settings'
@@ -14,9 +15,11 @@ vi.mock('../../src/hooks/useAuth')
 
 function renderSettings() {
   return render(
-    <ThemeProvider>
-      <Settings />
-    </ThemeProvider>
+    <MemoryRouter>
+      <ThemeProvider>
+        <Settings />
+      </ThemeProvider>
+    </MemoryRouter>
   )
 }
 
@@ -25,11 +28,23 @@ const user: User = {
   email: 'demo@brennkonto.local',
   username: null,
   display_name: 'Demo',
-  daily_calorie_goal: 2000,
-  daily_protein_goal_g: 150,
-  daily_carbs_goal_g: 200,
-  daily_fat_goal_g: 65,
   updated_at: null,
+}
+
+function makeDailyStats(overrides: Partial<DailyStats> = {}): DailyStats {
+  return {
+    date: '2026-08-01',
+    calories: 0,
+    protein_g: 0,
+    carbs_g: 0,
+    fat_g: 0,
+    calorie_goal: 2000,
+    protein_goal_g: 150,
+    carbs_goal_g: 200,
+    fat_goal_g: 65,
+    entries: [],
+    ...overrides,
+  }
 }
 
 function mockAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
@@ -48,8 +63,8 @@ function mockAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
 
 beforeEach(() => {
   vi.mocked(endpoints.updateProfile).mockReset()
-  vi.mocked(endpoints.updateGoals).mockReset()
   vi.mocked(endpoints.changePassword).mockReset()
+  vi.mocked(endpoints.fetchDailyStats).mockReset().mockResolvedValue(makeDailyStats())
 })
 
 describe('Settings', () => {
@@ -109,46 +124,22 @@ describe('Settings', () => {
   })
 
   describe('GoalsCard', () => {
-    it('saves updated goal numbers', async () => {
-      const clickUser = userEvent.setup()
-      const auth = mockAuth()
-      const updated = { ...user, daily_calorie_goal: 2200 }
-      vi.mocked(endpoints.updateGoals).mockResolvedValue(updated)
+    it("shows today's goal numbers, fetched via daily stats", async () => {
+      mockAuth()
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(
+        makeDailyStats({ calorie_goal: 2200, protein_goal_g: 160, carbs_goal_g: 220, fat_goal_g: 70 })
+      )
       renderSettings()
 
-      const caloriesInput = screen.getByLabelText('Calories')
-      await clickUser.clear(caloriesInput)
-      await clickUser.type(caloriesInput, '2200')
-      await clickUser.click(screen.getByRole('button', { name: 'Save goals' }))
-
-      expect(endpoints.updateGoals).toHaveBeenCalledWith({
-        daily_calorie_goal: 2200,
-        daily_protein_goal_g: 150,
-        daily_carbs_goal_g: 200,
-        daily_fat_goal_g: 65,
-      })
-      expect(await screen.findByText('Goals updated.')).toBeInTheDocument()
-      expect(auth.setUser).toHaveBeenCalledWith(updated)
+      expect(await screen.findByText('2200 kcal · P160 C220 F70')).toBeInTheDocument()
     })
 
-    it('shows the API error message on failure', async () => {
-      const clickUser = userEvent.setup()
+    it('links to the dedicated goal-management page rather than editing inline', async () => {
       mockAuth()
-      vi.mocked(endpoints.updateGoals).mockRejectedValue(new ApiError('Goals must be positive.', 400))
       renderSettings()
 
-      await clickUser.click(screen.getByRole('button', { name: 'Save goals' }))
-      expect(await screen.findByText('Goals must be positive.')).toBeInTheDocument()
-    })
-
-    it('shows a generic error message for a non-API failure', async () => {
-      const clickUser = userEvent.setup()
-      mockAuth()
-      vi.mocked(endpoints.updateGoals).mockRejectedValue(new Error('boom'))
-      renderSettings()
-
-      await clickUser.click(screen.getByRole('button', { name: 'Save goals' }))
-      expect(await screen.findByText('Could not save.')).toBeInTheDocument()
+      const link = await screen.findByRole('link', { name: 'Manage goals →' })
+      expect(link).toHaveAttribute('href', '/settings/goals')
     })
   })
 

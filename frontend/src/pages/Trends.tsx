@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchRangeStats } from '../api/endpoints'
 import type { GroupBy, RangeStats } from '../api/types'
 import BarChart from '../components/BarChart'
-import { useAuth } from '../hooks/useAuth'
 import { addDays, fromISODate, toISODate } from '../lib/dates'
 
 type Preset = '7' | '30' | '90' | 'custom'
@@ -50,7 +49,6 @@ function formatDelta(current: number, previous: number): string {
 }
 
 export default function Trends() {
-  const { user } = useAuth()
   const [preset, setPreset] = useState<Preset>('7')
   const [groupBy, setGroupBy] = useState<GroupBy>('day')
   const [customStart, setCustomStart] = useState(addDays(toISODate(new Date()), -6))
@@ -185,7 +183,7 @@ export default function Trends() {
                 label: shortLabel(point.period_start, groupBy),
                 value: point.calories,
               }))}
-              goal={user?.daily_calorie_goal}
+              goal={stats.points.at(-1)?.calorie_goal}
               sparse={stats.days_logged < Math.min(3, stats.days_in_range)}
             />
             <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>

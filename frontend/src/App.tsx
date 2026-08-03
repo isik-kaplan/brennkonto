@@ -5,6 +5,7 @@ import { Navigate, Route, Routes } from 'react-router'
 import AppShell from './components/AppShell'
 import { useAuth } from './hooks/useAuth'
 import Dashboard from './pages/Dashboard'
+import GoalHistory from './pages/GoalHistory'
 import History from './pages/History'
 import LogFood from './pages/LogFood'
 import Login from './pages/Login'
@@ -68,6 +69,7 @@ export default function App() {
         <Route path="/history" element={<History />} />
         <Route path="/trends" element={<Trends />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/settings/goals" element={<GoalHistory />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

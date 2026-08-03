@@ -1,13 +1,15 @@
-import { useState } from 'react'
-import type { ChangeEvent, FormEvent } from 'react'
+import { useEffect, useState } from 'react'
+import type { FormEvent } from 'react'
 
 import { useFormState } from '@isik-kaplan/core/hooks'
+import { Link } from 'react-router'
 
 import { ApiError } from '../api/client'
-import { changePassword, updateGoals, updateProfile } from '../api/endpoints'
+import { changePassword, fetchDailyStats, updateProfile } from '../api/endpoints'
 import type { User } from '../api/types'
 import ThemeToggle from '../components/ThemeToggle'
 import { useAuth } from '../hooks/useAuth'
+import { toISODate } from '../lib/dates'
 
 export default function Settings() {
   const { user, setUser, logout } = useAuth()
@@ -21,15 +23,7 @@ export default function Settings() {
 
       <div className="grid grid--2">
         <ProfileCard displayName={user.display_name} onSaved={setUser} />
-        <GoalsCard
-          goals={{
-            daily_calorie_goal: user.daily_calorie_goal,
-            daily_protein_goal_g: user.daily_protein_goal_g,
-            daily_carbs_goal_g: user.daily_carbs_goal_g,
-            daily_fat_goal_g: user.daily_fat_goal_g,
-          }}
-          onSaved={setUser}
-        />
+        <GoalsCard />
         <PasswordCard />
         <div className="card">
           <h2 className="card__title">Appearance</h2>
@@ -98,109 +92,41 @@ function ProfileCard({ displayName, onSaved }: { displayName: string; onSaved: (
   )
 }
 
-interface Goals {
-  daily_calorie_goal: number
-  daily_protein_goal_g: number
-  daily_carbs_goal_g: number
-  daily_fat_goal_g: number
-}
+// A lightweight "what's active right now" summary, not a management UI - adding/editing/removing
+// dated goals is deliberately one click further away on its own page (GoalHistory.tsx), not
+// inline in Settings, so day-to-day Settings stays uncluttered by something most visits don't
+// need. Reads via fetchDailyStats rather than the goals list so it never has to duplicate the
+// backend's own resolve-goal-for-a-date/fallback-to-defaults logic.
+function GoalsCard() {
+  const [goal, setGoal] = useState<{
+    calorie_goal: number
+    protein_goal_g: number
+    carbs_goal_g: number
+    fat_goal_g: number
+  } | null>(null)
 
-function GoalsCard({ goals, onSaved }: { goals: Goals; onSaved: (user: User) => void }) {
-  const { formState, setFormState } = useFormState(goals)
-  const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
-
-  function handleNumberChange(key: keyof Goals) {
-    // A native number input's .value is always a valid numeric string or "" - never text that
-    // would make Number(...) produce NaN - so there's no invalid case to guard here.
-    return (event: ChangeEvent<HTMLInputElement>) => {
-      setFormState((prev) => ({ ...prev, [key]: Number(event.target.value) }))
-    }
-  }
-
-  async function handleSubmit(event: FormEvent) {
-    event.preventDefault()
-    setIsSaving(true)
-    setMessage(null)
-    try {
-      const user = await updateGoals(formState)
-      onSaved(user)
-      setMessage({ kind: 'success', text: 'Goals updated.' })
-    } catch (error) {
-      setMessage({ kind: 'error', text: error instanceof ApiError ? error.message : 'Could not save.' })
-    } finally {
-      setIsSaving(false)
-    }
-  }
+  useEffect(() => {
+    fetchDailyStats(toISODate(new Date())).then((stats) => {
+      setGoal({
+        calorie_goal: stats.calorie_goal,
+        protein_goal_g: stats.protein_goal_g,
+        carbs_goal_g: stats.carbs_goal_g,
+        fat_goal_g: stats.fat_goal_g,
+      })
+    })
+  }, [])
 
   return (
     <div className="card">
       <h2 className="card__title">Daily goals</h2>
-      {message && (
-        <div className={message.kind === 'success' ? 'form__banner form__banner--success' : 'form__banner'}>
-          {message.text}
-        </div>
+      {goal && (
+        <p className="entry-row__meta" style={{ marginBottom: 'var(--space-md)' }}>
+          {goal.calorie_goal} kcal · P{goal.protein_goal_g} C{goal.carbs_goal_g} F{goal.fat_goal_g}
+        </p>
       )}
-      <form className="form" onSubmit={handleSubmit}>
-        <div className="form__row">
-          <div className="field">
-            <label htmlFor="daily_calorie_goal">Calories</label>
-            <input
-              id="daily_calorie_goal"
-              className="input"
-              type="number"
-              min={0}
-              required
-              value={formState.daily_calorie_goal}
-              onChange={handleNumberChange('daily_calorie_goal')}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="daily_protein_goal_g">Protein (g)</label>
-            <input
-              id="daily_protein_goal_g"
-              className="input"
-              type="number"
-              min={0}
-              required
-              value={formState.daily_protein_goal_g}
-              onChange={handleNumberChange('daily_protein_goal_g')}
-            />
-          </div>
-        </div>
-        <div className="form__row" style={{ marginTop: 'var(--space-md)' }}>
-          <div className="field">
-            <label htmlFor="daily_carbs_goal_g">Carbs (g)</label>
-            <input
-              id="daily_carbs_goal_g"
-              className="input"
-              type="number"
-              min={0}
-              required
-              value={formState.daily_carbs_goal_g}
-              onChange={handleNumberChange('daily_carbs_goal_g')}
-            />
-          </div>
-          <div className="field">
-            <label htmlFor="daily_fat_goal_g">Fat (g)</label>
-            <input
-              id="daily_fat_goal_g"
-              className="input"
-              type="number"
-              min={0}
-              required
-              value={formState.daily_fat_goal_g}
-              onChange={handleNumberChange('daily_fat_goal_g')}
-            />
-          </div>
-        </div>
-        <div className="form__actions">
-          <button type="submit" className="btn btn--primary" disabled={isSaving}>
-            {isSaving && <span className="btn__spinner" aria-hidden="true" />}
-            Save goals
-          </button>
-        </div>
-      </form>
+      <Link to="/settings/goals" className="btn btn--ghost">
+        Manage goals →
+      </Link>
     </div>
   )
 }

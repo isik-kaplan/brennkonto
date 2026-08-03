@@ -3,27 +3,13 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as endpoints from '../../src/api/endpoints'
-import type { RangeStats, User } from '../../src/api/types'
-import { useAuth } from '../../src/hooks/useAuth'
+import type { RangeStats } from '../../src/api/types'
 import { addDays, toISODate } from '../../src/lib/dates'
 import Trends from '../../src/pages/Trends'
 
 vi.mock('../../src/api/endpoints')
-vi.mock('../../src/hooks/useAuth')
 
 const today = toISODate(new Date())
-
-const user: User = {
-  id: '1',
-  email: 'demo@brennkonto.local',
-  username: null,
-  display_name: 'Demo',
-  daily_calorie_goal: 2000,
-  daily_protein_goal_g: 150,
-  daily_carbs_goal_g: 200,
-  daily_fat_goal_g: 65,
-  updated_at: null,
-}
 
 function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {
   return {
@@ -37,6 +23,7 @@ function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {
         carbs_g: 190,
         fat_g: 60,
         days_logged: 1,
+        calorie_goal: 2000,
       },
     ],
     average_calories: 1800,
@@ -50,20 +37,8 @@ function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {
   }
 }
 
-function mockAuth(withUser: User | null = user) {
-  vi.mocked(useAuth).mockReturnValue({
-    user: withUser,
-    isLoading: false,
-    login: vi.fn(),
-    register: vi.fn(),
-    logout: vi.fn(),
-    setUser: vi.fn(),
-  })
-}
-
 beforeEach(() => {
   vi.mocked(endpoints.fetchRangeStats).mockReset()
-  mockAuth()
 })
 
 describe('Trends', () => {
@@ -179,6 +154,7 @@ describe('Trends', () => {
             carbs_g: 190,
             fat_g: 60,
             days_logged: 1,
+            calorie_goal: 2000,
           },
           {
             period_label: 'Week of Aug 03',
@@ -189,6 +165,7 @@ describe('Trends', () => {
             carbs_g: 200,
             fat_g: 65,
             days_logged: 3,
+            calorie_goal: 2000,
           },
         ],
       })
@@ -199,12 +176,19 @@ describe('Trends', () => {
     expect(screen.getByText(/3 days logged/)).toBeInTheDocument()
   })
 
-  it('passes no goal line when there is no authenticated user', async () => {
-    mockAuth(null)
+  it('draws the goal line from the most recent point in the visible range', async () => {
     vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(makeRangeStats())
     render(<Trends />)
 
     await waitFor(() => expect(screen.getByText('1800')).toBeInTheDocument())
+    expect(document.querySelector('.chart__bar-goal')).toBeInTheDocument()
+  })
+
+  it('passes no goal line when there are no points to draw one from', async () => {
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(makeRangeStats({ points: [] }))
+    render(<Trends />)
+
+    await waitFor(() => expect(screen.getByText('No entries in this range yet.')).toBeInTheDocument())
     expect(document.querySelector('.chart__bar-goal')).not.toBeInTheDocument()
   })
 })

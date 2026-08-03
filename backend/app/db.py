@@ -123,8 +123,32 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
     new_meal_groups.create(connection, checkfirst=True)
     new_entries.create(connection)
 
+    goal_versions = Base.metadata.tables["goal_versions"]
     for row in old_users:
-        connection.execute(new_users.insert(), {**row, "id": user_id_map[row["id"]], "updated_at": None})
+        new_id = user_id_map[row["id"]]
+        connection.execute(new_users.insert(), {**row, "id": new_id, "updated_at": None})
+        # The new `users` table (built from the current model, above) never has the legacy
+        # daily_*_goal columns at all - inserting **row into it silently drops them, so this is
+        # the one chance to carry that data forward, into goal_versions, using the just-computed
+        # new id. _backfill_goal_versions_from_user_columns (below) only ever sees a `users` table
+        # whose goal columns already exist, which by construction is never true right after this
+        # rebuild - so it's this block's job alone to backfill for users that come through here.
+        # Every schema this migration has ever run against has had these 4 columns since the
+        # app's first release, so there's no "missing" case to guard against.
+        connection.execute(
+            goal_versions.insert(),
+            {
+                "id": uuid7(),
+                "user_id": new_id,
+                "effective_date": row["created_at"].date(),
+                "daily_calorie_goal": row["daily_calorie_goal"],
+                "daily_protein_goal_g": row["daily_protein_goal_g"],
+                "daily_carbs_goal_g": row["daily_carbs_goal_g"],
+                "daily_fat_goal_g": row["daily_fat_goal_g"],
+                "created_at": datetime.now(UTC),
+                "updated_at": None,
+            },
+        )
     for row in old_groups:
         # meal_groups.id was already a Uuid column before this migration (introduced UUID-native
         # in the same release that added meal grouping) - reflection reads it back as a plain hex
@@ -157,6 +181,54 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
         )
 
 
+def _backfill_goal_versions_from_user_columns(connection: Connection) -> None:
+    # The 4 daily_*_goal columns used to live directly on `users` - once dropped (see
+    # _drop_legacy_goal_columns_from_users below), Base.metadata.tables["users"] no longer knows
+    # about them, so this reflects the raw pre-drop table instead, the same technique
+    # _migrate_users_and_entries_to_uuid_ids uses above. Must run before the drop. Naturally
+    # idempotent: returns immediately once the columns are gone, and skips any user who already
+    # has a version (so a second run - or a fresh DB where create_all already built the
+    # column-less `users` table - does nothing).
+    columns = {column["name"] for column in inspect(connection).get_columns("users")}
+    if "daily_calorie_goal" not in columns:
+        return
+
+    old_metadata = MetaData()
+    old_metadata.reflect(bind=connection, only=["users"])
+    old_users = old_metadata.tables["users"]
+    goal_versions = Base.metadata.tables["goal_versions"]
+
+    existing_user_ids = {row[0] for row in connection.execute(select(goal_versions.c.user_id))}
+    for row in connection.execute(select(old_users)):
+        # Same string-vs-UUID-object reflection issue as meal_groups.id/food_entries.meal_group_id
+        # above - `users.id` is already a real Uuid column by this point in the chain (this runs
+        # after _migrate_users_and_entries_to_uuid_ids), but reflection still loses that type info.
+        user_id = row.id if isinstance(row.id, uuid_module.UUID) else uuid_module.UUID(row.id)
+        if user_id in existing_user_ids:
+            continue
+        connection.execute(
+            goal_versions.insert(),
+            {
+                "id": uuid7(),
+                "user_id": user_id,
+                "effective_date": row.created_at.date(),
+                "daily_calorie_goal": row.daily_calorie_goal,
+                "daily_protein_goal_g": row.daily_protein_goal_g,
+                "daily_carbs_goal_g": row.daily_carbs_goal_g,
+                "daily_fat_goal_g": row.daily_fat_goal_g,
+                "created_at": datetime.now(UTC),
+                "updated_at": None,
+            },
+        )
+
+
+def _drop_legacy_goal_columns_from_users(connection: Connection) -> None:
+    columns = {column["name"] for column in inspect(connection).get_columns("users")}
+    for column_name in ("daily_calorie_goal", "daily_protein_goal_g", "daily_carbs_goal_g", "daily_fat_goal_g"):
+        if column_name in columns:
+            connection.execute(text(f"ALTER TABLE users DROP COLUMN {column_name}"))
+
+
 def _backfill_meal_group_id_for_ungrouped_entries(connection: Connection) -> None:
     # Every entry must always belong to a real MealGroup (even a "group of one") so it can be
     # named the same way a multi-item meal can - this gives every pre-existing ungrouped entry
@@ -187,6 +259,8 @@ async def create_tables() -> None:
         await connection.run_sync(_add_deleted_at_column_if_missing)
         await connection.run_sync(_migrate_users_and_entries_to_uuid_ids)
         await connection.run_sync(_backfill_meal_group_id_for_ungrouped_entries)
+        await connection.run_sync(_backfill_goal_versions_from_user_columns)
+        await connection.run_sync(_drop_legacy_goal_columns_from_users)
 
 
 async def get_db_session() -> AsyncIterator[AsyncSession]:

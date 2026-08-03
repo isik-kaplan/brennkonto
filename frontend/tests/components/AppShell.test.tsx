@@ -14,10 +14,6 @@ const user: User = {
   email: 'demo@brennkonto.local',
   username: null,
   display_name: 'Demo User',
-  daily_calorie_goal: 2000,
-  daily_protein_goal_g: 150,
-  daily_carbs_goal_g: 200,
-  daily_fat_goal_g: 65,
   updated_at: null,
 }
 

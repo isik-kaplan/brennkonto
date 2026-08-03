@@ -18,7 +18,7 @@ from uuid6 import uuid7
 
 from app.auth import hash_password
 from app.db import Base, engine, session_factory
-from app.models import FoodEntry, MealGroup, User
+from app.models import FoodEntry, GoalVersion, MealGroup, User
 
 
 # (name, brand, calories_per_100g, protein_per_100g, carbs_per_100g, fat_per_100g)
@@ -72,15 +72,21 @@ async def seed(email: str, password: str, display_name: str, days: int) -> None:
             email=email,
             password_hash=hash_password(password),
             display_name=display_name,
-            daily_calorie_goal=2200,
-            daily_protein_goal_g=160,
-            daily_carbs_goal_g=220,
-            daily_fat_goal_g=70,
         )
         session.add(user)
         await session.flush()
 
         today = date.today()
+        session.add(
+            GoalVersion(
+                user_id=user.id,
+                effective_date=today - timedelta(days=days),
+                daily_calorie_goal=2200,
+                daily_protein_goal_g=160,
+                daily_carbs_goal_g=220,
+                daily_fat_goal_g=70,
+            )
+        )
         total_entries = 0
         for day_offset in range(days, -1, -1):
             day = today - timedelta(days=day_offset)

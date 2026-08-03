@@ -1,3 +1,9 @@
+from sqlalchemy import select
+
+from app.db import session_factory
+from app.models import User
+
+
 async def test_register_creates_a_user_and_starts_a_session(client) -> None:
     response = await client.post(
         "/api/auth/register",
@@ -8,7 +14,6 @@ async def test_register_creates_a_user_and_starts_a_session(client) -> None:
     assert body["email"] == "a@b.com"
     assert body["username"] is None
     assert body["display_name"] == "Ada"
-    assert body["daily_calorie_goal"] == 2000
     assert "password" not in body
     assert "password_hash" not in body
 
@@ -51,11 +56,17 @@ async def test_login_with_email(client) -> None:
 
 
 async def test_login_with_username(client) -> None:
+    # Username is permanently fixed at account creation - nothing in the current API can ever set
+    # one, so an account that has one (existing accounts from before this was locked down) is
+    # seeded directly here rather than through a request.
     await client.post(
         "/api/auth/register",
         json={"email": "a@b.com", "password": "correcthorsebattery", "display_name": "Ada"},
     )
-    await client.patch("/api/account/profile", json={"display_name": "Ada", "username": "ada"})
+    async with session_factory() as db_session:
+        user = await db_session.scalar(select(User).where(User.email == "a@b.com"))
+        user.username = "ada"
+        await db_session.commit()
     await client.post("/api/auth/logout")
 
     response = await client.post("/api/auth/login", json={"identifier": "ada", "password": "correcthorsebattery"})

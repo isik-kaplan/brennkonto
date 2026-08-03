@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import inspect, select, text
 from uuid6 import uuid7
@@ -282,10 +282,6 @@ async def test_create_tables_backfills_a_group_of_one_for_every_ungrouped_entry(
                 "username": None,
                 "password_hash": "hash",
                 "display_name": "Ada",
-                "daily_calorie_goal": 2000,
-                "daily_protein_goal_g": 150,
-                "daily_carbs_goal_g": 200,
-                "daily_fat_goal_g": 65,
                 "created_at": datetime(2026, 7, 1, 9, tzinfo=UTC),
             },
         )
@@ -357,6 +353,128 @@ async def test_create_tables_adds_unit_columns_to_a_pre_existing_product_cache_t
             lambda conn: {c["name"] for c in inspect(conn).get_columns("product_cache")}
         )
     assert {"suggested_unit", "unit_to_grams"} <= columns
+
+
+async def test_backfill_goal_versions_skips_a_user_who_already_has_one() -> None:
+    # Simulates a user who already got a goal_versions row through some other path (e.g. the
+    # uuid-id migration's own backfill, or simply using the app) before the legacy columns were
+    # dropped - the general column-presence backfill must not create a second, duplicate version.
+    has_version_id = uuid7()
+    needs_backfill_id = uuid7()
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id CHAR(32) PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE,
+                    username VARCHAR(120) UNIQUE,
+                    password_hash VARCHAR(255),
+                    display_name VARCHAR(120),
+                    daily_calorie_goal INTEGER,
+                    daily_protein_goal_g INTEGER,
+                    daily_carbs_goal_g INTEGER,
+                    daily_fat_goal_g INTEGER,
+                    created_at DATETIME
+                )
+                """
+            )
+        )
+        for user_id, email in [(has_version_id, "a@b.com"), (needs_backfill_id, "c@d.com")]:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, email, username, password_hash, display_name, daily_calorie_goal, "
+                    "daily_protein_goal_g, daily_carbs_goal_g, daily_fat_goal_g, created_at) VALUES "
+                    "(:id, :email, NULL, 'hash', 'Ada', 2200, 160, 220, 70, '2026-07-01 09:00:00')"
+                ),
+                {"id": user_id.hex, "email": email},
+            )
+        goal_versions = Base.metadata.tables["goal_versions"]
+        await connection.run_sync(lambda conn: goal_versions.create(conn))
+        await connection.execute(
+            goal_versions.insert(),
+            {
+                "id": uuid7(),
+                "user_id": has_version_id,
+                "effective_date": date(2026, 6, 1),
+                "daily_calorie_goal": 1999,
+                "daily_protein_goal_g": 100,
+                "daily_carbs_goal_g": 100,
+                "daily_fat_goal_g": 50,
+                "created_at": datetime(2026, 6, 1, tzinfo=UTC),
+                "updated_at": None,
+            },
+        )
+
+    await create_tables()
+
+    async with engine.begin() as connection:
+        goal_versions = Base.metadata.tables["goal_versions"]
+        rows = (await connection.execute(select(goal_versions))).all()
+    rows_by_user = {row.user_id: row for row in rows}
+    assert len(rows) == 2
+    # untouched - not overwritten with the legacy-column values
+    assert rows_by_user[has_version_id].daily_calorie_goal == 1999
+    # backfilled fresh from the legacy columns
+    assert rows_by_user[needs_backfill_id].daily_calorie_goal == 2200
+
+
+async def test_create_tables_backfills_goal_versions_and_drops_legacy_columns() -> None:
+    user_id = uuid7()
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        # Simulates a deployment from before goals were versioned - users.id is already UUID-shaped
+        # (post uuid-migration) so this isolates just the goal-versions backfill/drop.
+        await connection.execute(
+            text(
+                """
+                CREATE TABLE users (
+                    id CHAR(32) PRIMARY KEY,
+                    email VARCHAR(255) UNIQUE,
+                    username VARCHAR(120) UNIQUE,
+                    password_hash VARCHAR(255),
+                    display_name VARCHAR(120),
+                    daily_calorie_goal INTEGER,
+                    daily_protein_goal_g INTEGER,
+                    daily_carbs_goal_g INTEGER,
+                    daily_fat_goal_g INTEGER,
+                    created_at DATETIME
+                )
+                """
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO users (id, email, username, password_hash, display_name, daily_calorie_goal, "
+                "daily_protein_goal_g, daily_carbs_goal_g, daily_fat_goal_g, created_at) VALUES "
+                "(:id, 'a@b.com', 'ada', 'hash', 'Ada', 2200, 160, 220, 70, '2026-07-01 09:00:00')"
+            ),
+            {"id": user_id.hex},
+        )
+
+    await create_tables()
+
+    async with engine.begin() as connection:
+        columns = await connection.run_sync(lambda conn: {c["name"] for c in inspect(conn).get_columns("users")})
+        goal_versions = Base.metadata.tables["goal_versions"]
+        rows = (await connection.execute(select(goal_versions))).all()
+
+    assert not {"daily_calorie_goal", "daily_protein_goal_g", "daily_carbs_goal_g", "daily_fat_goal_g"} & columns
+    assert len(rows) == 1
+    assert rows[0].user_id == user_id
+    assert rows[0].effective_date.isoformat() == "2026-07-01"
+    assert rows[0].daily_calorie_goal == 2200
+    assert rows[0].daily_protein_goal_g == 160
+    assert rows[0].daily_carbs_goal_g == 220
+    assert rows[0].daily_fat_goal_g == 70
+
+    # idempotent: running again must not duplicate the backfilled version or error on the
+    # already-dropped columns.
+    await create_tables()
+    async with engine.begin() as connection:
+        rows_after_second_run = (await connection.execute(select(goal_versions))).all()
+    assert len(rows_after_second_run) == 1
 
 
 def _old_schema_ddl() -> list[str]:
@@ -521,3 +639,20 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
     entry_group_ids = [row.meal_group_id for row in entry_rows]
     assert all(group_id is not None for group_id in entry_group_ids)
     assert len(set(entry_group_ids)) == len(group_rows)
+
+    # the goal-versions backfill ran after the uuid migration (it needs users.id already
+    # UUID-shaped) and the legacy goal columns are gone from `users` afterward.
+    async with engine.begin() as connection:
+        goal_version_rows = (
+            await connection.execute(text("SELECT user_id, effective_date, daily_calorie_goal FROM goal_versions"))
+        ).all()
+        remaining_user_columns = await connection.run_sync(
+            lambda conn: {c["name"] for c in inspect(conn).get_columns("users")}
+        )
+    assert len(goal_version_rows) == num_users
+    assert {row.user_id for row in goal_version_rows} == {row.id for row in user_rows}
+    assert all(row.daily_calorie_goal == 2000 for row in goal_version_rows)
+    assert all(row.effective_date == "2026-07-01" for row in goal_version_rows)
+    assert not {"daily_calorie_goal", "daily_protein_goal_g", "daily_carbs_goal_g", "daily_fat_goal_g"} & (
+        remaining_user_columns
+    )

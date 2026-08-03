@@ -1,7 +1,7 @@
 from datetime import UTC, date, datetime
 
-from app.models import FoodEntry, User
-from app.serializers import entry_out, user_out
+from app.models import FoodEntry, GoalVersion, User
+from app.serializers import entry_out, goal_version_out, user_out
 
 
 def test_user_out_maps_all_fields() -> None:
@@ -11,21 +11,33 @@ def test_user_out_maps_all_fields() -> None:
         username="ada",
         password_hash="hashed",
         display_name="Ada",
-        daily_calorie_goal=2000,
-        daily_protein_goal_g=150,
-        daily_carbs_goal_g=200,
-        daily_fat_goal_g=65,
     )
     out = user_out(user)
     assert out.id == 1
     assert out.email == "a@b.com"
     assert out.username == "ada"
     assert out.display_name == "Ada"
+    assert not hasattr(out, "password_hash")
+
+
+def test_goal_version_out_maps_all_fields() -> None:
+    version = GoalVersion(
+        id=1,
+        user_id=1,
+        effective_date=date(2026, 8, 1),
+        daily_calorie_goal=2000,
+        daily_protein_goal_g=150,
+        daily_carbs_goal_g=200,
+        daily_fat_goal_g=65,
+    )
+    out = goal_version_out(version, date(2026, 8, 31))
+    assert out.id == 1
+    assert out.effective_date == date(2026, 8, 1)
+    assert out.end_date == date(2026, 8, 31)
     assert out.daily_calorie_goal == 2000
     assert out.daily_protein_goal_g == 150
     assert out.daily_carbs_goal_g == 200
     assert out.daily_fat_goal_g == 65
-    assert not hasattr(out, "password_hash")
 
 
 def test_entry_out_maps_fields_and_computed_macros() -> None:

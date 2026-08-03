@@ -12,33 +12,15 @@ async def test_update_profile_requires_authentication(client) -> None:
     assert response.status_code == 401
 
 
-async def test_update_profile_sets_a_username(authed_client) -> None:
-    response = await authed_client.patch("/api/account/profile", json={"display_name": "Demo", "username": "demo"})
-    assert response.status_code == 200
-    assert response.json()["username"] == "demo"
-
-    # login now works with the new username too
-    await authed_client.post("/api/auth/logout")
-    login = await authed_client.post("/api/auth/login", json={"identifier": "demo", "password": "correcthorsebattery"})
-    assert login.status_code == 201
-
-
-async def test_update_profile_rejects_a_taken_username(authed_client, client) -> None:
-    await authed_client.patch("/api/account/profile", json={"display_name": "Demo", "username": "demo"})
-
-    await client.post(
-        "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
+async def test_update_profile_ignores_a_username_field_if_sent(authed_client) -> None:
+    # Username is permanently fixed after account creation - UpdateProfileRequest no longer even
+    # has the field, so a client sending one (an old frontend build, or a direct API call) has it
+    # silently dropped by msgspec rather than changing anything.
+    response = await authed_client.patch(
+        "/api/account/profile", json={"display_name": "Demo", "username": "attempted-change"}
     )
-    response = await client.patch("/api/account/profile", json={"display_name": "Bob", "username": "demo"})
-    assert response.status_code == 403
-    assert "already taken" in response.json()["detail"]
-
-
-async def test_update_profile_username_is_a_no_op_when_unchanged(authed_client) -> None:
-    await authed_client.patch("/api/account/profile", json={"display_name": "Demo", "username": "demo"})
-    response = await authed_client.patch("/api/account/profile", json={"display_name": "Demo", "username": "demo"})
     assert response.status_code == 200
-    assert response.json()["username"] == "demo"
+    assert response.json()["username"] is None
 
 
 async def test_update_profile_sets_a_new_email(authed_client) -> None:
@@ -69,24 +51,6 @@ async def test_update_profile_email_is_a_no_op_when_unchanged(authed_client) -> 
     )
     assert response.status_code == 200
     assert response.json()["email"] == "demo@brennkonto.local"
-
-
-async def test_update_goals(authed_client) -> None:
-    response = await authed_client.patch(
-        "/api/account/goals",
-        json={
-            "daily_calorie_goal": 2500,
-            "daily_protein_goal_g": 180,
-            "daily_carbs_goal_g": 250,
-            "daily_fat_goal_g": 80,
-        },
-    )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["daily_calorie_goal"] == 2500
-    assert body["daily_protein_goal_g"] == 180
-    assert body["daily_carbs_goal_g"] == 250
-    assert body["daily_fat_goal_g"] == 80
 
 
 async def test_change_password_with_correct_current_password(authed_client) -> None:

@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as endpoints from '../../src/api/endpoints'
-import type { DailyStats, MealGroup } from '../../src/api/types'
+import type { DailyStats, MealGroup, RangeStats } from '../../src/api/types'
 import { addDays, toISODate } from '../../src/lib/dates'
 import History from '../../src/pages/History'
 import { dragEntryOnto, stubRects } from '../testUtils/dragAndDrop'
@@ -29,10 +29,25 @@ function makeStats(date: string, entries: DailyStats['entries'] = []): DailyStat
   }
 }
 
+function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {
+  return {
+    points: [],
+    average_calories: 0,
+    average_protein_g: 0,
+    average_carbs_g: 0,
+    average_fat_g: 0,
+    total_calories: 0,
+    days_in_range: 14,
+    days_logged: 0,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.mocked(endpoints.fetchDailyStats).mockReset()
   vi.mocked(endpoints.deleteEntry).mockReset()
   vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue([])
+  vi.mocked(endpoints.fetchRangeStats).mockReset().mockResolvedValue(makeRangeStats())
   vi.mocked(endpoints.updateEntry).mockReset()
   vi.mocked(endpoints.fetchArchivedEntries).mockReset().mockResolvedValue([])
   vi.mocked(endpoints.restoreEntry).mockReset()
@@ -363,6 +378,73 @@ describe('History', () => {
     await user.click(screen.getByRole('button', { name: 'Remove' }))
 
     await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(2))
+  })
+
+  it('shows the trailing goal-fulfillment chart, fetched for the 14 days ending on the viewed date', async () => {
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({
+        points: [
+          {
+            period_label: 'x',
+            period_start: yesterday,
+            period_end: yesterday,
+            calories: 1000,
+            protein_g: 0,
+            carbs_g: 0,
+            fat_g: 0,
+            days_logged: 1,
+            calorie_goal: 2000,
+          },
+          {
+            period_label: 'x',
+            period_start: today,
+            period_end: today,
+            calories: 2400,
+            protein_g: 0,
+            carbs_g: 0,
+            fat_g: 0,
+            days_logged: 1,
+            calorie_goal: 2000,
+          },
+        ],
+        days_logged: 2,
+        days_in_range: 14,
+      })
+    )
+    renderHistory()
+
+    await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledWith(addDays(today, -13), today, 'day'))
+    expect(await screen.findByText('Last 14 days')).toBeInTheDocument()
+    // 1000/2000 -> 50%, 2400/2000 -> 120% (rounded), rendered as bar heights via the shared BarChart.
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(2)
+  })
+
+  it('guards against a zero calorie goal when computing fulfillment percentage', async () => {
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({
+        points: [
+          {
+            period_label: 'x',
+            period_start: today,
+            period_end: today,
+            calories: 500,
+            protein_g: 0,
+            carbs_g: 0,
+            fat_g: 0,
+            days_logged: 1,
+            calorie_goal: 0,
+          },
+        ],
+        days_logged: 1,
+        days_in_range: 14,
+      })
+    )
+    renderHistory()
+
+    expect(await screen.findByText('Last 14 days')).toBeInTheDocument()
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
   })
 
   // Runs last in this file - @dnd-kit defers some of its internal document-listener cleanup by

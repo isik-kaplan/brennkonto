@@ -1,7 +1,8 @@
+from datetime import date
 from uuid import UUID
 
-from app.models import FoodEntry, MealGroup, User
-from app.schemas import FoodEntryOut, MealGroupOut, UserOut
+from app.models import FoodEntry, GoalVersion, MealGroup, User
+from app.schemas import FoodEntryOut, GoalVersionOut, MealGroupOut, UserOut
 
 
 def user_out(user: User) -> UserOut:
@@ -10,11 +11,19 @@ def user_out(user: User) -> UserOut:
         email=user.email,
         username=user.username,
         display_name=user.display_name,
-        daily_calorie_goal=user.daily_calorie_goal,
-        daily_protein_goal_g=user.daily_protein_goal_g,
-        daily_carbs_goal_g=user.daily_carbs_goal_g,
-        daily_fat_goal_g=user.daily_fat_goal_g,
         updated_at=user.updated_at,
+    )
+
+
+def goal_version_out(version: GoalVersion, end_date: date | None) -> GoalVersionOut:
+    return GoalVersionOut(
+        id=version.id,
+        effective_date=version.effective_date,
+        end_date=end_date,
+        daily_calorie_goal=version.daily_calorie_goal,
+        daily_protein_goal_g=version.daily_protein_goal_g,
+        daily_carbs_goal_g=version.daily_carbs_goal_g,
+        daily_fat_goal_g=version.daily_fat_goal_g,
     )
 
 

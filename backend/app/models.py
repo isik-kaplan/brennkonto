@@ -1,7 +1,7 @@
 import uuid as uuid_module
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Uuid
+from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid6 import uuid7
 
@@ -24,16 +24,34 @@ class User(Base):
     username: Mapped[str | None] = mapped_column(String(120), unique=True, index=True, nullable=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str] = mapped_column(String(120))
-    daily_calorie_goal: Mapped[int] = mapped_column(default=2000)
-    daily_protein_goal_g: Mapped[int] = mapped_column(default=150)
-    daily_carbs_goal_g: Mapped[int] = mapped_column(default=200)
-    daily_fat_goal_g: Mapped[int] = mapped_column(default=65)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     # Nullable, no default, no onupdate= - stays null until a controller explicitly sets it on a
     # real edit; auto-touching it would also fire during the id-migration's own row copy.
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     entries: Mapped[list["FoodEntry"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+
+
+class GoalVersion(Base):
+    """A daily calorie/macro goal that takes effect starting `effective_date`, until superseded by
+    a later version - see app/controllers/goals.py's resolve_goal_for_date for how "the goal on
+    date X" is resolved (latest version with effective_date <= X, or hardcoded defaults if none).
+    One row per (user, effective_date): setting a goal for a date that already has a version
+    overwrites it in place, which is what makes retroactively correcting a past goal and
+    scheduling a future one the same operation."""
+
+    __tablename__ = "goal_versions"
+    __table_args__ = (UniqueConstraint("user_id", "effective_date", name="uq_goal_versions_user_date"),)
+
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
+    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    effective_date: Mapped[date] = mapped_column(Date, index=True)
+    daily_calorie_goal: Mapped[int]
+    daily_protein_goal_g: Mapped[int]
+    daily_carbs_goal_g: Mapped[int]
+    daily_fat_goal_g: Mapped[int]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
 
 class ProductCache(Base):

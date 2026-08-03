@@ -163,3 +163,33 @@ async def test_range_stats_average_ignores_days_with_no_entries(authed_client) -
 async def test_range_stats_requires_authentication(client) -> None:
     response = await client.get("/api/stats/range?start=2026-08-01&end=2026-08-07&group_by=day")
     assert response.status_code == 401
+
+
+async def test_range_stats_points_reflect_the_goal_in_effect_by_the_end_of_each_bucket(authed_client) -> None:
+    await authed_client.post(
+        "/api/goals",
+        json={
+            "effective_date": "2026-08-01",
+            "daily_calorie_goal": 2000,
+            "daily_protein_goal_g": 150,
+            "daily_carbs_goal_g": 200,
+            "daily_fat_goal_g": 65,
+        },
+    )
+    await authed_client.post(
+        "/api/goals",
+        json={
+            "effective_date": "2026-08-03",
+            "daily_calorie_goal": 2500,
+            "daily_protein_goal_g": 150,
+            "daily_carbs_goal_g": 200,
+            "daily_fat_goal_g": 65,
+        },
+    )
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-03T12:00:00Z"})
+
+    response = await authed_client.get("/api/stats/range?start=2026-08-01&end=2026-08-07&group_by=day")
+    points_by_date = {point["period_start"]: point["calorie_goal"] for point in response.json()["points"]}
+    assert points_by_date["2026-08-01"] == 2000
+    assert points_by_date["2026-08-03"] == 2500

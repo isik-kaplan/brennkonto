@@ -7,7 +7,8 @@ from litestar.params import Parameter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FoodEntry, User
+from app.controllers.goals import resolve_goal_for_date
+from app.models import FoodEntry
 from app.schemas import DailyStatsOut, RangeStatsOut, RangeStatsPointOut
 from app.serializers import entry_out
 
@@ -53,17 +54,17 @@ async def daily_stats(
             .order_by(FoodEntry.created_at)
         )
     )
-    user: User = request.user
+    goal = await resolve_goal_for_date(db_session, request.user.id, entry_date)
     return DailyStatsOut(
         date=entry_date,
         calories=sum(entry.calories for entry in entries),
         protein_g=sum(entry.protein_g for entry in entries),
         carbs_g=sum(entry.carbs_g for entry in entries),
         fat_g=sum(entry.fat_g for entry in entries),
-        calorie_goal=user.daily_calorie_goal,
-        protein_goal_g=user.daily_protein_goal_g,
-        carbs_goal_g=user.daily_carbs_goal_g,
-        fat_goal_g=user.daily_fat_goal_g,
+        calorie_goal=goal.calorie_goal,
+        protein_goal_g=goal.protein_goal_g,
+        carbs_goal_g=goal.carbs_goal_g,
+        fat_goal_g=goal.fat_goal_g,
         entries=[entry_out(entry) for entry in entries],
     )
 
@@ -110,6 +111,10 @@ async def range_stats(
     for key in sorted(buckets):
         bucket_entries = buckets[key]
         label, period_start, period_end = _bucket_label(key, group_by)
+        # The goal as of the close of the bucket - unambiguous for day buckets (period_start ==
+        # period_end); for week/month buckets that span a goal change, this is "the goal in effect
+        # by the time this period ended".
+        goal = await resolve_goal_for_date(db_session, request.user.id, period_end)
         points.append(
             RangeStatsPointOut(
                 period_label=label,
@@ -120,6 +125,7 @@ async def range_stats(
                 carbs_g=sum(entry.carbs_g for entry in bucket_entries),
                 fat_g=sum(entry.fat_g for entry in bucket_entries),
                 days_logged=len({entry.consumed_at.date() for entry in bucket_entries}),
+                calorie_goal=goal.calorie_goal,
             )
         )
 

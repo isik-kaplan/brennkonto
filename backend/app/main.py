@@ -11,6 +11,7 @@ from app.controllers.account import account_router
 from app.controllers.auth import auth_router
 from app.controllers.entries import entries_router
 from app.controllers.foods import foods_router
+from app.controllers.goals import goals_router
 from app.controllers.meal_groups import meal_groups_router
 from app.controllers.stats import stats_router
 from app.db import create_tables, get_db_session
@@ -32,6 +33,7 @@ def _build_route_handlers() -> list:
         foods_router,
         entries_router,
         meal_groups_router,
+        goals_router,
         stats_router,
     ]
     if STATIC_DIR.is_dir():

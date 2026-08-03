@@ -3,11 +3,18 @@ export interface User {
   email: string
   username: string | null
   display_name: string
+  updated_at: string | null
+}
+
+export interface GoalVersion {
+  id: string
+  effective_date: string
+  // null only for the most recent version - in effect indefinitely, until a later one supersedes it.
+  end_date: string | null
   daily_calorie_goal: number
   daily_protein_goal_g: number
   daily_carbs_goal_g: number
   daily_fat_goal_g: number
-  updated_at: string | null
 }
 
 export interface FoodSearchResult {
@@ -91,6 +98,7 @@ export interface RangeStatsPoint {
   carbs_g: number
   fat_g: number
   days_logged: number
+  calorie_goal: number
 }
 
 export interface RangeStats {

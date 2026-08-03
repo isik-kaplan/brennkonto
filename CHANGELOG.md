@@ -3,6 +3,24 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.6.0]
+
+### Added
+
+- Daily calorie/macro goals are now versioned by date instead of a single mutable value: you can retroactively correct what a goal was on a past date, or schedule one to take effect on a future date, without disturbing any other date's goal.
+- Historical fulfillment (History page, Trends' goal line, Dashboard's calorie ring) now stays accurate after a goal change - each day always shows the goal that was actually in effect on it, not today's live value.
+- New "Goal history" page (linked from Settings, not in the main navigation) lists every goal as a date range, showing the day-before-the-next-version end date for past goals and "ongoing" for the current one.
+- History page shows a new "Last 14 days" chart of % of calorie goal met per day, with a dashed line at 100%.
+
+### Changed
+
+- Settings' Daily goals card is now a lightweight summary of today's active goal with a link to the dedicated Goal history page, rather than an inline edit form.
+- Usernames can no longer be changed via the Settings page or the account API - they're fixed once set.
+
+### Fixed
+
+- Trends' calorie-goal reference line previously always used your current live goal, even when viewing a custom date range from before it changed - it now reflects the goal that was actually in effect for the range being viewed.
+
 ## [0.5.0]
 
 ### Changed

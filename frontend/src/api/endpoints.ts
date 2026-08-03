@@ -4,6 +4,7 @@ import type {
   DailyStats,
   FoodEntry,
   FoodSearchResult,
+  GoalVersion,
   GroupBy,
   MealGroup,
   RangeStats,
@@ -30,13 +31,22 @@ export function updateProfile(displayName: string) {
   return api.patch<User>('/account/profile', { display_name: displayName })
 }
 
-export function updateGoals(goals: {
+export function fetchGoalVersions() {
+  return api.get<GoalVersion[]>('/goals')
+}
+
+export function upsertGoalVersion(payload: {
+  effective_date: string
   daily_calorie_goal: number
   daily_protein_goal_g: number
   daily_carbs_goal_g: number
   daily_fat_goal_g: number
 }) {
-  return api.patch<User>('/account/goals', goals)
+  return api.post<GoalVersion>('/goals', payload)
+}
+
+export function deleteGoalVersion(id: string) {
+  return api.delete<void>(`/goals/${id}`)
 }
 
 export function changePassword(currentPassword: string, newPassword: string) {

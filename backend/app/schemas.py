@@ -18,15 +18,7 @@ class LoginRequest(msgspec.Struct):
 
 class UpdateProfileRequest(msgspec.Struct):
     display_name: str
-    username: str | None = None
     email: str | None = None
-
-
-class UpdateGoalsRequest(msgspec.Struct):
-    daily_calorie_goal: int
-    daily_protein_goal_g: int
-    daily_carbs_goal_g: int
-    daily_fat_goal_g: int
 
 
 class ChangePasswordRequest(msgspec.Struct):
@@ -39,11 +31,28 @@ class UserOut(msgspec.Struct):
     email: str
     username: str | None
     display_name: str
+    updated_at: datetime | None
+
+
+class UpsertGoalRequest(msgspec.Struct):
+    effective_date: date
     daily_calorie_goal: int
     daily_protein_goal_g: int
     daily_carbs_goal_g: int
     daily_fat_goal_g: int
-    updated_at: datetime | None
+
+
+class GoalVersionOut(msgspec.Struct):
+    id: uuid.UUID
+    effective_date: date
+    # None only for the most recent version (by effective_date) - in effect indefinitely, until a
+    # later version supersedes it. Every other version has a real end_date, the day before
+    # whichever version starts next.
+    end_date: date | None
+    daily_calorie_goal: int
+    daily_protein_goal_g: int
+    daily_carbs_goal_g: int
+    daily_fat_goal_g: int
 
 
 class FoodSearchResultOut(msgspec.Struct):
@@ -148,6 +157,7 @@ class RangeStatsPointOut(msgspec.Struct):
     carbs_g: float
     fat_g: float
     days_logged: int
+    calorie_goal: int
 
 
 class RangeStatsOut(msgspec.Struct):

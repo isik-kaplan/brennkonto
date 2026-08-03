@@ -51,17 +51,6 @@ describe('account endpoints', () => {
     expect(api.patch).toHaveBeenCalledWith('/account/profile', { display_name: 'Ada' })
   })
 
-  it('updateGoals patches the full goals object', () => {
-    const goals = {
-      daily_calorie_goal: 2000,
-      daily_protein_goal_g: 150,
-      daily_carbs_goal_g: 200,
-      daily_fat_goal_g: 65,
-    }
-    endpoints.updateGoals(goals)
-    expect(api.patch).toHaveBeenCalledWith('/account/goals', goals)
-  })
-
   it('changePassword posts current and new password', () => {
     endpoints.changePassword('old', 'new')
     expect(api.post).toHaveBeenCalledWith('/account/password', {
@@ -149,6 +138,30 @@ describe('meal group endpoints', () => {
   it('deleteMealGroup deletes the group by id', () => {
     endpoints.deleteMealGroup('g1')
     expect(api.delete).toHaveBeenCalledWith('/meal-groups/g1')
+  })
+})
+
+describe('goal version endpoints', () => {
+  it('fetchGoalVersions gets the goals list', () => {
+    endpoints.fetchGoalVersions()
+    expect(api.get).toHaveBeenCalledWith('/goals')
+  })
+
+  it('upsertGoalVersion posts the effective date and goal values', () => {
+    const payload = {
+      effective_date: '2026-08-01',
+      daily_calorie_goal: 2000,
+      daily_protein_goal_g: 150,
+      daily_carbs_goal_g: 200,
+      daily_fat_goal_g: 65,
+    }
+    endpoints.upsertGoalVersion(payload)
+    expect(api.post).toHaveBeenCalledWith('/goals', payload)
+  })
+
+  it('deleteGoalVersion deletes the version by id', () => {
+    endpoints.deleteGoalVersion('g1')
+    expect(api.delete).toHaveBeenCalledWith('/goals/g1')
   })
 })
 

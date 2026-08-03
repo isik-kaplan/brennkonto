@@ -8,21 +8,30 @@ import {
   fetchArchivedEntries,
   fetchDailyStats,
   fetchMealGroups,
+  fetchRangeStats,
   moveEntryToGroup,
   permanentlyDeleteEntry,
   restoreEntry,
   updateEntry,
   updateMealGroup,
 } from '../api/endpoints'
-import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
+import type { DailyStats, FoodEntry, MealGroup, RangeStats } from '../api/types'
+import BarChart from '../components/BarChart'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EntryList from '../components/EntryList'
-import { addDays, displayDate, toISODate } from '../lib/dates'
+import { addDays, displayDate, fromISODate, toISODate } from '../lib/dates'
+
+const TREND_WINDOW_DAYS = 14
+
+function shortDayLabel(periodStart: string): string {
+  return fromISODate(periodStart).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
+}
 
 export default function History() {
   const [date, setDate] = useState(toISODate(new Date()))
   const [stats, setStats] = useState<DailyStats | null>(null)
   const [groups, setGroups] = useState<MealGroup[]>([])
+  const [trend, setTrend] = useState<RangeStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [showRemoved, setShowRemoved] = useState(false)
@@ -32,9 +41,14 @@ export default function History() {
   const load = useCallback(async () => {
     setIsLoading(true)
     try {
-      const [dailyStats, mealGroups] = await Promise.all([fetchDailyStats(date), fetchMealGroups()])
+      const [dailyStats, mealGroups, trendStats] = await Promise.all([
+        fetchDailyStats(date),
+        fetchMealGroups(),
+        fetchRangeStats(addDays(date, -(TREND_WINDOW_DAYS - 1)), date, 'day'),
+      ])
       setStats(dailyStats)
       setGroups(mealGroups)
+      setTrend(trendStats)
     } finally {
       setIsLoading(false)
     }
@@ -156,6 +170,23 @@ export default function History() {
               <div className="stat-tile__value">{Math.round(stats.fat_g)}g</div>
             </div>
           </div>
+
+          {trend && (
+            <div style={{ marginBottom: 'var(--space-lg)' }}>
+              <h3 className="card__title">Last {TREND_WINDOW_DAYS} days</h3>
+              <BarChart
+                points={trend.points.map((point) => ({
+                  label: shortDayLabel(point.period_start),
+                  value: Math.round((point.calories / Math.max(point.calorie_goal, 1)) * 100),
+                }))}
+                goal={100}
+                sparse={trend.days_logged < Math.min(3, trend.days_in_range)}
+              />
+              <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
+                % of calorie goal met each day. Dashed line marks 100%.
+              </p>
+            </div>
+          )}
 
           <EntryList
             entries={stats.entries}
