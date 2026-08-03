@@ -25,24 +25,6 @@ function defaultAmountFor(unit: string): string {
   return unit === 'g' || unit === 'ml' ? '100' : '1'
 }
 
-// A favorite is structurally the same product data a search result carries, just with its saved
-// default amount (if any) standing in for suggested_unit/unit_to_grams - mapping it into this
-// shape lets it flow through the exact same selectResult()/amount-form code path a search result
-// already uses, instead of duplicating that UI.
-function favoriteToSearchResult(favorite: Favorite): FoodSearchResult {
-  return {
-    barcode: favorite.barcode,
-    name: favorite.name,
-    brand: favorite.brand,
-    calories_per_100g: favorite.calories_per_100g,
-    protein_per_100g: favorite.protein_per_100g,
-    carbs_per_100g: favorite.carbs_per_100g,
-    fat_per_100g: favorite.fat_per_100g,
-    suggested_unit: favorite.default_input_unit ?? 'g',
-    unit_to_grams: favorite.default_unit_to_grams ?? 1,
-  }
-}
-
 function StarIcon({ filled }: { filled: boolean }): ReactNode {
   return (
     <svg
@@ -85,6 +67,18 @@ export default function LogFood() {
   const [saveAsFavorite, setSaveAsFavorite] = useState(false)
   const [rememberAmount, setRememberAmount] = useState(false)
   const [justAddedId, setJustAddedId] = useState<string | null>(null)
+
+  const [editingFavorite, setEditingFavorite] = useState<Favorite | null>(null)
+  const [editUnit, setEditUnit] = useState('g')
+  const [editAmountInput, setEditAmountInput] = useState('')
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editError, setEditError] = useState<string | null>(null)
+
+  const [customAddFavorite, setCustomAddFavorite] = useState<Favorite | null>(null)
+  const [customUnit, setCustomUnit] = useState('g')
+  const [customAmountInput, setCustomAmountInput] = useState('')
+  const [isAddingCustom, setIsAddingCustom] = useState(false)
+  const [customAddError, setCustomAddError] = useState<string | null>(null)
 
   const loadFavorites = useCallback(async () => {
     setFavorites(await fetchFavorites())
@@ -171,18 +165,10 @@ export default function LogFood() {
     await loadFavorites()
   }
 
-  function handleAddWithEdit(favorite: Favorite) {
-    const presetAmount =
-      favorite.default_input_amount != null && favorite.default_input_unit != null
-        ? { unit: favorite.default_input_unit, amount: String(favorite.default_input_amount) }
-        : undefined
-    selectResult(favoriteToSearchResult(favorite), presetAmount)
-  }
-
   async function handleQuickAdd(favorite: Favorite) {
-    // No saved default - fall back to the same "ask for an amount" behavior as Add & Edit.
+    // No saved default - fall back to the same "ask for an amount" behavior as Custom amount.
     if (favorite.default_input_amount == null || favorite.default_input_unit == null) {
-      handleAddWithEdit(favorite)
+      handleStartCustomAdd(favorite)
       return
     }
     const unitToGrams = favorite.default_unit_to_grams ?? 1
@@ -211,9 +197,116 @@ export default function LogFood() {
     }
   }
 
+  // Asks only for the amount, then logs immediately - like handleQuickAdd, but for a one-off
+  // portion instead of the favorite's saved default. Does not touch the favorite's own default.
+  function handleStartCustomAdd(favorite: Favorite) {
+    const unitValue = favorite.default_input_unit ?? 'g'
+    setEditingFavorite(null)
+    setCustomAddFavorite(favorite)
+    setCustomUnit(unitValue)
+    setCustomAmountInput(
+      favorite.default_input_amount != null ? String(favorite.default_input_amount) : defaultAmountFor(unitValue)
+    )
+    setCustomAddError(null)
+  }
+
+  function handleCustomAmountChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value
+    if (raw === '') {
+      setCustomAmountInput('')
+      return
+    }
+    setCustomAmountInput(raw.replace(/^0+(?=\d)/, ''))
+  }
+
+  async function handleConfirmCustomAdd(event: FormEvent) {
+    event.preventDefault()
+    const favorite = customAddFavorite!
+    const amount = customAmountInput === '' ? 0 : Number(customAmountInput)
+    if (amount <= 0) return
+    const unitToGrams = customUnit === 'g' ? 1 : (favorite.default_unit_to_grams ?? 1)
+    const grams = customUnit === 'g' ? amount : amount * unitToGrams
+    setIsAddingCustom(true)
+    setCustomAddError(null)
+    try {
+      await createEntry({
+        name: favorite.name,
+        brand: favorite.brand,
+        barcode: favorite.barcode,
+        grams,
+        input_unit: customUnit,
+        input_amount: amount,
+        unit_to_grams: unitToGrams,
+        calories_per_100g: favorite.calories_per_100g,
+        protein_per_100g: favorite.protein_per_100g,
+        carbs_per_100g: favorite.carbs_per_100g,
+        fat_per_100g: favorite.fat_per_100g,
+        consumed_at: combineDateAndTime(toISODate(new Date()), toISOTime(new Date())),
+      })
+      setCustomAddFavorite(null)
+      setJustAddedId(favorite.id)
+      setTimeout(() => setJustAddedId(null), 1500)
+    } catch (error) {
+      setCustomAddError(error instanceof ApiError ? error.message : 'Could not add this favorite.')
+    } finally {
+      setIsAddingCustom(false)
+    }
+  }
+
   async function handleRemoveFavorite(id: string) {
     await deleteFavorite(id)
     await loadFavorites()
+  }
+
+  // Editing here changes the favorite's own saved default portion (what "Add" uses every time
+  // going forward) - distinct from handleStartCustomAdd, which only adjusts the amount for one entry.
+  function handleStartEditFavorite(favorite: Favorite) {
+    const unit = favorite.default_input_unit ?? 'g'
+    setCustomAddFavorite(null)
+    setEditingFavorite(favorite)
+    setEditUnit(unit)
+    setEditAmountInput(
+      favorite.default_input_amount != null ? String(favorite.default_input_amount) : defaultAmountFor(unit)
+    )
+    setEditError(null)
+  }
+
+  function handleEditAmountChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value
+    if (raw === '') {
+      setEditAmountInput('')
+      return
+    }
+    setEditAmountInput(raw.replace(/^0+(?=\d)/, ''))
+  }
+
+  async function handleSaveFavoriteEdit(event: FormEvent) {
+    event.preventDefault()
+    const favorite = editingFavorite!
+    const amount = editAmountInput === '' ? 0 : Number(editAmountInput)
+    if (amount <= 0) return
+    setIsSavingEdit(true)
+    setEditError(null)
+    try {
+      await upsertFavorite({
+        barcode: favorite.barcode,
+        name: favorite.name,
+        brand: favorite.brand,
+        calories_per_100g: favorite.calories_per_100g,
+        protein_per_100g: favorite.protein_per_100g,
+        carbs_per_100g: favorite.carbs_per_100g,
+        fat_per_100g: favorite.fat_per_100g,
+        default_input_unit: editUnit,
+        default_input_amount: amount,
+        default_unit_to_grams: editUnit === 'g' ? 1 : (favorite.default_unit_to_grams ?? 1),
+      })
+      await loadFavorites()
+      setEditingFavorite(null)
+    } catch (error) {
+      setEditError(error instanceof ApiError ? error.message : 'Could not update this favorite.')
+    } finally {
+      setIsSavingEdit(false)
+    }
   }
 
   function handleAmountChange(event: ChangeEvent<HTMLInputElement>) {
@@ -417,29 +510,135 @@ export default function LogFood() {
                       )}
                     </div>
                   </div>
-                  <div className="entry-row__actions">
-                    <button
-                      type="button"
-                      className="btn btn--primary btn--small"
-                      onClick={() => handleQuickAdd(favorite)}
+                  {editingFavorite?.id === favorite.id ? (
+                    <form
+                      className="form"
+                      onSubmit={handleSaveFavoriteEdit}
+                      style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end', flexWrap: 'wrap' }}
                     >
-                      {justAddedId === favorite.id ? 'Added ✓' : 'Add'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--small"
-                      onClick={() => handleAddWithEdit(favorite)}
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label htmlFor={`edit-amount-${favorite.id}`}>{unitLabel(editUnit)}</label>
+                        <input
+                          id={`edit-amount-${favorite.id}`}
+                          className="input"
+                          type="number"
+                          inputMode="decimal"
+                          min={0.01}
+                          step="any"
+                          required
+                          value={editAmountInput}
+                          onChange={handleEditAmountChange}
+                        />
+                      </div>
+                      {favorite.default_input_unit != null && favorite.default_input_unit !== 'g' && (
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => {
+                            const nextUnit = editUnit === 'g' ? favorite.default_input_unit! : 'g'
+                            setEditUnit(nextUnit)
+                            setEditAmountInput(defaultAmountFor(nextUnit))
+                          }}
+                        >
+                          {editUnit === 'g' ? `Use ${favorite.default_input_unit} instead` : 'Use grams instead'}
+                        </button>
+                      )}
+                      {editError && <div className="form__banner">{editError}</div>}
+                      <div className="entry-row__actions">
+                        <button type="submit" className="btn btn--primary btn--small" disabled={isSavingEdit}>
+                          {isSavingEdit && <span className="btn__spinner" aria-hidden="true" />}
+                          Save
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => setEditingFavorite(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : customAddFavorite?.id === favorite.id ? (
+                    <form
+                      className="form"
+                      onSubmit={handleConfirmCustomAdd}
+                      style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end', flexWrap: 'wrap' }}
                     >
-                      Add & Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--ghost btn--small"
-                      onClick={() => handleRemoveFavorite(favorite.id)}
-                    >
-                      Remove
-                    </button>
-                  </div>
+                      <div className="field" style={{ marginBottom: 0 }}>
+                        <label htmlFor={`custom-amount-${favorite.id}`}>{unitLabel(customUnit)}</label>
+                        <input
+                          id={`custom-amount-${favorite.id}`}
+                          className="input"
+                          type="number"
+                          inputMode="decimal"
+                          min={0.01}
+                          step="any"
+                          required
+                          autoFocus
+                          value={customAmountInput}
+                          onChange={handleCustomAmountChange}
+                        />
+                      </div>
+                      {favorite.default_input_unit != null && favorite.default_input_unit !== 'g' && (
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => {
+                            const nextUnit = customUnit === 'g' ? favorite.default_input_unit! : 'g'
+                            setCustomUnit(nextUnit)
+                            setCustomAmountInput(defaultAmountFor(nextUnit))
+                          }}
+                        >
+                          {customUnit === 'g' ? `Use ${favorite.default_input_unit} instead` : 'Use grams instead'}
+                        </button>
+                      )}
+                      {customAddError && <div className="form__banner">{customAddError}</div>}
+                      <div className="entry-row__actions">
+                        <button type="submit" className="btn btn--primary btn--small" disabled={isAddingCustom}>
+                          {isAddingCustom && <span className="btn__spinner" aria-hidden="true" />}
+                          Add
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => setCustomAddFavorite(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <div className="entry-row__actions">
+                      <button
+                        type="button"
+                        className="btn btn--primary btn--small"
+                        onClick={() => handleQuickAdd(favorite)}
+                      >
+                        {justAddedId === favorite.id ? 'Added ✓' : 'Add'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--small"
+                        onClick={() => handleStartCustomAdd(favorite)}
+                      >
+                        Custom amount
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--small"
+                        onClick={() => handleStartEditFavorite(favorite)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--ghost btn--small"
+                        onClick={() => handleRemoveFavorite(favorite.id)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  )}
                 </li>
               ))}
             </ul>

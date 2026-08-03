@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.8.0]
+
+### Changed
+
+- Replaced the favorites "Add & Edit" action, which confusingly opened the full amount form and could silently overwrite the saved default. It's now two clearer actions: "Custom amount" asks only for a one-off portion and logs it instantly like "Add", and a new "Edit" action changes the favorite's own saved default amount/unit without logging anything.
+
 ## [0.7.0]
 
 ### Added

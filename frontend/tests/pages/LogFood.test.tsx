@@ -60,6 +60,16 @@ const milk: FoodSearchResult = {
   unit_to_grams: 1000,
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
   return {
     id: 'f1',
@@ -702,7 +712,7 @@ describe('LogFood favorites', () => {
     )
   })
 
-  it('Add without a saved default amount opens the form instead', async () => {
+  it('Add without a saved default amount asks for a custom amount inline instead', async () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
     renderLogFood()
@@ -710,23 +720,42 @@ describe('LogFood favorites', () => {
     await user.click(await screen.findByRole('button', { name: 'Add' }))
 
     expect(endpoints.createEntry).not.toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: 'Nutella' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Nutella' })).not.toBeInTheDocument()
+    expect(screen.getByLabelText('Amount (grams)')).toBeInTheDocument()
   })
 
-  it('Add & Edit always opens the form, pre-filled with the saved default amount', async () => {
+  it('Custom amount asks only for the new amount, then logs it immediately like Add', async () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
       makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
     ])
     renderLogFood()
 
-    await user.click(await screen.findByRole('button', { name: 'Add & Edit' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
 
-    expect(endpoints.createEntry).not.toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: 'Nutella' })).toBeInTheDocument()
-    expect(screen.getByLabelText('Amount (grams)')).toHaveValue(30)
-    // Already favorited - the checkbox starts checked so re-saving updates it, not duplicates it.
-    expect(screen.getByLabelText('Save as favorite')).toBeChecked()
+    // No full form (no heading, no date/time fields, no favorite checkboxes) - just the amount.
+    expect(screen.queryByRole('heading', { name: 'Nutella' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Date')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Save as favorite')).not.toBeInTheDocument()
+    const amountField = screen.getByLabelText('Amount (grams)')
+    expect(amountField).toHaveValue(30)
+
+    await user.clear(amountField)
+    await user.type(amountField, '45')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(endpoints.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Nutella',
+        grams: 45,
+        input_unit: 'g',
+        input_amount: 45,
+        unit_to_grams: 1,
+      })
+    )
+    // The favorite's own saved default is untouched by a one-off custom amount.
+    expect(endpoints.upsertFavorite).not.toHaveBeenCalled()
+    expect(await screen.findByText('Added ✓')).toBeInTheDocument()
   })
 
   it('shows an error message when a quick-add fails', async () => {
@@ -776,5 +805,352 @@ describe('LogFood favorites', () => {
 
     expect(endpoints.deleteFavorite).toHaveBeenCalledWith('f1')
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument())
+  })
+
+  it('cancelling a custom amount closes the inline form without logging anything', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Custom amount' })).toBeInTheDocument()
+  })
+
+  it('does not submit a custom amount cleared to empty, even bypassing native validation', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    const amountField = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountField)
+    fireEvent.submit(amountField.closest('form')!)
+
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+  })
+
+  it('shows an error message when a custom amount fails to log', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    vi.mocked(endpoints.createEntry).mockRejectedValue(new ApiError('Could not add this favorite.', 400))
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Could not add this favorite.')).toBeInTheDocument()
+  })
+
+  it('shows a generic error message when a custom amount fails with a non-API error', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    vi.mocked(endpoints.createEntry).mockRejectedValue(new Error('boom'))
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Could not add this favorite.')).toBeInTheDocument()
+  })
+
+  it('shows a spinner on the custom-amount submit button while it is in flight', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    const { promise, resolve } = deferred<void>()
+    vi.mocked(endpoints.createEntry).mockReturnValue(promise as never)
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    const submitButton = screen.getByRole('button', { name: 'Add' })
+    await user.click(submitButton)
+
+    expect(submitButton).toBeDisabled()
+    resolve()
+    // The form closes on success, taking the submit button with it - assert completion instead
+    // of the (now-unmounted) button re-enabling.
+    expect(await screen.findByText('Added ✓')).toBeInTheDocument()
+  })
+
+  it('reverts the "Added ✓" label after a custom amount, same as a plain Add', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+    expect(await screen.findByText('Added ✓')).toBeInTheDocument()
+
+    await waitForElementToBeRemoved(() => screen.queryByText('Added ✓'), { timeout: 2000 })
+  }, 3000)
+
+  it('offers a unit toggle for a custom amount when the favorite has a non-gram default, in both directions', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 53 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    expect(screen.getByLabelText('How many?')).toHaveValue(2)
+
+    await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+    expect(screen.getByLabelText('Amount (grams)')).toHaveValue(100)
+
+    await user.click(screen.getByRole('button', { name: 'Use count instead' }))
+    expect(screen.getByLabelText('How many?')).toHaveValue(1)
+  })
+
+  it('does not offer a unit toggle for a custom amount when the favorite has a gram default', async () => {
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    const user = userEvent.setup()
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+
+    expect(screen.queryByRole('button', { name: /Use .* instead/ })).not.toBeInTheDocument()
+  })
+
+  it('treats a missing default_unit_to_grams as 1 gram per unit after toggling in the custom-amount form', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: null }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(endpoints.createEntry).toHaveBeenCalledWith(expect.objectContaining({ grams: 2, unit_to_grams: 1 }))
+  })
+})
+
+describe('LogFood favorite editing', () => {
+  it('opens pre-filled with the saved default amount and unit', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 53 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+
+    expect(screen.getByLabelText('How many?')).toHaveValue(2)
+  })
+
+  it('falls back to a plain-grams default when the favorite has none saved', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+
+    expect(screen.getByLabelText('Amount (grams)')).toHaveValue(100)
+  })
+
+  it('cancelling closes the inline form without saving anything', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(endpoints.upsertFavorite).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Edit' })).toBeInTheDocument()
+  })
+
+  it("opening Edit on one favorite closes another favorite's open custom-amount form", async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite(),
+      makeFavorite({ id: 'f2', barcode: '4', name: 'Eggs', brand: null }),
+    ])
+    renderLogFood()
+
+    const customAmountButtons = await screen.findAllByRole('button', { name: 'Custom amount' })
+    expect(customAmountButtons).toHaveLength(2)
+    await user.click(customAmountButtons[0]) // opens Nutella's custom-amount form
+
+    // Only Eggs still shows its normal action row - Nutella's is replaced by the form.
+    const editButtons = screen.getAllByRole('button', { name: 'Edit' })
+    expect(editButtons).toHaveLength(1)
+    await user.click(editButtons[0]) // opens Eggs' edit form, which should close Nutella's
+
+    // Nutella's custom-amount form closed - back to its normal action row.
+    expect(screen.getAllByRole('button', { name: 'Custom amount' })).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+  })
+
+  it('typing after the field is cleared does not leave a stuck leading zero', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    const amountField = screen.getByLabelText('Amount (grams)') as HTMLInputElement
+    await user.clear(amountField)
+    expect(amountField.value).toBe('')
+    await user.type(amountField, '0521')
+    expect(amountField.value).toBe('521')
+  })
+
+  it('does not save when the amount is cleared to empty, even bypassing native validation', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    const amountField = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountField)
+    fireEvent.submit(amountField.closest('form')!)
+
+    expect(endpoints.upsertFavorite).not.toHaveBeenCalled()
+  })
+
+  it('saves the new default amount and reloads favorites', async () => {
+    const user = userEvent.setup()
+    const favorite = makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 })
+    vi.mocked(endpoints.fetchFavorites)
+      .mockResolvedValueOnce([favorite])
+      .mockResolvedValue([
+        makeFavorite({ default_input_unit: 'g', default_input_amount: 45, default_unit_to_grams: 1 }),
+      ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    const amountField = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountField)
+    await user.type(amountField, '45')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+      expect.objectContaining({
+        barcode: favorite.barcode,
+        default_input_unit: 'g',
+        default_input_amount: 45,
+        default_unit_to_grams: 1,
+      })
+    )
+    await waitFor(() => expect(endpoints.fetchFavorites).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText(/45g default/)).toBeInTheDocument()
+  })
+
+  it('shows a spinner on the Save button while the update is in flight', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    const { promise, resolve } = deferred<Favorite>()
+    vi.mocked(endpoints.upsertFavorite).mockReturnValue(promise as never)
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    const saveButton = screen.getByRole('button', { name: 'Save' })
+    await user.click(saveButton)
+
+    expect(saveButton).toBeDisabled()
+    resolve(makeFavorite())
+    // The form closes on success, taking the Save button with it - assert completion instead
+    // of the (now-unmounted) button re-enabling.
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument())
+  })
+
+  it('shows an error message when saving the new default fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    vi.mocked(endpoints.upsertFavorite).mockRejectedValue(new ApiError('Could not update this favorite.', 400))
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Could not update this favorite.')).toBeInTheDocument()
+  })
+
+  it('shows a generic error message when saving the new default fails with a non-API error', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    vi.mocked(endpoints.upsertFavorite).mockRejectedValue(new Error('boom'))
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByText('Could not update this favorite.')).toBeInTheDocument()
+  })
+
+  it('offers a unit toggle when the favorite has a non-gram default, in both directions', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 53 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    expect(screen.getByLabelText('How many?')).toHaveValue(2)
+
+    await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+    expect(screen.getByLabelText('Amount (grams)')).toHaveValue(100)
+
+    await user.click(screen.getByRole('button', { name: 'Use count instead' }))
+    expect(screen.getByLabelText('How many?')).toHaveValue(1)
+  })
+
+  it('does not offer a unit toggle when the favorite has a gram default or none at all', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+
+    expect(screen.queryByRole('button', { name: /Use .* instead/ })).not.toBeInTheDocument()
+  })
+
+  it('saving with the toggled-to-grams unit uses a 1:1 conversion regardless of the saved factor', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 53 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+      expect.objectContaining({ default_input_unit: 'g', default_input_amount: 100, default_unit_to_grams: 1 })
+    )
+  })
+
+  it('treats a missing default_unit_to_grams as 1 gram per unit after toggling away from grams', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: null }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Edit' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+      expect.objectContaining({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 1 })
+    )
   })
 })
