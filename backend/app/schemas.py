@@ -55,6 +55,35 @@ class GoalVersionOut(msgspec.Struct):
     daily_fat_goal_g: int
 
 
+class UpsertFavoriteRequest(msgspec.Struct):
+    barcode: str
+    name: str
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    brand: str | None = None
+    # All three omitted (None) means "no default amount, always ask". Sending a fresh upsert with
+    # these omitted clears a previously-set default, rather than leaving the old one in place.
+    default_input_unit: str | None = None
+    default_input_amount: float | None = None
+    default_unit_to_grams: float | None = None
+
+
+class FavoriteOut(msgspec.Struct):
+    id: uuid.UUID
+    barcode: str
+    name: str
+    brand: str | None
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    default_input_unit: str | None
+    default_input_amount: float | None
+    default_unit_to_grams: float | None
+
+
 class FoodSearchResultOut(msgspec.Struct):
     barcode: str
     name: str

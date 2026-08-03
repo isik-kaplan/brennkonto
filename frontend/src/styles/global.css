@@ -981,27 +981,61 @@ svg {
 
 .search-result {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-sm) var(--space-md);
+  align-items: stretch;
   background: var(--color-paper);
-  border: none;
   border-bottom: 1px solid var(--color-rule);
-  text-align: left;
-  cursor: pointer;
-  font: inherit;
-  color: inherit;
-  width: 100%;
 }
 
 .search-result:last-child {
   border-bottom: none;
 }
 
-.search-result:hover,
-.search-result.is-selected {
+.search-result:hover {
   background: var(--color-paper-3);
+}
+
+/* The row's primary action - only this part (not the favorite toggle) selects the product, so it
+   can't be the whole row's own <button> anymore (a button can't contain another button). */
+.search-result__select {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: none;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+}
+
+.search-result__favorite {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  flex-shrink: 0;
+  border: none;
+  background: none;
+  color: var(--color-neutral);
+  cursor: pointer;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+
+.search-result__favorite:hover {
+  color: var(--color-accent);
+}
+
+.search-result__favorite.is-favorited {
+  color: var(--color-accent);
+}
+
+.search-result__favorite svg {
+  width: 1.1rem;
+  height: 1.1rem;
 }
 
 .search-result__name {

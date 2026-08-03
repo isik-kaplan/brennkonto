@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.7.0]
+
+### Added
+
+- Favorites: save a food from search/barcode results (star toggle) or from the amount form ("Save as favorite"), optionally with a default amount to skip the amount form entirely on future logs.
+- Log Food page has a new Favorites card with "Add" (instant log using the saved default, or opens the amount form if there isn't one) and "Add & Edit" (always opens the amount form, pre-filled with the default if set) actions per favorite, plus "Remove" to un-favorite.
+- The amount form's "Save as favorite" checkbox has a nested "Remember this amount as the default" option, so saving a one-off larger portion doesn't silently overwrite the saved default unless asked.
+
 ## [0.6.0]
 
 ### Added

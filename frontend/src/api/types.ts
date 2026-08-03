@@ -17,6 +17,22 @@ export interface GoalVersion {
   daily_fat_goal_g: number
 }
 
+export interface Favorite {
+  id: string
+  barcode: string
+  name: string
+  brand: string | null
+  calories_per_100g: number
+  protein_per_100g: number
+  carbs_per_100g: number
+  fat_per_100g: number
+  // All three null together means "no default amount, always ask"; all three set means selecting
+  // this favorite can skip the amount form.
+  default_input_unit: string | null
+  default_input_amount: number | null
+  default_unit_to_grams: number | null
+}
+
 export interface FoodSearchResult {
   barcode: string
   name: string

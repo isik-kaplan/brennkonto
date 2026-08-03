@@ -1,11 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
-import type { FoodSearchResult } from '../../src/api/types'
+import type { Favorite, FoodSearchResult } from '../../src/api/types'
 import LogFood from '../../src/pages/LogFood'
 
 vi.mock('../../src/api/endpoints')
@@ -60,10 +60,30 @@ const milk: FoodSearchResult = {
   unit_to_grams: 1000,
 }
 
+function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
+  return {
+    id: 'f1',
+    barcode: '3017620422003',
+    name: 'Nutella',
+    brand: 'Ferrero',
+    calories_per_100g: 539,
+    protein_per_100g: 6.3,
+    carbs_per_100g: 57.5,
+    fat_per_100g: 30.9,
+    default_input_unit: null,
+    default_input_amount: null,
+    default_unit_to_grams: null,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   vi.mocked(endpoints.searchFoods).mockReset()
   vi.mocked(endpoints.lookupBarcode).mockReset()
   vi.mocked(endpoints.createEntry).mockReset()
+  vi.mocked(endpoints.fetchFavorites).mockReset().mockResolvedValue([])
+  vi.mocked(endpoints.upsertFavorite).mockReset().mockResolvedValue(makeFavorite())
+  vi.mocked(endpoints.deleteFavorite).mockReset()
 })
 
 function renderLogFood() {
@@ -435,5 +455,326 @@ describe('LogFood save form', () => {
     await user.click(screen.getByRole('button', { name: 'Back to search' }))
     expect(screen.getByLabelText('Product name')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Nutella' })).not.toBeInTheDocument()
+  })
+
+  it('checking "Save as favorite" upserts it after a successful save, without remembering an amount', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.createEntry).mockResolvedValue({
+      id: '1',
+      name: nutella.name,
+      brand: nutella.brand,
+      barcode: nutella.barcode,
+      grams: 100,
+      input_unit: 'g',
+      input_amount: 100,
+      unit_to_grams: 1,
+      calories_per_100g: nutella.calories_per_100g,
+      protein_per_100g: nutella.protein_per_100g,
+      carbs_per_100g: nutella.carbs_per_100g,
+      fat_per_100g: nutella.fat_per_100g,
+      calories: 539,
+      protein_g: 6.3,
+      carbs_g: 57.5,
+      fat_g: 30.9,
+      consumed_at: '2026-08-01T12:00:00',
+      created_at: '2026-08-01T12:00:00Z',
+      updated_at: null,
+      meal_group_id: null,
+      deleted_at: null,
+    })
+    await openSaveForm(user)
+
+    await user.click(screen.getByLabelText('Save as favorite'))
+    await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+    await waitFor(() =>
+      expect(endpoints.upsertFavorite).toHaveBeenCalledWith({
+        barcode: nutella.barcode,
+        name: nutella.name,
+        brand: nutella.brand,
+        calories_per_100g: nutella.calories_per_100g,
+        protein_per_100g: nutella.protein_per_100g,
+        carbs_per_100g: nutella.carbs_per_100g,
+        fat_per_100g: nutella.fat_per_100g,
+        default_input_unit: null,
+        default_input_amount: null,
+        default_unit_to_grams: null,
+      })
+    )
+  })
+
+  it('remembering an amount for a non-grams product uses its own unit_to_grams', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.lookupBarcode).mockResolvedValue(eggs)
+    vi.mocked(endpoints.createEntry).mockResolvedValue({
+      id: '1',
+      name: eggs.name,
+      brand: eggs.brand,
+      barcode: eggs.barcode,
+      grams: 53,
+      input_unit: 'count',
+      input_amount: 1,
+      unit_to_grams: 53,
+      calories_per_100g: eggs.calories_per_100g,
+      protein_per_100g: eggs.protein_per_100g,
+      carbs_per_100g: eggs.carbs_per_100g,
+      fat_per_100g: eggs.fat_per_100g,
+      calories: 82,
+      protein_g: 6.6,
+      carbs_g: 0.6,
+      fat_g: 5.8,
+      consumed_at: '2026-08-01T12:00:00',
+      created_at: '2026-08-01T12:00:00Z',
+      updated_at: null,
+      meal_group_id: null,
+      deleted_at: null,
+    })
+    renderLogFood()
+    await user.type(screen.getByLabelText('Barcode'), '4')
+    await user.click(screen.getByRole('button', { name: 'Look up' }))
+    await screen.findByRole('heading', { name: 'Eggs' })
+
+    await user.click(screen.getByLabelText('Save as favorite'))
+    await user.click(screen.getByLabelText('Remember this amount as the default'))
+    await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+    await waitFor(() =>
+      expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+        expect.objectContaining({ default_input_unit: 'count', default_input_amount: 1, default_unit_to_grams: 53 })
+      )
+    )
+  })
+
+  it('also checking "Remember this amount" includes the current amount in the upsert', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.createEntry).mockResolvedValue({
+      id: '1',
+      name: nutella.name,
+      brand: nutella.brand,
+      barcode: nutella.barcode,
+      grams: 50,
+      input_unit: 'g',
+      input_amount: 50,
+      unit_to_grams: 1,
+      calories_per_100g: nutella.calories_per_100g,
+      protein_per_100g: nutella.protein_per_100g,
+      carbs_per_100g: nutella.carbs_per_100g,
+      fat_per_100g: nutella.fat_per_100g,
+      calories: 270,
+      protein_g: 3.15,
+      carbs_g: 28.75,
+      fat_g: 15.45,
+      consumed_at: '2026-08-01T12:00:00',
+      created_at: '2026-08-01T12:00:00Z',
+      updated_at: null,
+      meal_group_id: null,
+      deleted_at: null,
+    })
+    await openSaveForm(user)
+
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountInput)
+    await user.type(amountInput, '50')
+    await user.click(screen.getByLabelText('Save as favorite'))
+    await user.click(screen.getByLabelText('Remember this amount as the default'))
+    await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+    await waitFor(() =>
+      expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+        expect.objectContaining({ default_input_unit: 'g', default_input_amount: 50, default_unit_to_grams: 1 })
+      )
+    )
+  })
+})
+
+describe('LogFood favorites', () => {
+  it('shows a hint when there are no favorites yet', async () => {
+    renderLogFood()
+    expect(await screen.findByText(/No favorites yet/)).toBeInTheDocument()
+  })
+
+  it('lists favorites with a default-amount badge when one is set', async () => {
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30 }),
+    ])
+    renderLogFood()
+
+    expect(await screen.findByText(/30g default/)).toBeInTheDocument()
+  })
+
+  it('does not show a default-amount badge when none is set', async () => {
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    renderLogFood()
+
+    await screen.findByText('Nutella', { selector: '.entry-row__name' })
+    expect(screen.queryByText(/default/)).not.toBeInTheDocument()
+  })
+
+  it('falls back to "Unbranded" when a favorite has no brand', async () => {
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite({ brand: null })])
+    renderLogFood()
+
+    expect(await screen.findByText(/Unbranded/)).toBeInTheDocument()
+  })
+
+  it('starring an unfavorited search result upserts it with no default amount', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.searchFoods).mockResolvedValue([nutella])
+    renderLogFood()
+
+    await user.type(screen.getByLabelText('Product name'), 'nutella')
+    await user.click(await screen.findByRole('button', { name: 'Favorite Nutella' }))
+
+    expect(endpoints.upsertFavorite).toHaveBeenCalledWith({
+      barcode: nutella.barcode,
+      name: nutella.name,
+      brand: nutella.brand,
+      calories_per_100g: nutella.calories_per_100g,
+      protein_per_100g: nutella.protein_per_100g,
+      carbs_per_100g: nutella.carbs_per_100g,
+      fat_per_100g: nutella.fat_per_100g,
+    })
+  })
+
+  it('un-stars an already-favorited search result', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    vi.mocked(endpoints.searchFoods).mockResolvedValue([nutella])
+    renderLogFood()
+
+    await user.type(screen.getByLabelText('Product name'), 'nutella')
+    await user.click(await screen.findByRole('button', { name: 'Remove Nutella from favorites' }))
+
+    expect(endpoints.deleteFavorite).toHaveBeenCalledWith('f1')
+  })
+
+  it('Add with a saved default amount logs instantly, without opening the form', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    expect(endpoints.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'Nutella',
+        grams: 30,
+        input_unit: 'g',
+        input_amount: 30,
+        unit_to_grams: 1,
+      })
+    )
+    expect(screen.queryByRole('heading', { name: 'Nutella' })).not.toBeInTheDocument()
+    expect(await screen.findByText('Added ✓')).toBeInTheDocument()
+  })
+
+  it('reverts the "Added ✓" label back after a short delay', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+    expect(await screen.findByText('Added ✓')).toBeInTheDocument()
+
+    await waitForElementToBeRemoved(() => screen.queryByText('Added ✓'), { timeout: 2000 })
+  }, 3000)
+
+  it('Add with a non-grams default amount converts to grams before logging', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 53 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    expect(endpoints.createEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        grams: 106,
+        input_unit: 'count',
+        input_amount: 2,
+        unit_to_grams: 53,
+      })
+    )
+  })
+
+  it('Add without a saved default amount opens the form instead', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Nutella' })).toBeInTheDocument()
+  })
+
+  it('Add & Edit always opens the form, pre-filled with the saved default amount', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add & Edit' }))
+
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: 'Nutella' })).toBeInTheDocument()
+    expect(screen.getByLabelText('Amount (grams)')).toHaveValue(30)
+    // Already favorited - the checkbox starts checked so re-saving updates it, not duplicates it.
+    expect(screen.getByLabelText('Save as favorite')).toBeChecked()
+  })
+
+  it('shows an error message when a quick-add fails', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    vi.mocked(endpoints.createEntry).mockRejectedValue(new ApiError('Could not add this favorite.', 400))
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Could not add this favorite.')).toBeInTheDocument()
+  })
+
+  it('shows a generic error message when a quick-add fails with a non-API error', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: 1 }),
+    ])
+    vi.mocked(endpoints.createEntry).mockRejectedValue(new Error('boom'))
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Could not add this favorite.')).toBeInTheDocument()
+  })
+
+  it('treats a missing default_unit_to_grams as 1 gram per unit', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 30, default_unit_to_grams: null }),
+    ])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    expect(endpoints.createEntry).toHaveBeenCalledWith(expect.objectContaining({ grams: 30, unit_to_grams: 1 }))
+  })
+
+  it('removes a favorite', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValueOnce([makeFavorite()]).mockResolvedValueOnce([])
+    renderLogFood()
+
+    await user.click(await screen.findByRole('button', { name: 'Remove' }))
+
+    expect(endpoints.deleteFavorite).toHaveBeenCalledWith('f1')
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument())
   })
 })

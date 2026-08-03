@@ -10,6 +10,7 @@ from app.config import settings
 from app.controllers.account import account_router
 from app.controllers.auth import auth_router
 from app.controllers.entries import entries_router
+from app.controllers.favorites import favorites_router
 from app.controllers.foods import foods_router
 from app.controllers.goals import goals_router
 from app.controllers.meal_groups import meal_groups_router
@@ -34,6 +35,7 @@ def _build_route_handlers() -> list:
         entries_router,
         meal_groups_router,
         goals_router,
+        favorites_router,
         stats_router,
     ]
     if STATIC_DIR.is_dir():

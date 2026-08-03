@@ -54,6 +54,32 @@ class GoalVersion(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
 
+class Favorite(Base):
+    """A saved food for fast re-logging, keyed by (user, barcode) - saving over an existing
+    favorite (e.g. re-favoriting from the amount form with a new amount) overwrites it in place
+    rather than creating a duplicate, the same upsert-by-natural-key convention as GoalVersion.
+    The default_* fields are optional and travel together: all three null means "no default
+    amount, always ask"; all three set means selecting this favorite can skip the amount form."""
+
+    __tablename__ = "favorites"
+    __table_args__ = (UniqueConstraint("user_id", "barcode", name="uq_favorites_user_barcode"),)
+
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
+    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    barcode: Mapped[str] = mapped_column(String(64))
+    name: Mapped[str] = mapped_column(String(255))
+    brand: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    calories_per_100g: Mapped[float]
+    protein_per_100g: Mapped[float]
+    carbs_per_100g: Mapped[float]
+    fat_per_100g: Mapped[float]
+    default_input_unit: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    default_input_amount: Mapped[float | None]
+    default_unit_to_grams: Mapped[float | None]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+
 class ProductCache(Base):
     """A local cache of Open Food Facts lookups, keyed by barcode, so repeat searches for the
     same product don't re-hit the OFF API."""

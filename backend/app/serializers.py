@@ -1,8 +1,8 @@
 from datetime import date
 from uuid import UUID
 
-from app.models import FoodEntry, GoalVersion, MealGroup, User
-from app.schemas import FoodEntryOut, GoalVersionOut, MealGroupOut, UserOut
+from app.models import Favorite, FoodEntry, GoalVersion, MealGroup, User
+from app.schemas import FavoriteOut, FoodEntryOut, GoalVersionOut, MealGroupOut, UserOut
 
 
 def user_out(user: User) -> UserOut:
@@ -24,6 +24,22 @@ def goal_version_out(version: GoalVersion, end_date: date | None) -> GoalVersion
         daily_protein_goal_g=version.daily_protein_goal_g,
         daily_carbs_goal_g=version.daily_carbs_goal_g,
         daily_fat_goal_g=version.daily_fat_goal_g,
+    )
+
+
+def favorite_out(favorite: Favorite) -> FavoriteOut:
+    return FavoriteOut(
+        id=favorite.id,
+        barcode=favorite.barcode,
+        name=favorite.name,
+        brand=favorite.brand,
+        calories_per_100g=favorite.calories_per_100g,
+        protein_per_100g=favorite.protein_per_100g,
+        carbs_per_100g=favorite.carbs_per_100g,
+        fat_per_100g=favorite.fat_per_100g,
+        default_input_unit=favorite.default_input_unit,
+        default_input_amount=favorite.default_input_amount,
+        default_unit_to_grams=favorite.default_unit_to_grams,
     )
 
 

@@ -165,6 +165,35 @@ describe('goal version endpoints', () => {
   })
 })
 
+describe('favorite endpoints', () => {
+  it('fetchFavorites gets the favorites list', () => {
+    endpoints.fetchFavorites()
+    expect(api.get).toHaveBeenCalledWith('/favorites')
+  })
+
+  it('upsertFavorite posts the favorite payload', () => {
+    const payload = {
+      barcode: '3017620422003',
+      name: 'Nutella',
+      brand: 'Ferrero',
+      calories_per_100g: 539,
+      protein_per_100g: 6.3,
+      carbs_per_100g: 57.5,
+      fat_per_100g: 30.9,
+      default_input_unit: 'g',
+      default_input_amount: 30,
+      default_unit_to_grams: 1,
+    }
+    endpoints.upsertFavorite(payload)
+    expect(api.post).toHaveBeenCalledWith('/favorites', payload)
+  })
+
+  it('deleteFavorite deletes by id', () => {
+    endpoints.deleteFavorite('f1')
+    expect(api.delete).toHaveBeenCalledWith('/favorites/f1')
+  })
+})
+
 describe('stats endpoints', () => {
   it('fetchDailyStats gets the daily endpoint with a date query', () => {
     endpoints.fetchDailyStats('2026-08-01')

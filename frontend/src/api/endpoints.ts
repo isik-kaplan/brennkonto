@@ -2,6 +2,7 @@ import { api } from './client'
 import type {
   CreateFoodEntryPayload,
   DailyStats,
+  Favorite,
   FoodEntry,
   FoodSearchResult,
   GoalVersion,
@@ -59,6 +60,29 @@ export function searchFoods(query: string) {
 
 export function lookupBarcode(barcode: string) {
   return api.get<FoodSearchResult>(`/foods/barcode/${encodeURIComponent(barcode)}`)
+}
+
+export function fetchFavorites() {
+  return api.get<Favorite[]>('/favorites')
+}
+
+export function upsertFavorite(payload: {
+  barcode: string
+  name: string
+  brand?: string | null
+  calories_per_100g: number
+  protein_per_100g: number
+  carbs_per_100g: number
+  fat_per_100g: number
+  default_input_unit?: string | null
+  default_input_amount?: number | null
+  default_unit_to_grams?: number | null
+}) {
+  return api.post<Favorite>('/favorites', payload)
+}
+
+export function deleteFavorite(id: string) {
+  return api.delete<void>(`/favorites/${id}`)
 }
 
 export function createEntry(payload: CreateFoodEntryPayload) {
