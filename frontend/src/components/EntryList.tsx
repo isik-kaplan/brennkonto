@@ -160,45 +160,57 @@ function EntryRow({
     return (
       <li key={entry.id} className="entry-row entry-row--editing" ref={setRefs} style={style}>
         {nameAndMeta(entry)}
-        <div className="form__row">
-          <div className="field">
-            <label htmlFor={`edit-amount-${entry.id}`}>{unitLabel(entry.input_unit)}</label>
-            <input
-              id={`edit-amount-${entry.id}`}
-              className="input"
-              type="number"
-              inputMode="decimal"
-              min={0.01}
-              step="any"
-              value={editAmount}
-              onChange={(event) => onEditAmountChange(event.target.value)}
-            />
+        {/* A real form, not a bare onClick, so the amount<=0 guard in onSaveEdit is reachable the
+            same way Log Food's amount guard is - by submitting past the disabled Save button /
+            native min validation, not just by disabling it. display:contents keeps its two
+            children (the fields, the actions) as direct flex items of .entry-row--editing,
+            unchanged from the non-form layout. */}
+        <form
+          style={{ display: 'contents' }}
+          onSubmit={(event) => {
+            event.preventDefault()
+            onSaveEdit()
+          }}
+        >
+          <div className="form__row">
+            <div className="field">
+              <label htmlFor={`edit-amount-${entry.id}`}>{unitLabel(entry.input_unit)}</label>
+              <input
+                id={`edit-amount-${entry.id}`}
+                className="input"
+                type="number"
+                inputMode="decimal"
+                min={0.01}
+                step="any"
+                value={editAmount}
+                onChange={(event) => onEditAmountChange(event.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label htmlFor={`edit-datetime-${entry.id}`}>Logged at</label>
+              <input
+                id={`edit-datetime-${entry.id}`}
+                className="input"
+                type="datetime-local"
+                value={editDatetime}
+                onChange={(event) => onEditDatetimeChange(event.target.value)}
+              />
+            </div>
           </div>
-          <div className="field">
-            <label htmlFor={`edit-datetime-${entry.id}`}>Logged at</label>
-            <input
-              id={`edit-datetime-${entry.id}`}
-              className="input"
-              type="datetime-local"
-              value={editDatetime}
-              onChange={(event) => onEditDatetimeChange(event.target.value)}
-            />
+          <div className="entry-row__actions">
+            <button
+              type="submit"
+              className="btn btn--primary btn--small"
+              disabled={!canSave}
+              title={canSave ? undefined : 'Enter an amount greater than 0'}
+            >
+              Save
+            </button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={onCancelEdit}>
+              Cancel
+            </button>
           </div>
-        </div>
-        <div className="entry-row__actions">
-          <button
-            type="button"
-            className="btn btn--primary btn--small"
-            onClick={onSaveEdit}
-            disabled={!canSave}
-            title={canSave ? undefined : 'Enter an amount greater than 0'}
-          >
-            Save
-          </button>
-          <button type="button" className="btn btn--ghost btn--small" onClick={onCancelEdit}>
-            Cancel
-          </button>
-        </div>
+        </form>
       </li>
     )
   }

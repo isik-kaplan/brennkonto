@@ -275,6 +275,22 @@ describe('EntryList', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
   })
 
+  it('does not call onUpdateEntry when submitted with a zero/empty amount, even bypassing native validation', async () => {
+    const user = userEvent.setup()
+    const onUpdateEntry = vi.fn()
+    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} onUpdateEntry={onUpdateEntry} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountInput)
+    // fireEvent.submit dispatches the submit event directly, bypassing the disabled Save button
+    // and the input's own min/required constraint validation - same defensive-guard pattern as
+    // Log Food's amount form.
+    fireEvent.submit(amountInput.closest('form')!)
+
+    expect(onUpdateEntry).not.toHaveBeenCalled()
+  })
+
   it('cancels editing without calling onUpdateEntry', async () => {
     const user = userEvent.setup()
     const onUpdateEntry = vi.fn()

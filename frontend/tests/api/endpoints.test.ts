@@ -88,9 +88,14 @@ describe('entry endpoints', () => {
     expect(api.post).toHaveBeenCalledWith('/entries/', payload)
   })
 
-  it('updateEntry patches grams and consumed_at by id', () => {
+  it('updateEntry patches grams and consumed_at by id, omitting input_amount', () => {
     endpoints.updateEntry('5', 150, '2026-08-02')
     expect(api.patch).toHaveBeenCalledWith('/entries/5', { grams: 150, consumed_at: '2026-08-02' })
+  })
+
+  it('updateEntry includes input_amount when a portion edit provides one', () => {
+    endpoints.updateEntry('5', 150, '2026-08-02', 3)
+    expect(api.patch).toHaveBeenCalledWith('/entries/5', { grams: 150, consumed_at: '2026-08-02', input_amount: 3 })
   })
 
   it('deleteEntry deletes by id', () => {

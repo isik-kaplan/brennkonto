@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as endpoints from '../../src/api/endpoints'
-import type { DailyStats, MealGroup, RangeStats } from '../../src/api/types'
+import type { DailyStats, FoodEntry, MealGroup, RangeStats } from '../../src/api/types'
 import { addDays, toISODate } from '../../src/lib/dates'
 import History from '../../src/pages/History'
 import { dragEntryOnto, stubRects } from '../testUtils/dragAndDrop'
@@ -451,6 +451,99 @@ describe('History', () => {
 
     expect(await screen.findByText('Last 14 days')).toBeInTheDocument()
     expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
+  })
+
+  const createdEntry: FoodEntry = {
+    id: '99',
+    name: 'Nutella',
+    brand: 'Ferrero',
+    barcode: '1',
+    grams: 50,
+    input_unit: 'g',
+    input_amount: 50,
+    unit_to_grams: 1,
+    calories_per_100g: 539,
+    protein_per_100g: 6.3,
+    carbs_per_100g: 57.5,
+    fat_per_100g: 30.9,
+    calories: 269.5,
+    protein_g: 3.15,
+    carbs_g: 28.75,
+    fat_g: 15.45,
+    consumed_at: `${today}T08:00:00`,
+    created_at: `${today}T08:00:00Z`,
+    updated_at: null,
+    meal_group_id: null,
+    deleted_at: null,
+  }
+
+  describe('AddEntryPanel integration', () => {
+    beforeEach(() => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    })
+
+    it('reloads the day after adding an entry through the panel', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.searchFoods).mockResolvedValue([
+        {
+          barcode: '1',
+          name: 'Nutella',
+          brand: 'Ferrero',
+          calories_per_100g: 539,
+          protein_per_100g: 6.3,
+          carbs_per_100g: 57.5,
+          fat_per_100g: 30.9,
+          suggested_unit: 'g',
+          unit_to_grams: 1,
+        },
+      ])
+      vi.mocked(endpoints.createEntry).mockResolvedValue(createdEntry)
+      renderHistory()
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(1))
+
+      await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+      await user.type(screen.getByLabelText('Product name'), 'nutella')
+      await user.click(await screen.findByText('Nutella'))
+      const amountInput = screen.getByLabelText('Amount (grams)')
+      await user.clear(amountInput)
+      await user.type(amountInput, '50')
+      await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+      // Archive isn't shown, so adding an entry must not also reload it.
+      expect(endpoints.fetchArchivedEntries).not.toHaveBeenCalled()
+    })
+
+    it('also reloads the archive if it is currently shown', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchArchivedEntries).mockResolvedValue([])
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        {
+          id: 'f1',
+          barcode: '1',
+          name: 'Nutella',
+          brand: 'Ferrero',
+          calories_per_100g: 539,
+          protein_per_100g: 6.3,
+          carbs_per_100g: 57.5,
+          fat_per_100g: 30.9,
+          default_input_unit: 'g',
+          default_input_amount: 15,
+          default_unit_to_grams: 1,
+        },
+      ])
+      vi.mocked(endpoints.createEntry).mockResolvedValue(createdEntry)
+      renderHistory()
+      await waitFor(() => expect(screen.getByText('Nothing logged yet today.')).toBeInTheDocument())
+
+      await user.click(screen.getByRole('button', { name: 'Show removed' }))
+      await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(1))
+
+      await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+      await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+      await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledTimes(2))
+    })
   })
 
   // Runs last in this file - @dnd-kit defers some of its internal document-listener cleanup by
