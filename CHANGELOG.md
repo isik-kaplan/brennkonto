@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.9.0]
+
+### Added
+
+- History page can now add entries directly for the day being viewed - search, barcode lookup/scan, and favorites, without leaving History or going through Log Food.
+- Entry portions are now retroactively editable: the existing "Edit" action on a logged entry also lets you correct the amount (not just the date/time it was logged), recomputing calories/macros from the new amount in whatever unit it was originally logged in.
+
+### Changed
+
+- `PATCH /entries/{id}` accepts an optional `input_amount`, used to keep the displayed amount in sync when a portion is corrected; omitted on a time-only edit, which leaves the amount untouched.
+
 ## [0.8.0]
 
 ### Changed

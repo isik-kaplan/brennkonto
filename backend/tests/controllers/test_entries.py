@@ -107,6 +107,37 @@ async def test_update_entry(authed_client) -> None:
     assert body["updated_at"] is not None
 
 
+async def test_update_entry_with_input_amount_updates_the_displayed_amount(authed_client) -> None:
+    payload = {**ENTRY_PAYLOAD, "input_unit": "count", "input_amount": 2, "unit_to_grams": 60}
+    created = await authed_client.post("/api/entries/", json=payload)
+    entry_id = created.json()["id"]
+
+    # Retroactively correcting "2 eggs" to "3 eggs" - grams and input_amount move together.
+    response = await authed_client.patch(
+        f"/api/entries/{entry_id}",
+        json={"grams": 180, "input_amount": 3, "consumed_at": "2026-08-01T12:00:00Z"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["grams"] == 180
+    assert body["input_amount"] == 3
+    assert body["input_unit"] == "count"
+    assert body["unit_to_grams"] == 60
+
+
+async def test_update_entry_without_input_amount_leaves_the_displayed_amount_untouched(authed_client) -> None:
+    payload = {**ENTRY_PAYLOAD, "input_unit": "count", "input_amount": 2, "unit_to_grams": 60}
+    created = await authed_client.post("/api/entries/", json=payload)
+    entry_id = created.json()["id"]
+
+    # A time-only edit (no input_amount sent) must not disturb the previously-logged amount.
+    response = await authed_client.patch(
+        f"/api/entries/{entry_id}", json={"grams": 120, "consumed_at": "2026-08-03T09:30:00Z"}
+    )
+    assert response.status_code == 200
+    assert response.json()["input_amount"] == 2
+
+
 async def test_update_entry_not_found(authed_client) -> None:
     response = await authed_client.patch(
         f"/api/entries/{NOT_FOUND_ID}", json={"grams": 200, "consumed_at": "2026-08-03T09:30:00Z"}

@@ -846,19 +846,18 @@ svg {
   fill: currentColor;
 }
 
-/* The edit form's datetime field is taller than the name and actions columns (label stacked
-   above input), so align-items: center leaves those columns floating between the label and the
-   input instead of lining up with the input row. */
+/* Editing now has two fields (amount + logged-at) instead of one, so it drops out of the row's
+   usual 3-column grid (info/middle/actions - too tight for two fields on narrow screens) into
+   plain stacked flow: name/meta, then the field pair, then actions. */
 .entry-row--editing {
-  align-items: end;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-sm);
 }
 
 .entry-row--editing .input {
   height: var(--control-h-sm);
-}
-
-.entry-row--editing input[type='datetime-local'] {
-  width: 13rem;
 }
 
 .entry-row:last-child {
@@ -881,10 +880,6 @@ svg {
   font-weight: 600;
   text-align: right;
   white-space: nowrap;
-}
-
-.entry-row--editing .field {
-  grid-area: middle;
 }
 
 .entry-row__actions {

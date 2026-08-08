@@ -55,6 +55,12 @@ beforeEach(() => {
   vi.mocked(endpoints.moveEntryToGroup).mockReset()
   vi.mocked(endpoints.updateMealGroup).mockReset()
   vi.mocked(endpoints.deleteMealGroup).mockReset()
+  // AddEntryPanel renders collapsed on every History test - only exercised directly by its own
+  // describe block below, but the fetch is wired here so opening it never hits a real endpoint.
+  vi.mocked(endpoints.fetchFavorites).mockReset().mockResolvedValue([])
+  vi.mocked(endpoints.searchFoods).mockReset()
+  vi.mocked(endpoints.lookupBarcode).mockReset()
+  vi.mocked(endpoints.createEntry).mockReset()
 })
 
 function renderHistory() {
@@ -184,7 +190,7 @@ describe('History', () => {
     await user.click(screen.getByRole('button', { name: 'Edit when Eggs was logged' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(endpoints.updateEntry).toHaveBeenCalledWith('1', 100, expect.any(String))
+    expect(endpoints.updateEntry).toHaveBeenCalledWith('1', 100, expect.any(String), 100)
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 

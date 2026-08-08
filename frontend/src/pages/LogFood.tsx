@@ -14,16 +14,11 @@ import {
 } from '../api/endpoints'
 import type { Favorite, FoodSearchResult } from '../api/types'
 import { combineDateAndTime, toISODate, toISOTime } from '../lib/dates'
+import { defaultAmountFor, unitLabel } from '../lib/units'
 
 // The zxing barcode-decoding library is ~450kB - lazy-loaded so it only ships to people who
 // actually open the scanner, not on every visit to this page.
 const BarcodeScanner = lazy(() => import('../components/BarcodeScanner'))
-
-// Small amounts (grams/ml) default to a serving-sized 100; larger/discrete units (count, kg, l,
-// oz, ...) default to 1 - a default of "100 L" would be absurd.
-function defaultAmountFor(unit: string): string {
-  return unit === 'g' || unit === 'ml' ? '100' : '1'
-}
 
 function StarIcon({ filled }: { filled: boolean }): ReactNode {
   return (
@@ -318,12 +313,6 @@ export default function LogFood() {
     // Strip a stuck leading zero (e.g. from clearing down to "0" then typing) without touching
     // a legitimate "0." while the user is mid-way through typing a decimal.
     setAmountInput(raw.replace(/^0+(?=\d)/, ''))
-  }
-
-  function unitLabel(u: string): string {
-    if (u === 'g') return 'Amount (grams)'
-    if (u === 'count') return 'How many?'
-    return `Amount (${u})`
   }
 
   async function handleSave(event: FormEvent) {

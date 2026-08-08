@@ -113,7 +113,7 @@ describe('Dashboard', () => {
     await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(endpoints.updateEntry).toHaveBeenCalledWith('1', 120, expect.any(String))
+    expect(endpoints.updateEntry).toHaveBeenCalledWith('1', 120, expect.any(String), 120)
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
   })
 

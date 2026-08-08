@@ -88,6 +88,8 @@ async def update_entry(
     entry = await _get_owned_entry(db_session, request, entry_id)
     entry.grams = data.grams
     entry.consumed_at = data.consumed_at
+    if data.input_amount is not None:
+        entry.input_amount = data.input_amount
     entry.updated_at = _utcnow()
     await db_session.commit()
     return entry_out(entry)

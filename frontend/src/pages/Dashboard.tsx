@@ -12,7 +12,7 @@ import {
   updateMealGroup,
 } from '../api/endpoints'
 import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
-import EntryList from '../components/EntryList'
+import EntryList, { type EntryEditValues } from '../components/EntryList'
 import MacroSummary from '../components/MacroSummary'
 import { displayDateLong, toISODate } from '../lib/dates'
 
@@ -63,8 +63,8 @@ export default function Dashboard() {
     await load()
   }
 
-  async function handleUpdateConsumedAt(entry: FoodEntry, consumedAt: string) {
-    await updateEntry(entry.id, entry.grams, consumedAt)
+  async function handleUpdateEntry(entry: FoodEntry, updates: EntryEditValues) {
+    await updateEntry(entry.id, updates.grams, updates.consumedAt, updates.inputAmount)
     await load()
   }
 
@@ -108,7 +108,7 @@ export default function Dashboard() {
               onMoveEntry={handleMoveEntry}
               onRenameGroup={handleRenameGroup}
               onUngroup={handleUngroup}
-              onUpdateConsumedAt={handleUpdateConsumedAt}
+              onUpdateEntry={handleUpdateEntry}
             />
           </div>
         </>

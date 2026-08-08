@@ -127,8 +127,11 @@ class FoodEntry(Base):
     barcode: Mapped[str | None] = mapped_column(String(64), nullable=True)
     grams: Mapped[float]
     # What the user actually typed and in what unit, snapshotted at logging time - `grams` above
-    # is always the canonical value every calculation uses; these three are a historical record
-    # of how the entry was originally logged (e.g. "2 count" for 2 eggs), not live-editable.
+    # is always the canonical value every calculation uses. `input_unit`/`unit_to_grams` stay
+    # fixed once logged (an edit never changes the unit an entry was recorded in), but
+    # `input_amount` is retroactively editable in that same unit via PATCH /entries/{id} - see
+    # app/controllers/entries.py's update_entry - so correcting a portion keeps the displayed
+    # amount ("2 count", "1.5 l") in sync with the recomputed `grams`.
     input_unit: Mapped[str] = mapped_column(String(16), default="g")
     input_amount: Mapped[float]
     unit_to_grams: Mapped[float] = mapped_column(default=1.0)

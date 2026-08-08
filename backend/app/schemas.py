@@ -116,6 +116,10 @@ class CreateFoodEntryRequest(msgspec.Struct):
 class UpdateFoodEntryRequest(msgspec.Struct):
     grams: float
     consumed_at: datetime
+    # Set together with `grams` when the user retroactively edits how much they logged, so the
+    # displayed amount ("2 count", "1.5 l") stays consistent with the canonical gram figure.
+    # Omitted (None) on a time-only edit, which leaves the previously-logged amount untouched.
+    input_amount: float | None = None
 
 
 class MoveEntryToGroupRequest(msgspec.Struct):

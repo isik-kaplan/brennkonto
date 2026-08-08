@@ -16,9 +16,10 @@ import {
   updateMealGroup,
 } from '../api/endpoints'
 import type { DailyStats, FoodEntry, MealGroup, RangeStats } from '../api/types'
+import AddEntryPanel from '../components/AddEntryPanel'
 import BarChart from '../components/BarChart'
 import ConfirmDialog from '../components/ConfirmDialog'
-import EntryList from '../components/EntryList'
+import EntryList, { type EntryEditValues } from '../components/EntryList'
 import { addDays, displayDate, fromISODate, toISODate } from '../lib/dates'
 
 const TREND_WINDOW_DAYS = 14
@@ -106,9 +107,14 @@ export default function History() {
     await load()
   }
 
-  async function handleUpdateConsumedAt(entry: FoodEntry, consumedAt: string) {
-    await updateEntry(entry.id, entry.grams, consumedAt)
+  async function handleUpdateEntry(entry: FoodEntry, updates: EntryEditValues) {
+    await updateEntry(entry.id, updates.grams, updates.consumedAt, updates.inputAmount)
     await load()
+  }
+
+  async function handleEntryAdded() {
+    await load()
+    if (showRemoved) await loadArchived()
   }
 
   const isToday = date === toISODate(new Date())
@@ -188,6 +194,8 @@ export default function History() {
             </div>
           )}
 
+          <AddEntryPanel date={date} onAdded={handleEntryAdded} />
+
           <EntryList
             entries={stats.entries}
             onDelete={handleDelete}
@@ -197,7 +205,7 @@ export default function History() {
             onMoveEntry={handleMoveEntry}
             onRenameGroup={handleRenameGroup}
             onUngroup={handleUngroup}
-            onUpdateConsumedAt={handleUpdateConsumedAt}
+            onUpdateEntry={handleUpdateEntry}
           />
 
           {isToday && stats.entries.length === 0 && (

@@ -6,7 +6,14 @@ import type { DragEndEvent } from '@dnd-kit/core'
 
 import type { FoodEntry, MealGroup } from '../api/types'
 import { displayTime, fromDatetimeLocalValue, toDatetimeLocalValue } from '../lib/dates'
+import { unitLabel } from '../lib/units'
 import ConfirmDialog from './ConfirmDialog'
+
+export interface EntryEditValues {
+  consumedAt: string
+  grams: number
+  inputAmount: number
+}
 
 interface EntryListProps {
   entries: FoodEntry[]
@@ -17,7 +24,10 @@ interface EntryListProps {
   onMoveEntry?: (entry: FoodEntry, targetGroupId: string) => void
   onRenameGroup?: (groupId: string, name: string) => void
   onUngroup?: (groupId: string) => void
-  onUpdateConsumedAt?: (entry: FoodEntry, consumedAt: string) => void
+  // Covers both a retroactive time correction and a retroactive portion correction - whichever
+  // fields the edit row actually changed, `grams` is always recomputed from `inputAmount` in the
+  // entry's original unit so the two never drift apart.
+  onUpdateEntry?: (entry: FoodEntry, updates: EntryEditValues) => void
 }
 
 interface Cluster {
@@ -106,6 +116,8 @@ interface EntryRowProps {
   isEditing: boolean
   editDatetime: string
   onEditDatetimeChange: (value: string) => void
+  editAmount: string
+  onEditAmountChange: (value: string) => void
   onStartEdit: () => void
   onSaveEdit: () => void
   onCancelEdit: () => void
@@ -122,6 +134,8 @@ function EntryRow({
   isEditing,
   editDatetime,
   onEditDatetimeChange,
+  editAmount,
+  onEditAmountChange,
   onStartEdit,
   onSaveEdit,
   onCancelEdit,
@@ -142,21 +156,43 @@ function EntryRow({
     : undefined
 
   if (isEditing) {
+    const canSave = editAmount !== '' && Number(editAmount) > 0
     return (
       <li key={entry.id} className="entry-row entry-row--editing" ref={setRefs} style={style}>
         {nameAndMeta(entry)}
-        <div className="field">
-          <label htmlFor={`edit-datetime-${entry.id}`}>Logged at</label>
-          <input
-            id={`edit-datetime-${entry.id}`}
-            className="input"
-            type="datetime-local"
-            value={editDatetime}
-            onChange={(event) => onEditDatetimeChange(event.target.value)}
-          />
+        <div className="form__row">
+          <div className="field">
+            <label htmlFor={`edit-amount-${entry.id}`}>{unitLabel(entry.input_unit)}</label>
+            <input
+              id={`edit-amount-${entry.id}`}
+              className="input"
+              type="number"
+              inputMode="decimal"
+              min={0.01}
+              step="any"
+              value={editAmount}
+              onChange={(event) => onEditAmountChange(event.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label htmlFor={`edit-datetime-${entry.id}`}>Logged at</label>
+            <input
+              id={`edit-datetime-${entry.id}`}
+              className="input"
+              type="datetime-local"
+              value={editDatetime}
+              onChange={(event) => onEditDatetimeChange(event.target.value)}
+            />
+          </div>
         </div>
         <div className="entry-row__actions">
-          <button type="button" className="btn btn--primary btn--small" onClick={onSaveEdit}>
+          <button
+            type="button"
+            className="btn btn--primary btn--small"
+            onClick={onSaveEdit}
+            disabled={!canSave}
+            title={canSave ? undefined : 'Enter an amount greater than 0'}
+          >
             Save
           </button>
           <button type="button" className="btn btn--ghost btn--small" onClick={onCancelEdit}>
@@ -217,10 +253,11 @@ export default function EntryList({
   onMoveEntry,
   onRenameGroup,
   onUngroup,
-  onUpdateConsumedAt,
+  onUpdateEntry,
 }: EntryListProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editDatetime, setEditDatetime] = useState('')
+  const [editAmount, setEditAmount] = useState('')
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [pendingDelete, setPendingDelete] = useState<FoodEntry | null>(null)
@@ -234,10 +271,23 @@ export default function EntryList({
   function startEditing(entry: FoodEntry) {
     setEditingId(entry.id)
     setEditDatetime(toDatetimeLocalValue(entry.consumed_at))
+    setEditAmount(String(entry.input_amount))
+  }
+
+  function handleEditAmountChange(raw: string) {
+    if (raw === '') {
+      setEditAmount('')
+      return
+    }
+    // Strip a stuck leading zero, same as the amount field on the Log Food form.
+    setEditAmount(raw.replace(/^0+(?=\d)/, ''))
   }
 
   function saveEdit(entry: FoodEntry) {
-    onUpdateConsumedAt?.(entry, fromDatetimeLocalValue(editDatetime))
+    const amount = editAmount === '' ? 0 : Number(editAmount)
+    if (amount <= 0) return
+    const grams = entry.input_unit === 'g' ? amount : amount * entry.unit_to_grams
+    onUpdateEntry?.(entry, { consumedAt: fromDatetimeLocalValue(editDatetime), grams, inputAmount: amount })
     setEditingId(null)
   }
 
@@ -278,12 +328,14 @@ export default function EntryList({
                 isEditing={editingId === entry.id}
                 editDatetime={editDatetime}
                 onEditDatetimeChange={setEditDatetime}
+                editAmount={editAmount}
+                onEditAmountChange={handleEditAmountChange}
                 onStartEdit={() => startEditing(entry)}
                 onSaveEdit={() => saveEdit(entry)}
                 onCancelEdit={() => setEditingId(null)}
                 onDelete={() => setPendingDelete(entry)}
                 deletingId={deletingId}
-                showEdit={Boolean(onUpdateConsumedAt)}
+                showEdit={Boolean(onUpdateEntry)}
               />
             ))
 

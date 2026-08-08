@@ -206,36 +206,84 @@ describe('EntryList', () => {
     })
   })
 
-  it('does not show an Edit button when onUpdateConsumedAt is not provided', () => {
+  it('does not show an Edit button when onUpdateEntry is not provided', () => {
     render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} />)
     expect(screen.queryByRole('button', { name: 'Edit when Banana was logged' })).not.toBeInTheDocument()
   })
 
   it('edits the consumed-at date and time, pre-filled from the entry', async () => {
     const user = userEvent.setup()
-    const onUpdateConsumedAt = vi.fn()
+    const onUpdateEntry = vi.fn()
     const entry = makeEntry({ consumed_at: '2026-08-01T09:15:00' })
-    render(<EntryList entries={[entry]} onDelete={vi.fn()} onUpdateConsumedAt={onUpdateConsumedAt} />)
+    render(<EntryList entries={[entry]} onDelete={vi.fn()} onUpdateEntry={onUpdateEntry} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
     expect(screen.getByLabelText('Logged at')).toHaveValue('2026-08-01T09:15')
+    expect(screen.getByLabelText('Amount (grams)')).toHaveValue(120)
 
     fireEvent.change(screen.getByLabelText('Logged at'), { target: { value: '2026-08-02T13:30' } })
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    expect(onUpdateConsumedAt).toHaveBeenCalledWith(entry, '2026-08-02T13:30:00')
+    expect(onUpdateEntry).toHaveBeenCalledWith(entry, {
+      consumedAt: '2026-08-02T13:30:00',
+      grams: 120,
+      inputAmount: 120,
+    })
     expect(screen.queryByLabelText('Logged at')).not.toBeInTheDocument()
   })
 
-  it('cancels editing without calling onUpdateConsumedAt', async () => {
+  it('edits the portion, recomputing grams from the amount', async () => {
     const user = userEvent.setup()
-    const onUpdateConsumedAt = vi.fn()
-    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} onUpdateConsumedAt={onUpdateConsumedAt} />)
+    const onUpdateEntry = vi.fn()
+    const entry = makeEntry()
+    render(<EntryList entries={[entry]} onDelete={vi.fn()} onUpdateEntry={onUpdateEntry} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountInput)
+    await user.type(amountInput, '150')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onUpdateEntry).toHaveBeenCalledWith(entry, expect.objectContaining({ grams: 150, inputAmount: 150 }))
+  })
+
+  it('recomputes grams from unit_to_grams for a non-gram entry', async () => {
+    const user = userEvent.setup()
+    const onUpdateEntry = vi.fn()
+    const entry = makeEntry({ input_unit: 'count', input_amount: 2, unit_to_grams: 53, grams: 106 })
+    render(<EntryList entries={[entry]} onDelete={vi.fn()} onUpdateEntry={onUpdateEntry} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    expect(screen.getByLabelText('How many?')).toHaveValue(2)
+    const amountInput = screen.getByLabelText('How many?')
+    await user.clear(amountInput)
+    await user.type(amountInput, '3')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(onUpdateEntry).toHaveBeenCalledWith(entry, expect.objectContaining({ grams: 159, inputAmount: 3 }))
+  })
+
+  it('disables Save while the amount is cleared to empty', async () => {
+    const user = userEvent.setup()
+    const onUpdateEntry = vi.fn()
+    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} onUpdateEntry={onUpdateEntry} />)
+
+    await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountInput)
+
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+  })
+
+  it('cancels editing without calling onUpdateEntry', async () => {
+    const user = userEvent.setup()
+    const onUpdateEntry = vi.fn()
+    render(<EntryList entries={[makeEntry()]} onDelete={vi.fn()} onUpdateEntry={onUpdateEntry} />)
 
     await user.click(screen.getByRole('button', { name: 'Edit when Banana was logged' }))
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
 
-    expect(onUpdateConsumedAt).not.toHaveBeenCalled()
+    expect(onUpdateEntry).not.toHaveBeenCalled()
     expect(screen.queryByLabelText('Logged at')).not.toBeInTheDocument()
   })
 

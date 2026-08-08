@@ -89,8 +89,14 @@ export function createEntry(payload: CreateFoodEntryPayload) {
   return api.post<FoodEntry>('/entries/', payload)
 }
 
-export function updateEntry(id: string, grams: number, consumedAt: string) {
-  return api.patch<FoodEntry>(`/entries/${id}`, { grams, consumed_at: consumedAt })
+// inputAmount is only sent on a portion edit - a plain time edit omits it, which leaves the
+// entry's previously-logged display amount untouched (see UpdateFoodEntryRequest on the backend).
+export function updateEntry(id: string, grams: number, consumedAt: string, inputAmount?: number) {
+  return api.patch<FoodEntry>(`/entries/${id}`, {
+    grams,
+    consumed_at: consumedAt,
+    ...(inputAmount != null && { input_amount: inputAmount }),
+  })
 }
 
 export function deleteEntry(id: string) {
