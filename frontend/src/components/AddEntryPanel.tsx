@@ -58,6 +58,14 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [justAdded, setJustAdded] = useState<string | null>(null)
 
+  // A one-off portion for this add only - like Add, but always asks for the amount instead of
+  // using (or falling back past) the favorite's saved default, and never touches that default.
+  const [customAddFavorite, setCustomAddFavorite] = useState<Favorite | null>(null)
+  const [customUnit, setCustomUnit] = useState('g')
+  const [customAmountInput, setCustomAmountInput] = useState('')
+  const [isAddingCustom, setIsAddingCustom] = useState(false)
+  const [customAddError, setCustomAddError] = useState<string | null>(null)
+
   // The panel always reopens onto whichever day History is currently showing, not whatever day
   // it was last left on.
   useEffect(() => {
@@ -150,6 +158,63 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
     }
   }
 
+  // Asks only for the amount, then logs immediately - like handleQuickAddFavorite's default-set
+  // path, but for a one-off portion instead of the favorite's saved default. Doesn't touch the
+  // favorite's own default.
+  function handleStartCustomAdd(favorite: Favorite) {
+    const unitValue = favorite.default_input_unit ?? 'g'
+    setCustomAddFavorite(favorite)
+    setCustomUnit(unitValue)
+    setCustomAmountInput(
+      favorite.default_input_amount != null ? String(favorite.default_input_amount) : defaultAmountFor(unitValue)
+    )
+    setCustomAddError(null)
+  }
+
+  function handleCustomAmountChange(event: ChangeEvent<HTMLInputElement>) {
+    const raw = event.target.value
+    if (raw === '') {
+      setCustomAmountInput('')
+      return
+    }
+    setCustomAmountInput(raw.replace(/^0+(?=\d)/, ''))
+  }
+
+  async function handleConfirmCustomAdd(event: FormEvent) {
+    event.preventDefault()
+    const favorite = customAddFavorite!
+    const amount = customAmountInput === '' ? 0 : Number(customAmountInput)
+    if (amount <= 0) return
+    const unitToGrams = customUnit === 'g' ? 1 : (favorite.default_unit_to_grams ?? 1)
+    const grams = customUnit === 'g' ? amount : amount * unitToGrams
+    setIsAddingCustom(true)
+    setCustomAddError(null)
+    try {
+      await createEntry({
+        name: favorite.name,
+        brand: favorite.brand,
+        barcode: favorite.barcode,
+        grams,
+        input_unit: customUnit,
+        input_amount: amount,
+        unit_to_grams: unitToGrams,
+        calories_per_100g: favorite.calories_per_100g,
+        protein_per_100g: favorite.protein_per_100g,
+        carbs_per_100g: favorite.carbs_per_100g,
+        fat_per_100g: favorite.fat_per_100g,
+        consumed_at: combineDateAndTime(entryDate, entryTime),
+      })
+      setCustomAddFavorite(null)
+      setJustAddedId(favorite.id)
+      setTimeout(() => setJustAddedId(null), 1500)
+      await onAdded()
+    } catch (error) {
+      setCustomAddError(error instanceof ApiError ? error.message : 'Could not add this favorite.')
+    } finally {
+      setIsAddingCustom(false)
+    }
+  }
+
   function handleAmountChange(event: ChangeEvent<HTMLInputElement>) {
     const raw = event.target.value
     if (raw === '') {
@@ -202,6 +267,7 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
     setJustAdded(null)
     setSaveError(null)
     setSearchError(null)
+    setCustomAddFavorite(null)
   }
 
   const amount = amountInput === '' ? 0 : Number(amountInput)
@@ -315,17 +381,82 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
                       <div className="entry-row__name">{favorite.name}</div>
                       <div className="entry-row__meta">
                         {favorite.brand ?? 'Unbranded'} · {Math.round(favorite.calories_per_100g)} kcal/100g
+                        {favorite.default_input_amount != null && (
+                          <>
+                            {' '}
+                            · {favorite.default_input_amount}
+                            {favorite.default_input_unit} default
+                          </>
+                        )}
                       </div>
                     </div>
-                    <div className="entry-row__actions">
-                      <button
-                        type="button"
-                        className="btn btn--primary btn--small"
-                        onClick={() => handleQuickAddFavorite(favorite)}
+                    {customAddFavorite?.id === favorite.id ? (
+                      <form
+                        className="form"
+                        onSubmit={handleConfirmCustomAdd}
+                        style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end', flexWrap: 'wrap' }}
                       >
-                        {justAddedId === favorite.id ? 'Added ✓' : 'Add'}
-                      </button>
-                    </div>
+                        <div className="field" style={{ marginBottom: 0 }}>
+                          <label htmlFor={`add-entry-custom-amount-${favorite.id}`}>{unitLabel(customUnit)}</label>
+                          <input
+                            id={`add-entry-custom-amount-${favorite.id}`}
+                            className="input"
+                            type="number"
+                            inputMode="decimal"
+                            min={0.01}
+                            step="any"
+                            required
+                            autoFocus
+                            value={customAmountInput}
+                            onChange={handleCustomAmountChange}
+                          />
+                        </div>
+                        {favorite.default_input_unit != null && favorite.default_input_unit !== 'g' && (
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--small"
+                            onClick={() => {
+                              const nextUnit = customUnit === 'g' ? favorite.default_input_unit! : 'g'
+                              setCustomUnit(nextUnit)
+                              setCustomAmountInput(defaultAmountFor(nextUnit))
+                            }}
+                          >
+                            {customUnit === 'g' ? `Use ${favorite.default_input_unit} instead` : 'Use grams instead'}
+                          </button>
+                        )}
+                        {customAddError && <div className="form__banner">{customAddError}</div>}
+                        <div className="entry-row__actions">
+                          <button type="submit" className="btn btn--primary btn--small" disabled={isAddingCustom}>
+                            {isAddingCustom && <span className="btn__spinner" aria-hidden="true" />}
+                            Add
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn--ghost btn--small"
+                            onClick={() => setCustomAddFavorite(null)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    ) : (
+                      <div className="entry-row__actions">
+                        <button
+                          type="button"
+                          className="btn btn--primary btn--small"
+                          onClick={() => handleQuickAddFavorite(favorite)}
+                        >
+                          {justAddedId === favorite.id ? 'Added ✓' : 'Add'}
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => handleStartCustomAdd(favorite)}
+                        >
+                          Custom amount
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>

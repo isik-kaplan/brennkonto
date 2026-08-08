@@ -7,7 +7,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
-- History page can now add entries directly for the day being viewed - search, barcode lookup/scan, and favorites, without leaving History or going through Log Food.
+- History page can now add entries directly for the day being viewed - search, barcode lookup/scan, and favorites (with their saved default amount shown and a "Custom amount" action for a one-off portion, matching Log Food), without leaving History or going through Log Food.
 - Entry portions are now retroactively editable: the existing "Edit" action on a logged entry also lets you correct the amount (not just the date/time it was logged), recomputing calories/macros from the new amount in whatever unit it was originally logged in.
 
 ### Changed

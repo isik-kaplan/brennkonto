@@ -234,6 +234,154 @@ describe('AddEntryPanel', () => {
     expect(endpoints.createEntry).not.toHaveBeenCalled()
   })
 
+  it("shows the favorite's saved default amount", async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 15, default_unit_to_grams: 1 }),
+    ])
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    expect(await screen.findByText(/15g default/)).toBeInTheDocument()
+  })
+
+  it('logs a one-off custom amount without touching the saved default', async () => {
+    const user = userEvent.setup()
+    const onAdded = vi.fn()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'g', default_input_amount: 15, default_unit_to_grams: 1 }),
+    ])
+    render(<AddEntryPanel date="2026-08-01" onAdded={onAdded} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    expect(amountInput).toHaveValue(15)
+    await user.clear(amountInput)
+    await user.type(amountInput, '40')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() =>
+      expect(endpoints.createEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ grams: 40, input_amount: 40, input_unit: 'g' })
+      )
+    )
+    expect(endpoints.upsertFavorite).not.toHaveBeenCalled()
+    expect(onAdded).toHaveBeenCalled()
+  })
+
+  it('saves a custom amount for a non-gram favorite with the unit conversion applied', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 1, default_unit_to_grams: 53 }),
+    ])
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+
+    const amountInput = screen.getByLabelText('How many?')
+    await user.clear(amountInput)
+    await user.type(amountInput, '3')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() =>
+      expect(endpoints.createEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ grams: 159, input_unit: 'count', input_amount: 3, unit_to_grams: 53 })
+      )
+    )
+  })
+
+  it('falls back unit_to_grams to 1 for a custom amount when no conversion was saved', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 1, default_unit_to_grams: null }),
+    ])
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    await waitFor(() =>
+      expect(endpoints.createEntry).toHaveBeenCalledWith(
+        expect.objectContaining({ grams: 1, input_unit: 'count', input_amount: 1, unit_to_grams: 1 })
+      )
+    )
+  })
+
+  it('offers a unit toggle inside the custom-amount form for a non-gram favorite', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+      makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 53 }),
+    ])
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+
+    expect(screen.getByLabelText('How many?')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+    expect(screen.getByLabelText('Amount (grams)')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Use count instead' }))
+    expect(screen.getByLabelText('How many?')).toBeInTheDocument()
+  })
+
+  it('cancels a custom amount without adding', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+    expect(screen.queryByLabelText('Amount (grams)')).not.toBeInTheDocument()
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+  })
+
+  it('does not submit a custom amount of zero, even bypassing native validation', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+
+    const amountInput = screen.getByLabelText('Amount (grams)')
+    await user.clear(amountInput)
+    fireEvent.submit(amountInput.closest('form')!)
+
+    expect(endpoints.createEntry).not.toHaveBeenCalled()
+  })
+
+  it('shows an API error message when a custom amount fails to save', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    vi.mocked(endpoints.createEntry).mockRejectedValue(new ApiError('Could not add.', 500))
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Could not add.')).toBeInTheDocument()
+  })
+
+  it('shows a generic error message for a non-API custom-amount failure', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+    vi.mocked(endpoints.createEntry).mockRejectedValue(new Error('boom'))
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(await screen.findByText('Could not add this favorite.')).toBeInTheDocument()
+  })
+
   it('looks up a barcode and scans via camera', async () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.lookupBarcode).mockResolvedValue(nutella)
