@@ -546,6 +546,69 @@ describe('History', () => {
     })
   })
 
+  describe('repeating an entry for today', () => {
+    const nutellaEntry: FoodEntry = {
+      id: '5',
+      name: 'Nutella',
+      brand: 'Ferrero',
+      barcode: '1',
+      grams: 30,
+      input_unit: 'g',
+      input_amount: 30,
+      unit_to_grams: 1,
+      calories_per_100g: 539,
+      protein_per_100g: 6.3,
+      carbs_per_100g: 57.5,
+      fat_per_100g: 30.9,
+      calories: 161.7,
+      protein_g: 1.89,
+      carbs_g: 17.25,
+      fat_g: 9.27,
+      consumed_at: `${yesterday}T08:00:00`,
+      created_at: `${yesterday}T08:00:00Z`,
+      updated_at: null,
+      meal_group_id: null,
+      deleted_at: null,
+    }
+
+    it('reloads today after repeating an entry while already viewing today', async () => {
+      const user = userEvent.setup()
+      const todaysEntry = { ...nutellaEntry, consumed_at: `${today}T08:00:00` }
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [todaysEntry]))
+      vi.mocked(endpoints.createEntry).mockResolvedValue(createdEntry)
+      renderHistory()
+
+      await waitFor(() => expect(screen.getByText('Nutella')).toBeInTheDocument())
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(1))
+      await user.click(screen.getByRole('button', { name: 'Repeat Nutella today' }))
+
+      await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalled())
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+    })
+
+    it('does not reload the viewed day after repeating an entry from a past day', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(yesterday, [nutellaEntry]))
+      vi.mocked(endpoints.createEntry).mockResolvedValue(createdEntry)
+      renderHistory()
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledWith(today))
+
+      const dateInput = screen.getByLabelText('Date') as HTMLInputElement
+      fireEvent.change(dateInput, { target: { value: yesterday } })
+      await waitFor(() => expect(screen.getByText('Nutella')).toBeInTheDocument())
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+
+      await user.click(screen.getByRole('button', { name: 'Repeat Nutella today' }))
+
+      await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalled())
+      const [payload] = vi.mocked(endpoints.createEntry).mock.calls[0]
+      expect(payload.consumed_at).toMatch(new RegExp(`^${today}T\\d{2}:\\d{2}:00$`))
+      // Still viewing yesterday - a repeat always lands on today, which isn't on screen here, so
+      // there's nothing for this view to refresh.
+      expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2)
+    })
+  })
+
   // Runs last in this file - @dnd-kit defers some of its internal document-listener cleanup by
   // 50ms after a drag ends, which has been observed to bleed into whichever test runs right
   // after a drag simulation.

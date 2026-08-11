@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.10.0]
+
+### Added
+
+- Every logged entry, on any day, now has "Repeat today" and "Repeat with changes" actions: the first instantly re-logs the same food and amount for today, the second opens an amount field first so a different portion can be logged. Both always land on today's log regardless of which day's entries are being browsed - the fast way to re-log something you ate again without re-searching for it.
+- Meal groups with more than one item also get a "Repeat meal today" action on the group header, re-logging every item at once and regrouping the copies under the same name.
+
 ## [0.9.0]
 
 ### Added

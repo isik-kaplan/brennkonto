@@ -119,6 +119,14 @@ export default function History() {
 
   const isToday = date === toISODate(new Date())
 
+  // A repeated entry always lands on today, never on whatever date is currently being viewed - so
+  // there's only something to refresh here when today is what's already on screen. Browsing a
+  // past date and repeating one of its entries logs it for today invisibly as far as this view is
+  // concerned; the row's own "Repeated ✓" confirmation is the only feedback for that case.
+  async function handleEntryRepeated() {
+    if (isToday) await load()
+  }
+
   return (
     <>
       <div className="page-header">
@@ -206,6 +214,7 @@ export default function History() {
             onRenameGroup={handleRenameGroup}
             onUngroup={handleUngroup}
             onUpdateEntry={handleUpdateEntry}
+            onEntryRepeated={handleEntryRepeated}
           />
 
           {isToday && stats.entries.length === 0 && (
