@@ -550,6 +550,14 @@ svg {
   color: var(--color-positive);
 }
 
+/* Text stays --color-ink rather than --color-warning here - --color-warning itself is too light
+   against --color-warning-soft to hold body-text contrast, so it's used for the border/tint only. */
+.form__banner--warning {
+  border-color: var(--color-warning);
+  background: var(--color-warning-soft);
+  color: var(--color-ink);
+}
+
 /* ---------- cards ---------- */
 
 .card {
@@ -1252,6 +1260,26 @@ svg {
 .auth-card__subtitle {
   color: var(--color-neutral);
   margin-bottom: var(--space-lg);
+}
+
+.connection-error__icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin: 0 auto var(--space-md);
+  color: var(--color-warning);
+}
+
+.connection-error__icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.connection-error.auth-card {
+  text-align: center;
+}
+
+.connection-error .auth-card__brand {
+  justify-content: center;
 }
 
 .auth-card__switch {

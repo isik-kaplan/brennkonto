@@ -7,12 +7,27 @@ export class ApiError extends Error {
   }
 }
 
+// Thrown when `fetch` itself fails to reach the server - no connection, DNS failure, the request
+// never got a response - as opposed to ApiError, which means a response *did* come back, just
+// with a non-2xx status. Callers use this to show "can't connect" instead of, say, treating it
+// like an auth failure.
+export class NetworkError extends Error {
+  constructor() {
+    super("Can't connect. Check your connection and try again.")
+  }
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    credentials: 'include',
-    headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
-    ...options,
-  })
+  let response: Response
+  try {
+    response = await fetch(`/api${path}`, {
+      credentials: 'include',
+      headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
+      ...options,
+    })
+  } catch {
+    throw new NetworkError()
+  }
 
   if (response.status === 204) {
     return undefined as T

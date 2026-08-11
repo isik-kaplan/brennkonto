@@ -3,7 +3,7 @@ import type { ReactNode } from 'react'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError } from '../../src/api/client'
+import { ApiError, NetworkError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
 import type { User } from '../../src/api/types'
 import { AuthProvider, useAuth } from '../../src/hooks/useAuth'
@@ -67,6 +67,33 @@ describe('useAuth', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false))
     expect(result.current.user).toBeNull()
     expect(spy).toHaveBeenCalled()
+  })
+
+  it("sets isOffline, without logging, when the initial check can't reach the server", async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.mocked(endpoints.fetchCurrentUser).mockRejectedValue(new NetworkError())
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(result.current.isOffline).toBe(true)
+    expect(result.current.user).toBeNull()
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('retryConnection re-runs the check and clears isOffline on success', async () => {
+    vi.mocked(endpoints.fetchCurrentUser).mockRejectedValueOnce(new NetworkError())
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.isOffline).toBe(true))
+
+    vi.mocked(endpoints.fetchCurrentUser).mockResolvedValueOnce(user)
+    act(() => {
+      result.current.retryConnection()
+    })
+    expect(result.current.isLoading).toBe(true)
+    expect(result.current.isOffline).toBe(false)
+
+    await waitFor(() => expect(result.current.user).toEqual(user))
+    expect(result.current.isOffline).toBe(false)
   })
 
   it('login sets the user', async () => {

@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import { useFormState } from '@isik-kaplan/core/hooks'
 import { Link, useNavigate } from 'react-router'
 
-import { ApiError } from '../api/client'
+import { ApiError, NetworkError } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Register() {
@@ -26,7 +26,9 @@ export default function Register() {
       await register(formState.email, formState.password, formState.display_name)
       navigate('/')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
+      setError(
+        err instanceof ApiError || err instanceof NetworkError ? err.message : 'Something went wrong. Try again.'
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -36,7 +38,7 @@ export default function Register() {
     <div className="auth-page">
       <div className="auth-card">
         <span className="auth-card__brand">
-          <span className="app-nav__brand-mark" aria-hidden="true" />
+          <span className="app-floating-nav__brand-mark" aria-hidden="true" />
           brennkonto
         </span>
         <h1>Create your account</h1>

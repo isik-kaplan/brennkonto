@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 
 import AppShell from './components/AppShell'
+import ConnectionError from './components/ConnectionError'
 import { useAuth } from './hooks/useAuth'
 import Dashboard from './pages/Dashboard'
 import GoalHistory from './pages/GoalHistory'
@@ -14,8 +15,11 @@ import Settings from './pages/Settings'
 import Trends from './pages/Trends'
 
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, isOffline, retryConnection } = useAuth()
 
+  if (isOffline) {
+    return <ConnectionError onRetry={retryConnection} />
+  }
   if (isLoading) {
     return <div className="centered-loader">Loading…</div>
   }
@@ -26,8 +30,11 @@ function RequireAuth({ children }: { children: ReactNode }) {
 }
 
 function RequireGuest({ children }: { children: ReactNode }) {
-  const { user, isLoading } = useAuth()
+  const { user, isLoading, isOffline, retryConnection } = useAuth()
 
+  if (isOffline) {
+    return <ConnectionError onRetry={retryConnection} />
+  }
   if (isLoading) {
     return <div className="centered-loader">Loading…</div>
   }

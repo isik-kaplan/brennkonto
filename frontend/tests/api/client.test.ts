@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api } from '../../src/api/client'
+import { ApiError, NetworkError, api } from '../../src/api/client'
 
 function mockFetchOnce(response: Partial<Response> & { jsonBody?: unknown }) {
   const { jsonBody, ...rest } = response
@@ -58,6 +58,14 @@ describe('api.get', () => {
     mockFetchOnce({ ok: false, status: 502, json: vi.fn().mockRejectedValue(new Error('bad json')) })
     const error = (await api.get('/broken').catch((e: unknown) => e)) as ApiError
     expect(error.message).toBe('Request failed (502).')
+  })
+
+  it('throws NetworkError, not ApiError, when fetch itself fails', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+    const error = (await api.get('/ping').catch((e: unknown) => e)) as NetworkError
+    expect(error).toBeInstanceOf(NetworkError)
+    expect(error).not.toBeInstanceOf(ApiError)
+    expect(error.message).toBe("Can't connect. Check your connection and try again.")
   })
 })
 

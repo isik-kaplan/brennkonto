@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -27,6 +28,8 @@ function mockAuth(overrides: Partial<ReturnType<typeof useAuth>>) {
   vi.mocked(useAuth).mockReturnValue({
     user: null,
     isLoading: false,
+    isOffline: false,
+    retryConnection: vi.fn(),
     login: vi.fn(),
     register: vi.fn(),
     logout: vi.fn(),
@@ -84,5 +87,28 @@ describe('App routing', () => {
     mockAuth({ user })
     renderAt('/does-not-exist')
     expect(screen.getByText('Dashboard page')).toBeInTheDocument()
+  })
+
+  it('shows "Can\'t connect" instead of redirecting a protected route when offline', () => {
+    mockAuth({ isOffline: true })
+    renderAt('/log')
+    expect(screen.getByText("Can't connect")).toBeInTheDocument()
+    expect(screen.queryByText('Login page')).not.toBeInTheDocument()
+  })
+
+  it('shows "Can\'t connect" instead of a guest route when offline', () => {
+    mockAuth({ isOffline: true })
+    renderAt('/login')
+    expect(screen.getByText("Can't connect")).toBeInTheDocument()
+  })
+
+  it('retries the auth check from the "Can\'t connect" screen', async () => {
+    const userEventInstance = userEvent.setup()
+    const retryConnection = vi.fn()
+    mockAuth({ isOffline: true, retryConnection })
+    renderAt('/')
+
+    await userEventInstance.click(screen.getByRole('button', { name: 'Retry' }))
+    expect(retryConnection).toHaveBeenCalled()
   })
 })

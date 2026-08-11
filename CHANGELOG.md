@@ -3,7 +3,17 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.10.0]
+## [0.11.0]
+
+### Added
+
+- brennkonto is now an installable PWA: a web app manifest and a service worker (via `vite-plugin-pwa`) precache the app shell and fonts, so it can be added to your home screen and the interface itself still loads with no connection. Logging in and fetching data still requires reaching the server - this doesn't add offline data yet.
+- A dedicated "Can't connect" screen replaces the login/loading flow when the very first request to the server fails outright (no connection, server unreachable), with a Retry action - previously this could misread as "logged out" and bounce you to the login page.
+- A persistent banner appears across the app whenever the browser reports no network connection, so a dropped connection mid-session is obvious instead of pages silently failing to refresh.
+
+### Fixed
+
+- Login and Register's brand mark referenced a CSS class that didn't exist, so it silently rendered as nothing.
 
 ### Added
 

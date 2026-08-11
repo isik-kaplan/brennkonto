@@ -51,6 +51,8 @@ function mockAuth(overrides: Partial<ReturnType<typeof useAuth>> = {}) {
   const value = {
     user,
     isLoading: false,
+    isOffline: false,
+    retryConnection: vi.fn(),
     login: vi.fn(),
     register: vi.fn(),
     logout: vi.fn(),

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
-import { ApiError } from '../../src/api/client'
+import { ApiError, NetworkError } from '../../src/api/client'
 import { useAuth } from '../../src/hooks/useAuth'
 import Login from '../../src/pages/Login'
 
@@ -13,6 +13,8 @@ function renderLogin(login = vi.fn()) {
   vi.mocked(useAuth).mockReturnValue({
     user: null,
     isLoading: false,
+    isOffline: false,
+    retryConnection: vi.fn(),
     login,
     register: vi.fn(),
     logout: vi.fn(),
@@ -62,5 +64,16 @@ describe('Login', () => {
     await user.click(screen.getByRole('button', { name: 'Log in' }))
 
     expect(await screen.findByText('Something went wrong. Try again.')).toBeInTheDocument()
+  })
+
+  it('shows the "can\'t connect" message when the login request never reaches the server', async () => {
+    const user = userEvent.setup()
+    renderLogin(vi.fn().mockRejectedValue(new NetworkError()))
+
+    await user.type(screen.getByLabelText('Email / Username'), 'demo@brennkonto.local')
+    await user.type(screen.getByLabelText('Password'), 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Log in' }))
+
+    expect(await screen.findByText("Can't connect. Check your connection and try again.")).toBeInTheDocument()
   })
 })

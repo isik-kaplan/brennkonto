@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { NavLink, Outlet } from 'react-router'
 
 import { useAuth } from '../hooks/useAuth'
+import { useOnlineStatus } from '../hooks/useOnlineStatus'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Today', end: true },
@@ -41,6 +42,7 @@ function LogoutIcon(): ReactNode {
 
 export default function AppShell() {
   const { user, logout } = useAuth()
+  const isOnline = useOnlineStatus()
 
   return (
     <div className="app-shell">
@@ -82,6 +84,11 @@ export default function AppShell() {
         </header>
 
         <main className="app-main">
+          {!isOnline && (
+            <div className="form__banner form__banner--warning" role="status">
+              You're offline. Some things may not work until you're back online.
+            </div>
+          )}
           <Outlet />
         </main>
       </div>

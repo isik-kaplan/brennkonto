@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { User } from '../../src/api/types'
 import AppShell from '../../src/components/AppShell'
@@ -30,11 +30,17 @@ function renderShell(initialPath = '/') {
   )
 }
 
+afterEach(() => {
+  vi.restoreAllMocks()
+})
+
 describe('AppShell', () => {
   it('renders the brand, nav links, current user, and routed page content', () => {
     vi.mocked(useAuth).mockReturnValue({
       user,
       isLoading: false,
+      isOffline: false,
+      retryConnection: vi.fn(),
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
@@ -52,6 +58,8 @@ describe('AppShell', () => {
     vi.mocked(useAuth).mockReturnValue({
       user,
       isLoading: false,
+      isOffline: false,
+      retryConnection: vi.fn(),
       login: vi.fn(),
       register: vi.fn(),
       logout: vi.fn(),
@@ -74,6 +82,8 @@ describe('AppShell', () => {
     vi.mocked(useAuth).mockReturnValue({
       user,
       isLoading: false,
+      isOffline: false,
+      retryConnection: vi.fn(),
       login: vi.fn(),
       register: vi.fn(),
       logout,
@@ -88,5 +98,39 @@ describe('AppShell', () => {
       await userEventInstance.click(button)
     }
     expect(logout).toHaveBeenCalledTimes(2)
+  })
+
+  it('shows an offline banner when the browser has no network connection', () => {
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false)
+    vi.mocked(useAuth).mockReturnValue({
+      user,
+      isLoading: false,
+      isOffline: false,
+      retryConnection: vi.fn(),
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      setUser: vi.fn(),
+    })
+    renderShell('/')
+
+    expect(screen.getByRole('status')).toHaveTextContent("You're offline")
+  })
+
+  it('hides the offline banner while connected', () => {
+    vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(true)
+    vi.mocked(useAuth).mockReturnValue({
+      user,
+      isLoading: false,
+      isOffline: false,
+      retryConnection: vi.fn(),
+      login: vi.fn(),
+      register: vi.fn(),
+      logout: vi.fn(),
+      setUser: vi.fn(),
+    })
+    renderShell('/')
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 })

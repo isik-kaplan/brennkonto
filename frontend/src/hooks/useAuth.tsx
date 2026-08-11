@@ -1,13 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 
-import { ApiError } from '../api/client'
+import { ApiError, NetworkError } from '../api/client'
 import * as endpoints from '../api/endpoints'
 import type { User } from '../api/types'
 
 interface AuthContextValue {
   user: User | null
   isLoading: boolean
+  // True only when the initial auth check couldn't reach the server at all (NetworkError) - a
+  // normal 401 (not logged in) is not "offline", it's just "logged out", and still routes to
+  // /login as usual.
+  isOffline: boolean
+  retryConnection: () => void
   login: (identifier: string, password: string) => Promise<void>
   register: (email: string, password: string, displayName: string) => Promise<void>
   logout: () => Promise<void>
@@ -19,18 +24,29 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const [isOffline, setIsOffline] = useState(false)
 
-  useEffect(() => {
+  const checkAuth = useCallback(() => {
+    setIsLoading(true)
+    setIsOffline(false)
     endpoints
       .fetchCurrentUser()
       .then(setUser)
       .catch((error) => {
+        if (error instanceof NetworkError) {
+          setIsOffline(true)
+          return
+        }
         if (!(error instanceof ApiError && error.status === 401)) {
           console.error(error)
         }
       })
       .finally(() => setIsLoading(false))
   }, [])
+
+  useEffect(() => {
+    checkAuth()
+  }, [checkAuth])
 
   const login = useCallback(async (identifier: string, password: string) => {
     setUser(await endpoints.login(identifier, password))
@@ -46,7 +62,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout, setUser }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, isOffline, retryConnection: checkAuth, login, register, logout, setUser }}
+    >
       {children}
     </AuthContext.Provider>
   )

@@ -1,7 +1,7 @@
 {
   "name": "brennkonto-frontend",
   "private": true,
-  "version": "0.10.0",
+  "version": "0.11.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -45,6 +45,7 @@
     "typescript": "^5.5.4",
     "typescript-eslint": "^8.3.0",
     "vite": "^6.0.7",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.1.10"
   }
 }

@@ -4,7 +4,7 @@ import type { FormEvent } from 'react'
 import { useFormState } from '@isik-kaplan/core/hooks'
 import { useNavigate } from 'react-router'
 
-import { ApiError } from '../api/client'
+import { ApiError, NetworkError } from '../api/client'
 import { useAuth } from '../hooks/useAuth'
 
 export default function Login() {
@@ -22,7 +22,9 @@ export default function Login() {
       await login(formState.identifier, formState.password)
       navigate('/')
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Something went wrong. Try again.')
+      setError(
+        err instanceof ApiError || err instanceof NetworkError ? err.message : 'Something went wrong. Try again.'
+      )
     } finally {
       setIsSubmitting(false)
     }
@@ -32,7 +34,7 @@ export default function Login() {
     <div className="auth-page">
       <div className="auth-card">
         <span className="auth-card__brand">
-          <span className="app-nav__brand-mark" aria-hidden="true" />
+          <span className="app-floating-nav__brand-mark" aria-hidden="true" />
           brennkonto
         </span>
         <h1>Welcome back</h1>
