@@ -21,14 +21,27 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setThemeState] = useState<Theme>(readStoredTheme)
 
   // The CSS drives the actual colors via `:root[data-theme]` (see tokens.css) - this effect's
-  // only job is to keep that attribute in sync with the chosen theme. "system" removes the
-  // attribute entirely, handing control back to the `prefers-color-scheme` media query.
+  // job is to keep that attribute in sync with the chosen theme and update the PWA theme-color.
   useEffect(() => {
     if (theme === 'system') {
       document.documentElement.removeAttribute('data-theme')
     } else {
       document.documentElement.setAttribute('data-theme', theme)
     }
+
+    const metaTags = document.querySelectorAll('meta[name="theme-color"]')
+    metaTags.forEach((tag) => {
+      const media = tag.getAttribute('media')
+      if (theme === 'system') {
+        if (media && media.includes('dark')) {
+          tag.setAttribute('content', '#211e1a')
+        } else {
+          tag.setAttribute('content', '#f7f0e4')
+        }
+      } else {
+        tag.setAttribute('content', theme === 'dark' ? '#211e1a' : '#f7f0e4')
+      }
+    })
   }, [theme])
 
   const setTheme = useCallback((next: Theme) => {

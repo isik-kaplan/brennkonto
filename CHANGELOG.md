@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.13.0]
+
+### Added
+
+- PWA status bar theme-color is now dynamically synchronized with the light, dark, and system appearance modes, preventing a white top bar when running in dark mode.
+
+### Fixed
+
+- Resized the brand green square in PWA/iOS icons to 50% of the canvas size to ensure it fits entirely within circular/adaptive OS icon masks without corners being cropped.
+
 ## [0.12.0]
 
 ### Added
