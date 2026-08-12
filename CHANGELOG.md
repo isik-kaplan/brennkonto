@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.12.0]
+
+### Added
+
+- Food search results can now be prioritized to show unbranded options on top. The API fetches a larger pool of 100 results from Open Food Facts, stably sorts unbranded/brandless products to the top, and returns the top 20 items. This helps users log raw or basic ingredients more easily without scrolling through brand-specific alternatives.
+
 ## [0.11.0]
 
 ### Added

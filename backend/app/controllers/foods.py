@@ -40,10 +40,12 @@ async def _upsert_cache(db_session: AsyncSession, result: FoodSearchResultOut) -
 
 @get("/search")
 async def search_foods(db_session: AsyncSession, q: str = Parameter(min_length=2)) -> list[FoodSearchResultOut]:
-    results = await off_client.search(q)
-    for result in results:
+    results = await off_client.search(q, page_size=100)
+    results.sort(key=lambda x: 0 if not x.brand else 1)
+    top_results = results[:20]
+    for result in top_results:
         await _upsert_cache(db_session, result)
-    return results
+    return top_results
 
 
 @get("/barcode/{barcode:str}")

@@ -125,3 +125,58 @@ async def test_repeated_search_updates_an_existing_cache_entry(authed_client, mo
 
     cached = await authed_client.get("/api/foods/barcode/3017620422003")
     assert cached.json()["calories_per_100g"] == 550.0
+
+
+async def test_search_prioritizes_unbranded_results(authed_client, monkeypatch) -> None:
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return [
+            FoodSearchResultOut(
+                barcode="1",
+                name="Branded Product 1",
+                brand="Brand A",
+                calories_per_100g=100.0,
+                protein_per_100g=1.0,
+                carbs_per_100g=2.0,
+                fat_per_100g=3.0,
+            ),
+            FoodSearchResultOut(
+                barcode="2",
+                name="Unbranded Product 1",
+                brand=None,
+                calories_per_100g=100.0,
+                protein_per_100g=1.0,
+                carbs_per_100g=2.0,
+                fat_per_100g=3.0,
+            ),
+            FoodSearchResultOut(
+                barcode="3",
+                name="Branded Product 2",
+                brand="Brand B",
+                calories_per_100g=100.0,
+                protein_per_100g=1.0,
+                carbs_per_100g=2.0,
+                fat_per_100g=3.0,
+            ),
+            FoodSearchResultOut(
+                barcode="4",
+                name="Unbranded Product 2",
+                brand="",
+                calories_per_100g=100.0,
+                protein_per_100g=1.0,
+                carbs_per_100g=2.0,
+                fat_per_100g=3.0,
+            ),
+        ]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=test")
+    assert response.status_code == 200
+    results = response.json()
+    assert len(results) == 4
+    # The two unbranded ones (None and "") should be first, preserving their relative order
+    assert results[0]["name"] == "Unbranded Product 1"
+    assert results[1]["name"] == "Unbranded Product 2"
+    # The two branded ones should follow, preserving their relative order
+    assert results[2]["name"] == "Branded Product 1"
+    assert results[3]["name"] == "Branded Product 2"
