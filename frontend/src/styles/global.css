@@ -240,7 +240,7 @@ svg {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: var(--space-sm) var(--space-md);
+    padding: calc(var(--space-sm) + env(safe-area-inset-top, 0px)) var(--space-md) var(--space-sm) var(--space-md);
     background: var(--color-paper);
     border-bottom: 1.5px solid var(--color-ink);
     position: sticky;

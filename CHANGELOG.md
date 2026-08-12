@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.14.0]
+
+### Fixed
+
+- Added `viewport-fit=cover` to the viewport meta tag and padded the top bar with `env(safe-area-inset-top)`. This allows the app background to flow continuously behind the home indicator at the bottom and the status bar at the top, eliminating non-matching background blocks.
+
 ## [0.13.0]
 
 ### Added
