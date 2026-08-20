@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.15.0]
+
+### Added
+
+- A searchable "From your history" browser surfaces every distinct food (and every named meal combo) you've logged before, with a one-tap "Add" using the amount/unit you last logged it with, a "Custom amount" option, and "Add meal" to re-log a whole past combo at once. Available on both Log Food and History's inline add-entry panel.
+
 ## [0.14.0]
 
 ### Fixed

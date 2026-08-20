@@ -168,6 +168,50 @@ class UpdateMealGroupRequest(msgspec.Struct):
     name: str | None = None
 
 
+class HistoryFoodOut(msgspec.Struct):
+    """A distinct food the user has logged before, deduplicated to its most recently logged
+    instance - see app/controllers/history.py's history_foods for how the dedup key and
+    `times_logged` are computed."""
+
+    barcode: str
+    name: str
+    brand: str | None
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    suggested_unit: str
+    unit_to_grams: float
+    last_input_amount: float
+    last_logged_at: datetime
+    times_logged: int
+
+
+class HistoryGroupItemOut(msgspec.Struct):
+    name: str
+    brand: str | None
+    barcode: str | None
+    grams: float
+    input_unit: str
+    input_amount: float
+    unit_to_grams: float
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+
+
+class HistoryGroupOut(msgspec.Struct):
+    """A previously-logged, named combo of foods (a "meal") - deduplicated by name to its most
+    recently logged occurrence. See app/controllers/history.py's history_groups."""
+
+    name: str
+    items: list[HistoryGroupItemOut]
+    calories: float
+    last_logged_at: datetime
+    times_logged: int
+
+
 class DailyStatsOut(msgspec.Struct):
     date: date
     calories: float

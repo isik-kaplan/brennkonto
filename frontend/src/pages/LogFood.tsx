@@ -13,6 +13,7 @@ import {
   upsertFavorite,
 } from '../api/endpoints'
 import type { Favorite, FoodSearchResult } from '../api/types'
+import HistoryPicker from '../components/HistoryPicker'
 import { combineDateAndTime, toISODate, toISOTime } from '../lib/dates'
 import { defaultAmountFor, unitLabel } from '../lib/units'
 
@@ -632,6 +633,15 @@ export default function LogFood() {
               ))}
             </ul>
           )}
+        </div>
+      )}
+
+      {!selected && (
+        <div className="card" style={{ marginTop: 'var(--space-lg)' }}>
+          <HistoryPicker
+            getConsumedAt={() => combineDateAndTime(toISODate(new Date()), toISOTime(new Date()))}
+            onAdded={() => {}}
+          />
         </div>
       )}
 

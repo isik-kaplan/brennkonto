@@ -75,6 +75,39 @@ export interface MealGroup {
   entry_ids: string[]
 }
 
+// A distinct food the user has logged before, deduped to its most recently logged instance -
+// structurally a FoodSearchResult plus a bit of history context, so a history item can be handed
+// straight to any code path that already knows how to select a search result.
+export interface HistoryFood extends FoodSearchResult {
+  last_input_amount: number
+  last_logged_at: string
+  times_logged: number
+}
+
+export interface HistoryGroupItem {
+  name: string
+  brand: string | null
+  barcode: string | null
+  grams: number
+  input_unit: string
+  input_amount: number
+  unit_to_grams: number
+  calories_per_100g: number
+  protein_per_100g: number
+  carbs_per_100g: number
+  fat_per_100g: number
+}
+
+// A previously-logged, named combo of foods (a "meal") - deduped by name to its most recent
+// occurrence.
+export interface HistoryGroup {
+  name: string
+  items: HistoryGroupItem[]
+  calories: number
+  last_logged_at: string
+  times_logged: number
+}
+
 export interface CreateFoodEntryPayload {
   name: string
   grams: number

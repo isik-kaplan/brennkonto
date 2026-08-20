@@ -6,6 +6,7 @@ import { createEntry, fetchFavorites, lookupBarcode, searchFoods } from '../api/
 import type { Favorite, FoodSearchResult } from '../api/types'
 import { combineDateAndTime, toISOTime } from '../lib/dates'
 import { defaultAmountFor, unitLabel } from '../lib/units'
+import HistoryPicker from './HistoryPicker'
 
 // Same lazy split as Log Food's scanner - most History visits never open the camera, so it
 // shouldn't ship on every page load.
@@ -462,6 +463,8 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
               </ul>
             </div>
           )}
+
+          <HistoryPicker getConsumedAt={() => combineDateAndTime(entryDate, entryTime)} onAdded={onAdded} />
         </>
       )}
 

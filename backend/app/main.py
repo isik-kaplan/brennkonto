@@ -13,6 +13,7 @@ from app.controllers.entries import entries_router
 from app.controllers.favorites import favorites_router
 from app.controllers.foods import foods_router
 from app.controllers.goals import goals_router
+from app.controllers.history import history_router
 from app.controllers.meal_groups import meal_groups_router
 from app.controllers.stats import stats_router
 from app.db import create_tables, get_db_session
@@ -37,6 +38,7 @@ def _build_route_handlers() -> list:
         goals_router,
         favorites_router,
         stats_router,
+        history_router,
     ]
     if STATIC_DIR.is_dir():
         # Serves the built frontend SPA and falls back to index.html for client-side routes -

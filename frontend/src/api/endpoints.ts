@@ -7,6 +7,8 @@ import type {
   FoodSearchResult,
   GoalVersion,
   GroupBy,
+  HistoryFood,
+  HistoryGroup,
   MealGroup,
   RangeStats,
   User,
@@ -133,6 +135,16 @@ export function updateMealGroup(id: string, payload: { entry_ids?: string[]; nam
 
 export function deleteMealGroup(id: string) {
   return api.delete<void>(`/meal-groups/${id}`)
+}
+
+// query='' returns the user's most recently logged distinct foods/meals rather than nothing -
+// browsing history without typing anything is itself part of the feature.
+export function fetchHistoryFoods(query = '') {
+  return api.get<HistoryFood[]>(`/history/foods?q=${encodeURIComponent(query)}`)
+}
+
+export function fetchHistoryGroups(query = '') {
+  return api.get<HistoryGroup[]>(`/history/groups?q=${encodeURIComponent(query)}`)
 }
 
 export function fetchDailyStats(date: string) {
