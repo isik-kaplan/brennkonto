@@ -124,3 +124,20 @@ async def test_remove_meal_name_ungroups_every_occurrence(authed_client) -> None
 async def test_remove_meal_name_404s_for_an_unknown_name(authed_client) -> None:
     response = await authed_client.delete("/api/meal-names/?name=Nope")
     assert response.status_code == 404
+
+
+async def test_list_meal_names_skips_a_group_whose_name_is_blank_after_stripping(authed_client) -> None:
+    entry = (await authed_client.post("/api/entries/", json=NUTELLA_PAYLOAD)).json()
+    # MealGroup.name is nullable, not non-blank - the SQL filter only excludes None, so a
+    # whitespace-only name reaches the app-level trim-and-skip.
+    await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry["id"]], "name": "   "})
+
+    assert (await authed_client.get("/api/meal-names/")).json() == []
+
+
+async def test_list_meal_names_skips_a_name_whose_entries_are_all_deleted(authed_client) -> None:
+    entry_ids = await _log_breakfast(authed_client)
+    for entry_id in entry_ids:
+        await authed_client.delete(f"/api/entries/{entry_id}")
+
+    assert (await authed_client.get("/api/meal-names/")).json() == []

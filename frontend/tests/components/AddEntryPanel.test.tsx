@@ -624,4 +624,38 @@ describe('AddEntryPanel', () => {
       timeout: 3000,
     })
   }, 10000)
+
+  it("adds a food from History using the panel's own viewed date and the current time", async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([
+      {
+        barcode: '3017620422003',
+        name: 'Nutella',
+        brand: 'Ferrero',
+        calories_per_100g: 539,
+        protein_per_100g: 6.3,
+        carbs_per_100g: 57.5,
+        fat_per_100g: 30.9,
+        suggested_unit: 'g',
+        unit_to_grams: 1,
+        last_input_amount: 45,
+        last_logged_at: '2026-08-05T08:00:00Z',
+        times_logged: 3,
+      },
+    ])
+    vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([])
+    vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+    render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.click(screen.getByRole('button', { name: 'Browse past foods' }))
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalled())
+    const [payload] = vi.mocked(endpoints.createEntry).mock.calls[0]
+    expect(payload).toMatchObject({ name: 'Nutella', grams: 45 })
+    // The date comes from the panel's own `date` prop (whichever day History is viewing), not
+    // "today" - unlike Log Food's history picker, which always logs against right now.
+    expect(payload.consumed_at).toMatch(/^2026-08-01T\d{2}:\d{2}:00$/)
+  })
 })

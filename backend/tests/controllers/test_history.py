@@ -134,3 +134,48 @@ async def test_history_groups_filters_by_query_against_name(authed_client) -> No
 async def test_history_endpoints_require_authentication(client) -> None:
     assert (await client.get("/api/history/foods")).status_code == 401
     assert (await client.get("/api/history/groups")).status_code == 401
+
+
+async def test_history_foods_falls_back_to_name_and_brand_when_barcode_is_missing(authed_client) -> None:
+    payload = {**NUTELLA_PAYLOAD, "consumed_at": "2026-08-01T08:00:00Z"}
+    del payload["barcode"]
+    await authed_client.post("/api/entries/", json=payload)
+    await authed_client.post("/api/entries/", json={**payload, "consumed_at": "2026-08-05T08:00:00Z"})
+
+    response = await authed_client.get("/api/history/foods")
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["times_logged"] == 2
+    # No real barcode to key off of - falls back to a synthetic "n:name|brand" key instead.
+    assert body[0]["barcode"].startswith("n:")
+
+
+async def test_history_foods_caps_results_at_30(authed_client) -> None:
+    for i in range(31):
+        await authed_client.post(
+            "/api/entries/",
+            json={**NUTELLA_PAYLOAD, "barcode": f"barcode-{i}", "consumed_at": f"2026-08-01T{i % 24:02d}:00:00Z"},
+        )
+
+    response = await authed_client.get("/api/history/foods")
+    assert len(response.json()) == 30
+
+
+async def test_history_groups_returns_empty_for_a_user_with_no_entries_at_all(authed_client) -> None:
+    response = await authed_client.get("/api/history/groups")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+async def test_history_groups_caps_results_at_30(authed_client) -> None:
+    for i in range(31):
+        entry = (
+            await authed_client.post(
+                "/api/entries/",
+                json={**NUTELLA_PAYLOAD, "barcode": f"barcode-{i}", "consumed_at": f"2026-08-01T{i % 24:02d}:00:00Z"},
+            )
+        ).json()
+        await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry["id"]], "name": f"Meal {i}"})
+
+    response = await authed_client.get("/api/history/groups")
+    assert len(response.json()) == 30

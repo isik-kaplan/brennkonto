@@ -344,7 +344,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
                             step="any"
                             required
                             autoFocus={index === 0}
-                            value={customGroupAmounts[index] ?? ''}
+                            value={customGroupAmounts[index]}
                             onChange={(event) => handleCustomGroupAmountChange(index, event.target.value)}
                           />
                         </div>

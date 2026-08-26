@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
 import type { Favorite, FoodSearchResult } from '../../src/api/types'
+import { toISODate } from '../../src/lib/dates'
 import LogFood from '../../src/pages/LogFood'
 
 vi.mock('../../src/api/endpoints')
@@ -1152,5 +1153,41 @@ describe('LogFood favorite editing', () => {
     expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
       expect.objectContaining({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 1 })
     )
+  })
+})
+
+describe('LogFood history picker', () => {
+  it('adds a food from history using the current date and time', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([
+      {
+        barcode: '3017620422003',
+        name: 'Nutella',
+        brand: 'Ferrero',
+        calories_per_100g: 539,
+        protein_per_100g: 6.3,
+        carbs_per_100g: 57.5,
+        fat_per_100g: 30.9,
+        suggested_unit: 'g',
+        unit_to_grams: 1,
+        last_input_amount: 45,
+        last_logged_at: '2026-08-05T08:00:00Z',
+        times_logged: 3,
+      },
+    ])
+    vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([])
+    vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+    renderLogFood()
+
+    await user.click(screen.getByRole('button', { name: 'Browse past foods' }))
+    await user.click(await screen.findByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalled())
+    const [payload] = vi.mocked(endpoints.createEntry).mock.calls[0]
+    expect(payload).toMatchObject({ name: 'Nutella', grams: 45 })
+    // Unlike History's inline add panel (which logs against whichever day it's viewing), Log
+    // Food's history picker always logs against right now.
+    const today = toISODate(new Date())
+    expect(payload.consumed_at).toMatch(new RegExp(`^${today}T\\d{2}:\\d{2}:00$`))
   })
 })

@@ -199,6 +199,41 @@ describe('favorite endpoints', () => {
   })
 })
 
+describe('history endpoints', () => {
+  it('fetchHistoryFoods gets the foods endpoint with a query, defaulting to empty', () => {
+    endpoints.fetchHistoryFoods()
+    expect(api.get).toHaveBeenCalledWith('/history/foods?q=')
+
+    endpoints.fetchHistoryFoods('nut')
+    expect(api.get).toHaveBeenCalledWith('/history/foods?q=nut')
+  })
+
+  it('fetchHistoryGroups gets the groups endpoint with a query, defaulting to empty', () => {
+    endpoints.fetchHistoryGroups()
+    expect(api.get).toHaveBeenCalledWith('/history/groups?q=')
+
+    endpoints.fetchHistoryGroups('break')
+    expect(api.get).toHaveBeenCalledWith('/history/groups?q=break')
+  })
+})
+
+describe('meal name endpoints', () => {
+  it('fetchMealNames gets the meal-names list', () => {
+    endpoints.fetchMealNames()
+    expect(api.get).toHaveBeenCalledWith('/meal-names/')
+  })
+
+  it('renameMealName URL-encodes the name and patches new_name', () => {
+    endpoints.renameMealName('Breakfast & Co', 'Morning meal')
+    expect(api.patch).toHaveBeenCalledWith('/meal-names/?name=Breakfast%20%26%20Co', { new_name: 'Morning meal' })
+  })
+
+  it('removeMealName URL-encodes the name and deletes', () => {
+    endpoints.removeMealName('Breakfast & Co')
+    expect(api.delete).toHaveBeenCalledWith('/meal-names/?name=Breakfast%20%26%20Co')
+  })
+})
+
 describe('stats endpoints', () => {
   it('fetchDailyStats gets the daily endpoint with a date query', () => {
     endpoints.fetchDailyStats('2026-08-01')
