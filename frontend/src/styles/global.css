@@ -985,6 +985,27 @@ svg {
   border: 1.5px dashed var(--color-rule);
 }
 
+/* The collapsed "Browse past foods" prompt (HistoryPicker) - same dashed-border language as
+   .empty-state above, since it's the same "nothing shown yet, here's the way in" idea, just with
+   its own CTA instead of static text. Equal padding on every side (rather than a bare button with
+   a one-sided top margin) is what keeps it centered both ways. */
+.history-picker__teaser {
+  margin-top: var(--space-lg);
+  padding: var(--space-xl) var(--space-md);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-sm);
+  text-align: center;
+  border: 1.5px dashed var(--color-rule);
+}
+
+.history-picker__teaser-text {
+  color: var(--color-neutral);
+  font-size: var(--text-sm);
+  max-width: 26rem;
+}
+
 /* ---------- search results ---------- */
 
 .search-results {

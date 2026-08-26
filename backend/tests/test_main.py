@@ -26,10 +26,10 @@ def test_build_cors_config_allows_configured_origins(monkeypatch) -> None:
 def test_build_route_handlers_without_static_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(main_module, "STATIC_DIR", tmp_path / "does-not-exist")
     handlers = main_module._build_route_handlers()
-    assert len(handlers) == 10
+    assert len(handlers) == 11
 
 
 def test_build_route_handlers_with_static_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(main_module, "STATIC_DIR", tmp_path)
     handlers = main_module._build_route_handlers()
-    assert len(handlers) == 11
+    assert len(handlers) == 12

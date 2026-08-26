@@ -33,6 +33,14 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   const [isAddingCustom, setIsAddingCustom] = useState(false)
   const [customAddError, setCustomAddError] = useState<string | null>(null)
 
+  // Which past meal (if any) is currently expanded for per-ingredient amount editing, and what's
+  // typed into each of its ingredient amount fields - indexed the same as customGroup.items so a
+  // field's edit stays paired to its ingredient even as the user types.
+  const [customGroup, setCustomGroup] = useState<HistoryGroup | null>(null)
+  const [customGroupAmounts, setCustomGroupAmounts] = useState<string[]>([])
+  const [isAddingCustomGroup, setIsAddingCustomGroup] = useState(false)
+  const [customGroupError, setCustomGroupError] = useState<string | null>(null)
+
   const [addingKey, setAddingKey] = useState<string | null>(null)
   const [justAddedKey, setJustAddedKey] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -61,6 +69,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
     setIsOpen(false)
     setQuery('')
     setCustomAddFood(null)
+    setCustomGroup(null)
     setActionError(null)
   }
 
@@ -186,13 +195,75 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
     }
   }
 
+  // Opens the per-ingredient amount form for a past meal, seeded with each ingredient's
+  // last-logged amount - the multi-item counterpart to startCustomAdd above.
+  function startCustomGroup(group: HistoryGroup) {
+    setCustomGroup(group)
+    setCustomGroupAmounts(group.items.map((item) => String(item.input_amount)))
+    setCustomGroupError(null)
+  }
+
+  function handleCustomGroupAmountChange(index: number, raw: string) {
+    setCustomGroupAmounts((current) =>
+      current.map((value, i) => (i === index ? (raw === '' ? '' : raw.replace(/^0+(?=\d)/, '')) : value))
+    )
+  }
+
+  // Same "recreate every item, then re-group under the same name" shape as addGroup, but each
+  // item's amount comes from the edited form instead of being carried over unchanged.
+  async function confirmCustomGroup(event: FormEvent) {
+    event.preventDefault()
+    const group = customGroup!
+    const amounts = customGroupAmounts.map((value) => (value === '' ? 0 : Number(value)))
+    if (amounts.some((amount) => amount <= 0)) return
+    const key = `group:${group.name}`
+    setIsAddingCustomGroup(true)
+    setCustomGroupError(null)
+    try {
+      const consumedAt = getConsumedAt()
+      const created = await Promise.all(
+        group.items.map((item, index) => {
+          const amount = amounts[index]
+          const grams = item.input_unit === 'g' ? amount : amount * item.unit_to_grams
+          return createEntry({
+            name: item.name,
+            brand: item.brand,
+            barcode: item.barcode,
+            grams,
+            input_unit: item.input_unit,
+            input_amount: amount,
+            unit_to_grams: item.unit_to_grams,
+            calories_per_100g: item.calories_per_100g,
+            protein_per_100g: item.protein_per_100g,
+            carbs_per_100g: item.carbs_per_100g,
+            fat_per_100g: item.fat_per_100g,
+            consumed_at: consumedAt,
+          })
+        })
+      )
+      await createMealGroup(
+        created.map((entry) => entry.id),
+        group.name
+      )
+      setCustomGroup(null)
+      setJustAddedKey(key)
+      setTimeout(() => setJustAddedKey(null), 1500)
+      await onAdded()
+    } catch (error) {
+      setCustomGroupError(error instanceof ApiError ? error.message : `Could not add "${group.name}".`)
+    } finally {
+      setIsAddingCustomGroup(false)
+    }
+  }
+
   if (!isOpen) {
     return (
-      <p style={{ marginTop: 'var(--space-md)' }}>
+      <div className="history-picker__teaser">
+        <p className="history-picker__teaser-text">Search everything you've logged before, or repeat a past meal.</p>
         <button type="button" className="btn btn--ghost btn--small" onClick={() => setIsOpen(true)}>
           Browse past foods
         </button>
-      </p>
+      </div>
     )
   }
 
@@ -250,6 +321,57 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
           <ul className="entry-list">
             {groups.map((group) => {
               const key = `group:${group.name}`
+              const isCustomizing = customGroup?.name === group.name
+
+              if (isCustomizing) {
+                const canSave = customGroupAmounts.every((value) => value !== '' && Number(value) > 0)
+                return (
+                  <li key={key} className="entry-row entry-row--editing" style={{ flexDirection: 'column' }}>
+                    <div className="entry-row__name">{group.name}</div>
+                    <form className="form" onSubmit={confirmCustomGroup} style={{ width: '100%' }}>
+                      {group.items.map((item, index) => (
+                        <div className="field" key={`${item.barcode ?? item.name}-${index}`}>
+                          <label htmlFor={`history-group-amount-${index}`}>
+                            {item.name}
+                            {item.brand ? ` (${item.brand})` : ''} · {unitLabel(item.input_unit)}
+                          </label>
+                          <input
+                            id={`history-group-amount-${index}`}
+                            className="input"
+                            type="number"
+                            inputMode="decimal"
+                            min={0.01}
+                            step="any"
+                            required
+                            autoFocus={index === 0}
+                            value={customGroupAmounts[index] ?? ''}
+                            onChange={(event) => handleCustomGroupAmountChange(index, event.target.value)}
+                          />
+                        </div>
+                      ))}
+                      {customGroupError && <div className="form__banner">{customGroupError}</div>}
+                      <div className="entry-row__actions">
+                        <button
+                          type="submit"
+                          className="btn btn--primary btn--small"
+                          disabled={!canSave || isAddingCustomGroup}
+                        >
+                          {isAddingCustomGroup && <span className="btn__spinner" aria-hidden="true" />}
+                          Add meal
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn--ghost btn--small"
+                          onClick={() => setCustomGroup(null)}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  </li>
+                )
+              }
+
               return (
                 <li key={key} className="entry-row">
                   <div>
@@ -273,6 +395,9 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
                       ) : (
                         'Add meal'
                       )}
+                    </button>
+                    <button type="button" className="btn btn--ghost btn--small" onClick={() => startCustomGroup(group)}>
+                      Customize
                     </button>
                   </div>
                 </li>

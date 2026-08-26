@@ -10,6 +10,7 @@ import GoalHistory from './pages/GoalHistory'
 import History from './pages/History'
 import LogFood from './pages/LogFood'
 import Login from './pages/Login'
+import Meals from './pages/Meals'
 import Register from './pages/Register'
 import Settings from './pages/Settings'
 import Trends from './pages/Trends'
@@ -77,6 +78,7 @@ export default function App() {
         <Route path="/trends" element={<Trends />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/goals" element={<GoalHistory />} />
+        <Route path="/settings/meals" element={<Meals />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

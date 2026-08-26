@@ -24,6 +24,7 @@ export default function Settings() {
       <div className="grid grid--2">
         <ProfileCard displayName={user.display_name} onSaved={setUser} />
         <GoalsCard />
+        <MealsCard />
         <PasswordCard />
         <div className="card">
           <h2 className="card__title">Appearance</h2>
@@ -126,6 +127,22 @@ function GoalsCard() {
       )}
       <Link to="/settings/goals" className="btn btn--ghost">
         Manage goals →
+      </Link>
+    </div>
+  )
+}
+
+// Same "summary card, management page one click away" shape as GoalsCard above - renaming or
+// un-grouping a meal is rare enough that it doesn't need to live inline in day-to-day Settings.
+function MealsCard() {
+  return (
+    <div className="card">
+      <h2 className="card__title">Meals</h2>
+      <p className="entry-row__meta" style={{ marginBottom: 'var(--space-md)' }}>
+        Rename or ungroup the named combos you've logged before, like "Breakfast".
+      </p>
+      <Link to="/settings/meals" className="btn btn--ghost">
+        Manage meals →
       </Link>
     </div>
   )

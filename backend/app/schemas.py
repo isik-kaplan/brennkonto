@@ -187,6 +187,23 @@ class HistoryFoodOut(msgspec.Struct):
     times_logged: int
 
 
+class MealNameOut(msgspec.Struct):
+    """A meal grouping name, aggregated across every past occurrence - the management-page
+    counterpart to HistoryGroupOut, which only ever surfaces the most recent occurrence. See
+    app/controllers/meal_names.py."""
+
+    name: str
+    times_logged: int
+    last_logged_at: datetime
+    # Ingredient names from the most recently logged occurrence only, for a quick preview - not
+    # every occurrence's items, which could differ meal to meal.
+    items: list[str]
+
+
+class RenameMealNameRequest(msgspec.Struct):
+    new_name: str
+
+
 class HistoryGroupItemOut(msgspec.Struct):
     name: str
     brand: str | None

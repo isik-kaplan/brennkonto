@@ -10,6 +10,7 @@ import type {
   HistoryFood,
   HistoryGroup,
   MealGroup,
+  MealName,
   RangeStats,
   User,
 } from './types'
@@ -145,6 +146,24 @@ export function fetchHistoryFoods(query = '') {
 
 export function fetchHistoryGroups(query = '') {
   return api.get<HistoryGroup[]>(`/history/groups?q=${encodeURIComponent(query)}`)
+}
+
+export function fetchMealNames() {
+  return api.get<MealName[]>('/meal-names/')
+}
+
+// Renames every past occurrence of `name` at once - a meal grouping isn't its own row, it's
+// whichever MealGroup rows happen to share a name, so a rename has to sweep all of them or the
+// history picker would show old and new names as two different meals. See
+// app/controllers/meal_names.py.
+export function renameMealName(name: string, newName: string) {
+  return api.patch<void>(`/meal-names/?name=${encodeURIComponent(name)}`, { new_name: newName })
+}
+
+// Ungroups every past occurrence of `name` - each entry keeps existing individually in history,
+// it just stops being clustered under this meal name. Nothing is deleted.
+export function removeMealName(name: string) {
+  return api.delete<void>(`/meal-names/?name=${encodeURIComponent(name)}`)
 }
 
 export function fetchDailyStats(date: string) {

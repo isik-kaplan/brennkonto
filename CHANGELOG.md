@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.16.0]
+
+### Added
+
+- Past meals in "From your history" can now be logged with a custom amount per ingredient ("Customize"), instead of only repeating the exact amounts from last time.
+- Settings > Meals lists every named meal combo you've logged before, with rename and remove actions. Removing a meal only stops grouping it under that name - every food you logged stays in your history as an individual item.
+
+### Fixed
+
+- The collapsed "Browse past foods" prompt is now centered, with balanced spacing above and below its button.
+
 ## [0.15.0]
 
 ### Added

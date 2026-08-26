@@ -70,9 +70,11 @@ function renderPicker(onAdded = vi.fn()) {
 }
 
 describe('HistoryPicker', () => {
-  it('starts collapsed and does not load anything until opened', () => {
-    renderPicker()
-    expect(screen.getByRole('button', { name: 'Browse past foods' })).toBeInTheDocument()
+  it('starts collapsed, centered in its own teaser box, and does not load anything until opened', () => {
+    const { container } = renderPicker()
+    const teaser = container.querySelector('.history-picker__teaser')
+    expect(teaser).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Browse past foods' }).closest('.history-picker__teaser')).toBe(teaser)
     expect(endpoints.fetchHistoryFoods).not.toHaveBeenCalled()
     expect(endpoints.fetchHistoryGroups).not.toHaveBeenCalled()
   })
@@ -173,6 +175,41 @@ describe('HistoryPicker', () => {
     await user.click(screen.getByRole('button', { name: 'Add meal' }))
 
     await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalledTimes(2))
+    expect(endpoints.createMealGroup).toHaveBeenCalledWith(['e1', 'e2'], 'Breakfast')
+    expect(onAdded).toHaveBeenCalled()
+  })
+
+  it('lets each ingredient of a past meal get a custom amount before logging', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+    vi.mocked(endpoints.createEntry)
+      .mockResolvedValueOnce({ id: 'e1' } as never)
+      .mockResolvedValueOnce({ id: 'e2' } as never)
+    vi.mocked(endpoints.createMealGroup).mockResolvedValue({} as never)
+    const { onAdded } = renderPicker()
+
+    await user.click(screen.getByRole('button', { name: 'Browse past foods' }))
+    await screen.findByText('Breakfast')
+    await user.click(screen.getByRole('button', { name: 'Customize' }))
+
+    const nutellaAmount = screen.getByLabelText(/Nutella/)
+    await user.clear(nutellaAmount)
+    await user.type(nutellaAmount, '10')
+    const bananaAmount = screen.getByLabelText(/Banana/)
+    await user.clear(bananaAmount)
+    await user.type(bananaAmount, '200')
+
+    await user.click(screen.getByRole('button', { name: 'Add meal' }))
+
+    await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalledTimes(2))
+    expect(endpoints.createEntry).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ name: 'Nutella', grams: 10, input_amount: 10 })
+    )
+    expect(endpoints.createEntry).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ name: 'Banana', grams: 200, input_amount: 200 })
+    )
     expect(endpoints.createMealGroup).toHaveBeenCalledWith(['e1', 'e2'], 'Breakfast')
     expect(onAdded).toHaveBeenCalled()
   })

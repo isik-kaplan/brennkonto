@@ -108,6 +108,16 @@ export interface HistoryGroup {
   times_logged: number
 }
 
+// A meal grouping name, aggregated across every past occurrence - the management-page (Settings >
+// Meals) counterpart to HistoryGroup, which only ever surfaces the most recent occurrence.
+export interface MealName {
+  name: string
+  times_logged: number
+  last_logged_at: string
+  // Ingredient names from the most recently logged occurrence only, for a quick preview.
+  items: string[]
+}
+
 export interface CreateFoodEntryPayload {
   name: string
   grams: number
