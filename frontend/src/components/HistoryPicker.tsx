@@ -349,8 +349,21 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
                           />
                         </div>
                       ))}
-                      {customGroupError && <div className="form__banner">{customGroupError}</div>}
-                      <div className="entry-row__actions">
+                      {/* .field + .field only puts space above each field after the first - the
+                          last one has none below it, so whatever follows (the banner, or the
+                          action row when there's no error) needs its own margin here instead. The
+                          action row's own margin is skipped when the banner is showing - its
+                          existing margin-bottom already supplies that gap, and stacking both would
+                          double it. */}
+                      {customGroupError && (
+                        <div className="form__banner" style={{ marginTop: 'var(--space-md)' }}>
+                          {customGroupError}
+                        </div>
+                      )}
+                      <div
+                        className="entry-row__actions"
+                        style={{ marginTop: customGroupError ? 0 : 'var(--space-md)' }}
+                      >
                         <button
                           type="submit"
                           className="btn btn--primary btn--small"
