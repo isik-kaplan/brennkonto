@@ -127,6 +127,180 @@ async def test_repeated_search_updates_an_existing_cache_entry(authed_client, mo
     assert cached.json()["calories_per_100g"] == 550.0
 
 
+async def test_search_boosts_a_previously_logged_result_above_new_ones(authed_client, monkeypatch) -> None:
+    await authed_client.post(
+        "/api/entries/",
+        json={
+            "name": "Nutella",
+            "brand": "Ferrero",
+            "barcode": "3017620422003",
+            "grams": 30,
+            "calories_per_100g": 539,
+            "protein_per_100g": 6.3,
+            "carbs_per_100g": 57.5,
+            "fat_per_100g": 30.9,
+            "consumed_at": "2026-08-01T08:00:00Z",
+        },
+    )
+
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return [
+            FoodSearchResultOut(
+                barcode="1",
+                name="Unrelated Unbranded Spread",
+                brand=None,
+                calories_per_100g=100.0,
+                protein_per_100g=1.0,
+                carbs_per_100g=2.0,
+                fat_per_100g=3.0,
+            ),
+            NUTELLA,
+        ]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=nutella")
+    assert response.status_code == 200
+    results = response.json()
+    # Logged before, so it jumps ahead of the unbranded result despite OFF returning it second.
+    assert results[0]["name"] == "Nutella"
+    assert results[1]["name"] == "Unrelated Unbranded Spread"
+
+
+async def test_search_orders_multiple_logged_results_by_times_logged_then_recency(
+    authed_client, monkeypatch
+) -> None:
+    # The entries below all carry a shared "widget" marker in their name so one query matches
+    # all three in history - the response still reports OFF's own (unmarked) names, since a
+    # "seen" logged item is returned straight from its OFF search result, not rebuilt from the
+    # logged entry.
+
+    # Logged once, a while ago.
+    await authed_client.post(
+        "/api/entries/",
+        json={
+            "name": "Widget Banana",
+            "barcode": "4011",
+            "grams": 120,
+            "calories_per_100g": 89,
+            "protein_per_100g": 1.1,
+            "carbs_per_100g": 22.8,
+            "fat_per_100g": 0.3,
+            "consumed_at": "2026-08-01T08:00:00Z",
+        },
+    )
+    # Logged three times, most recently after the banana.
+    for i in range(3):
+        await authed_client.post(
+            "/api/entries/",
+            json={
+                "name": "Widget Nutella",
+                "brand": "Ferrero",
+                "barcode": "3017620422003",
+                "grams": 30,
+                "calories_per_100g": 539,
+                "protein_per_100g": 6.3,
+                "carbs_per_100g": 57.5,
+                "fat_per_100g": 30.9,
+                "consumed_at": f"2026-08-0{2 + i}T08:00:00Z",
+            },
+        )
+    # Logged once, most recently of all.
+    await authed_client.post(
+        "/api/entries/",
+        json={
+            "name": "Widget Oat Milk",
+            "barcode": "5000",
+            "grams": 200,
+            "calories_per_100g": 45,
+            "protein_per_100g": 1.0,
+            "carbs_per_100g": 6.5,
+            "fat_per_100g": 1.5,
+            "consumed_at": "2026-08-06T08:00:00Z",
+        },
+    )
+
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return [
+            FoodSearchResultOut(
+                barcode="4011",
+                name="Banana",
+                brand=None,
+                calories_per_100g=89.0,
+                protein_per_100g=1.1,
+                carbs_per_100g=22.8,
+                fat_per_100g=0.3,
+            ),
+            NUTELLA,
+            FoodSearchResultOut(
+                barcode="5000",
+                name="Oat Milk",
+                brand=None,
+                calories_per_100g=45.0,
+                protein_per_100g=1.0,
+                carbs_per_100g=6.5,
+                fat_per_100g=1.5,
+            ),
+        ]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=widget")
+    body = response.json()
+    # Nutella (3x) beats both single-log foods regardless of OFF's own order; between the two
+    # single-log foods, Oat Milk (logged most recently) beats Banana.
+    assert [result["name"] for result in body] == ["Nutella", "Oat Milk", "Banana"]
+
+
+async def test_search_surfaces_a_logged_food_off_search_does_not_return(authed_client, monkeypatch) -> None:
+    await authed_client.post(
+        "/api/entries/",
+        json={
+            "name": "Nutella",
+            "brand": "Ferrero",
+            "barcode": "3017620422003",
+            "grams": 30,
+            "calories_per_100g": 539,
+            "protein_per_100g": 6.3,
+            "carbs_per_100g": 57.5,
+            "fat_per_100g": 30.9,
+            "consumed_at": "2026-08-01T08:00:00Z",
+        },
+    )
+
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return []
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=nutella")
+    body = response.json()
+    assert len(body) == 1
+    assert body[0]["name"] == "Nutella"
+    assert body[0]["barcode"] == "3017620422003"
+
+
+async def test_search_skips_boosting_a_barcode_less_logged_entry(authed_client, monkeypatch) -> None:
+    payload = {
+        "name": "Homemade Soup",
+        "grams": 300,
+        "calories_per_100g": 60,
+        "protein_per_100g": 3.0,
+        "carbs_per_100g": 8.0,
+        "fat_per_100g": 1.5,
+        "consumed_at": "2026-08-01T08:00:00Z",
+    }
+    await authed_client.post("/api/entries/", json=payload)
+
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return []
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=soup")
+    assert response.json() == []
+
+
 async def test_search_prioritizes_unbranded_results(authed_client, monkeypatch) -> None:
     async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
         return [

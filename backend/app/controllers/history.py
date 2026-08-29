@@ -8,54 +8,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import FoodEntry, MealGroup
 from app.schemas import HistoryFoodOut, HistoryGroupItemOut, HistoryGroupOut
+from app.services.food_history import SCAN_LIMIT, logged_foods_matching
 
 
-# How many of the user's most recent (non-deleted) entries to scan before deduplicating - bounds
-# the query for a long-running account without needing "distinct on, latest row per key" support,
-# which SQLite has none of. `times_logged` below is therefore "times logged within this recent
-# window", not a true all-time count - an approximation that's accurate for anything a user would
-# plausibly want to re-log.
-_SCAN_LIMIT = 1000
 _RESULT_LIMIT = 30
-
-
-def _food_key(entry: FoodEntry) -> str:
-    # Barcode is the natural identity for anything looked up via OFF - the only way an entry is
-    # ever created today. name+brand is a defensive fallback for the barcode-less rows the model
-    # still allows at the schema level.
-    if entry.barcode:
-        return f"b:{entry.barcode}"
-    return f"n:{entry.name.strip().lower()}|{(entry.brand or '').strip().lower()}"
-
-
-def _matches_query(entry: FoodEntry, query: str) -> bool:
-    return query in entry.name.lower() or (entry.brand is not None and query in entry.brand.lower())
 
 
 @get("/foods")
 async def history_foods(
     db_session: AsyncSession, request: Request, q: str = Parameter(default="")
 ) -> list[HistoryFoodOut]:
-    entries = list(
-        await db_session.scalars(
-            select(FoodEntry)
-            .where(FoodEntry.user_id == request.user.id, FoodEntry.deleted_at.is_(None))
-            .order_by(FoodEntry.consumed_at.desc())
-            .limit(_SCAN_LIMIT)
-        )
-    )
-
-    query = q.strip().lower()
-    counts: dict[str, int] = {}
-    # Insertion order here tracks first-seen order among `entries`, which is already sorted
-    # most-recent-first - so the first entry seen for a key is also its most recently logged one.
-    latest_by_key: OrderedDict[str, FoodEntry] = OrderedDict()
-    for entry in entries:
-        if query and not _matches_query(entry, query):
-            continue
-        key = _food_key(entry)
-        counts[key] = counts.get(key, 0) + 1
-        latest_by_key.setdefault(key, entry)
+    counts, latest_by_key = await logged_foods_matching(db_session, request.user.id, q.strip().lower())
 
     results = []
     for key, entry in latest_by_key.items():
@@ -93,7 +56,7 @@ async def history_groups(
                 FoodEntry.meal_group_id.is_not(None),
             )
             .order_by(FoodEntry.consumed_at.desc())
-            .limit(_SCAN_LIMIT)
+            .limit(SCAN_LIMIT)
         )
     )
     if not entries:
