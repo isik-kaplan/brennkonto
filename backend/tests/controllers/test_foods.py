@@ -167,9 +167,7 @@ async def test_search_boosts_a_previously_logged_result_above_new_ones(authed_cl
     assert results[1]["name"] == "Unrelated Unbranded Spread"
 
 
-async def test_search_orders_multiple_logged_results_by_times_logged_then_recency(
-    authed_client, monkeypatch
-) -> None:
+async def test_search_orders_multiple_logged_results_by_times_logged_then_recency(authed_client, monkeypatch) -> None:
     # The entries below all carry a shared "widget" marker in their name so one query matches
     # all three in history - the response still reports OFF's own (unmarked) names, since a
     # "seen" logged item is returned straight from its OFF search result, not rebuilt from the
