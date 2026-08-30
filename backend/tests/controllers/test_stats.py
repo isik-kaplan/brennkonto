@@ -190,6 +190,16 @@ async def test_range_stats_points_reflect_the_goal_in_effect_by_the_end_of_each_
     await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-03T12:00:00Z"})
 
     response = await authed_client.get("/api/stats/range?start=2026-08-01&end=2026-08-07&group_by=day")
-    points_by_date = {point["period_start"]: point["calorie_goal"] for point in response.json()["points"]}
-    assert points_by_date["2026-08-01"] == 2000
-    assert points_by_date["2026-08-03"] == 2500
+    points_by_date = {point["period_start"]: point for point in response.json()["points"]}
+    assert points_by_date["2026-08-01"]["calorie_goal"] == 2000
+    assert points_by_date["2026-08-03"]["calorie_goal"] == 2500
+
+
+async def test_range_stats_points_include_the_per_macro_goals(authed_client) -> None:
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
+
+    response = await authed_client.get("/api/stats/range?start=2026-08-01&end=2026-08-07&group_by=day")
+    point = response.json()["points"][0]
+    assert point["protein_goal_g"] == 150
+    assert point["carbs_goal_g"] == 200
+    assert point["fat_goal_g"] == 65

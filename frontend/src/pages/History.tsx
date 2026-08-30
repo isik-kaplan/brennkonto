@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import type { CSSProperties } from 'react'
 
 import { Link } from 'react-router'
 
@@ -15,7 +16,7 @@ import {
   updateEntry,
   updateMealGroup,
 } from '../api/endpoints'
-import type { DailyStats, FoodEntry, MealGroup, RangeStats } from '../api/types'
+import type { DailyStats, FoodEntry, MealGroup, RangeStats, RangeStatsPoint } from '../api/types'
 import AddEntryPanel from '../components/AddEntryPanel'
 import BarChart from '../components/BarChart'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -23,6 +24,55 @@ import EntryList, { type EntryEditValues } from '../components/EntryList'
 import { addDays, displayDate, fromISODate, toISODate } from '../lib/dates'
 
 const TREND_WINDOW_DAYS = 14
+
+type MetricKey = 'calories' | 'protein' | 'carbs' | 'fat'
+
+interface MetricConfig {
+  key: MetricKey
+  label: string
+  colorVar: string
+  value: (point: RangeStatsPoint) => number
+  goal: (point: RangeStatsPoint) => number
+  formatAmount: (value: number) => string
+}
+
+// Colors mirror the token comments in tokens.css: accent is already earmarked "primary/protein",
+// accent-2 "secondary/fat". Calories (the aggregate, not a macro) gets the neutral ink instead of
+// a fourth hue; carbs takes the theme's remaining warm/yellow anchor.
+const METRICS: MetricConfig[] = [
+  {
+    key: 'calories',
+    label: 'Calories',
+    colorVar: '--color-ink',
+    value: (p) => p.calories,
+    goal: (p) => p.calorie_goal,
+    formatAmount: (v) => `${Math.round(v)} kcal`,
+  },
+  {
+    key: 'protein',
+    label: 'Protein',
+    colorVar: '--color-accent',
+    value: (p) => p.protein_g,
+    goal: (p) => p.protein_goal_g,
+    formatAmount: (v) => `${Math.round(v)}g`,
+  },
+  {
+    key: 'carbs',
+    label: 'Carbs',
+    colorVar: '--color-warning',
+    value: (p) => p.carbs_g,
+    goal: (p) => p.carbs_goal_g,
+    formatAmount: (v) => `${Math.round(v)}g`,
+  },
+  {
+    key: 'fat',
+    label: 'Fat',
+    colorVar: '--color-accent-2',
+    value: (p) => p.fat_g,
+    goal: (p) => p.fat_goal_g,
+    formatAmount: (v) => `${Math.round(v)}g`,
+  },
+]
 
 function shortDayLabel(periodStart: string): string {
   return fromISODate(periodStart).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
@@ -38,6 +88,8 @@ export default function History() {
   const [showRemoved, setShowRemoved] = useState(false)
   const [archivedEntries, setArchivedEntries] = useState<FoodEntry[]>([])
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState<FoodEntry | null>(null)
+  const [activeMetrics, setActiveMetrics] = useState<Set<MetricKey>>(() => new Set(METRICS.map((metric) => metric.key)))
+  const [showAmounts, setShowAmounts] = useState(false)
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -127,6 +179,18 @@ export default function History() {
     if (isToday) await load()
   }
 
+  function toggleMetric(key: MetricKey) {
+    setActiveMetrics((prev) => {
+      const next = new Set(prev)
+      if (next.has(key)) {
+        next.delete(key)
+      } else {
+        next.add(key)
+      }
+      return next
+    })
+  }
+
   return (
     <>
       <div className="page-header">
@@ -188,17 +252,56 @@ export default function History() {
           {trend && (
             <div style={{ marginBottom: 'var(--space-lg)' }}>
               <h3 className="card__title">Last {TREND_WINDOW_DAYS} days</h3>
-              <BarChart
-                points={trend.points.map((point) => ({
-                  label: shortDayLabel(point.period_start),
-                  value: Math.round((point.calories / Math.max(point.calorie_goal, 1)) * 100),
-                }))}
-                goal={100}
-                sparse={trend.days_logged < Math.min(3, trend.days_in_range)}
-              />
-              <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
-                % of calorie goal met each day. Dashed line marks 100%.
-              </p>
+              <div className="metric-toggles" role="group" aria-label="Metrics shown in the chart">
+                {METRICS.map((metric) => {
+                  const isActive = activeMetrics.has(metric.key)
+                  return (
+                    <button
+                      key={metric.key}
+                      type="button"
+                      className="metric-toggle"
+                      aria-pressed={isActive}
+                      style={{ '--dot-color': `var(${metric.colorVar})` } as CSSProperties}
+                      onClick={() => toggleMetric(metric.key)}
+                    >
+                      <span className="metric-toggle__dot" aria-hidden="true" />
+                      {metric.label}
+                    </button>
+                  )
+                })}
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  aria-pressed={showAmounts}
+                  onClick={() => setShowAmounts((v) => !v)}
+                >
+                  {showAmounts ? 'Hide amounts' : 'Show amounts'}
+                </button>
+              </div>
+
+              {activeMetrics.size === 0 ? (
+                <p className="page-header__meta">Pick at least one metric above to see its bars.</p>
+              ) : (
+                <>
+                  <BarChart
+                    points={trend.points.map((point) => ({
+                      label: shortDayLabel(point.period_start),
+                      bars: METRICS.filter((metric) => activeMetrics.has(metric.key)).map((metric) => ({
+                        key: metric.key,
+                        colorVar: metric.colorVar,
+                        value: Math.round((metric.value(point) / Math.max(metric.goal(point), 1)) * 100),
+                        amountLabel: showAmounts ? metric.formatAmount(metric.value(point)) : undefined,
+                      })),
+                    }))}
+                    goal={100}
+                    sparse={trend.days_logged < Math.min(3, trend.days_in_range)}
+                  />
+                  <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
+                    % of each metric's own daily goal met. Dashed line marks 100%.
+                    {showAmounts && ' The logged amount is labeled above each bar.'}
+                  </p>
+                </>
+              )}
             </div>
           )}
 

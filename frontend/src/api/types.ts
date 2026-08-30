@@ -158,6 +158,9 @@ export interface RangeStatsPoint {
   fat_g: number
   days_logged: number
   calorie_goal: number
+  protein_goal_g: number
+  carbs_goal_g: number
+  fat_goal_g: number
 }
 
 export interface RangeStats {

@@ -72,4 +72,74 @@ describe('BarChart', () => {
     const [small, large] = Array.from(document.querySelectorAll('.chart__bar'))
     expect(Number(large.getAttribute('height'))).toBeGreaterThan(Number(small.getAttribute('height')))
   })
+
+  it('renders one narrower bar per entry when a point carries multiple named bars', () => {
+    render(
+      <BarChart
+        points={[
+          {
+            label: 'Mon',
+            bars: [
+              { key: 'calories', value: 50, colorVar: '--color-ink' },
+              { key: 'protein', value: 80, colorVar: '--color-accent' },
+            ],
+          },
+        ]}
+      />
+    )
+    const bars = document.querySelectorAll('.chart__bar')
+    expect(bars).toHaveLength(2)
+    expect((bars[0] as SVGRectElement).getAttribute('width')).toBe((bars[1] as SVGRectElement).getAttribute('width'))
+    expect(Number((bars[0] as SVGRectElement).getAttribute('width'))).toBeLessThan(34)
+  })
+
+  it('colors each grouped bar from its own colorVar', () => {
+    render(
+      <BarChart
+        points={[
+          {
+            label: 'Mon',
+            bars: [{ key: 'protein', value: 80, colorVar: '--color-accent' }],
+          },
+        ]}
+      />
+    )
+    const bar = document.querySelector('.chart__bar') as SVGRectElement
+    expect(bar.style.fill).toBe('var(--color-accent)')
+  })
+
+  it('renders an amountLabel above its bar without affecting bar height', () => {
+    render(
+      <BarChart
+        points={[{ label: 'Mon', bars: [{ key: 'calories', value: 50, colorVar: '', amountLabel: '1000 kcal' }] }]}
+        goal={100}
+      />
+    )
+    expect(screen.getByText('1000 kcal')).toBeInTheDocument()
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
+  })
+
+  it('omits the amount-label text entirely when no bar sets one', () => {
+    render(<BarChart points={[{ label: 'Mon', bars: [{ key: 'calories', value: 50, colorVar: '' }] }]} />)
+    expect(document.querySelector('.chart__bar-amount')).not.toBeInTheDocument()
+  })
+
+  it('renders no bars, just an axis label, for a point with neither a value nor bars', () => {
+    render(<BarChart points={[{ label: 'Mon' }, { label: 'Tue', value: 1800 }]} />)
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
+    expect(screen.getByText('Mon')).toBeInTheDocument()
+  })
+
+  it('scales grouped bars against the tallest value across every point and series', () => {
+    render(
+      <BarChart
+        points={[
+          { label: 'Mon', bars: [{ key: 'a', value: 10, colorVar: '' }] },
+          { label: 'Tue', bars: [{ key: 'a', value: 200, colorVar: '' }] },
+        ]}
+      />
+    )
+    const [small, large] = Array.from(document.querySelectorAll('.chart__bar'))
+    expect(Number(large.getAttribute('height'))).toBeGreaterThan(Number(small.getAttribute('height')))
+  })
 })

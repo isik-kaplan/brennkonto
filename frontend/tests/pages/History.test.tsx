@@ -401,6 +401,9 @@ describe('History', () => {
             fat_g: 0,
             days_logged: 1,
             calorie_goal: 2000,
+            protein_goal_g: 150,
+            carbs_goal_g: 200,
+            fat_goal_g: 65,
           },
           {
             period_label: 'x',
@@ -412,6 +415,9 @@ describe('History', () => {
             fat_g: 0,
             days_logged: 1,
             calorie_goal: 2000,
+            protein_goal_g: 150,
+            carbs_goal_g: 200,
+            fat_goal_g: 65,
           },
         ],
         days_logged: 2,
@@ -422,11 +428,12 @@ describe('History', () => {
 
     await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledWith(addDays(today, -13), today, 'day'))
     expect(await screen.findByText('Last 14 days')).toBeInTheDocument()
-    // 1000/2000 -> 50%, 2400/2000 -> 120% (rounded), rendered as bar heights via the shared BarChart.
-    expect(document.querySelectorAll('.chart__bar')).toHaveLength(2)
+    // All 4 metrics (Calories/Protein/Carbs/Fat) are on by default, so each of the 2 days
+    // renders one grouped bar per metric: 1000/2000 -> 50%, 2400/2000 -> 120% for calories, etc.
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(8)
   })
 
-  it('guards against a zero calorie goal when computing fulfillment percentage', async () => {
+  it('guards against a zero goal when computing fulfillment percentage', async () => {
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
     vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
       makeRangeStats({
@@ -441,6 +448,9 @@ describe('History', () => {
             fat_g: 0,
             days_logged: 1,
             calorie_goal: 0,
+            protein_goal_g: 0,
+            carbs_goal_g: 0,
+            fat_goal_g: 0,
           },
         ],
         days_logged: 1,
@@ -450,7 +460,129 @@ describe('History', () => {
     renderHistory()
 
     expect(await screen.findByText('Last 14 days')).toBeInTheDocument()
-    expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(4)
+  })
+
+  it('toggles a metric off and on, hiding and restoring its bars', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({
+        points: [
+          {
+            period_label: 'x',
+            period_start: today,
+            period_end: today,
+            calories: 1000,
+            protein_g: 75,
+            carbs_g: 100,
+            fat_g: 30,
+            days_logged: 1,
+            calorie_goal: 2000,
+            protein_goal_g: 150,
+            carbs_goal_g: 200,
+            fat_goal_g: 65,
+          },
+        ],
+        days_logged: 1,
+        days_in_range: 14,
+      })
+    )
+    renderHistory()
+    await screen.findByText('Last 14 days')
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(4)
+
+    const proteinToggle = screen.getByRole('button', { name: 'Protein' })
+    expect(proteinToggle).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(proteinToggle)
+    expect(proteinToggle).toHaveAttribute('aria-pressed', 'false')
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(3)
+
+    await user.click(proteinToggle)
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(4)
+  })
+
+  it('shows a prompt instead of a chart when every metric is toggled off', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({
+        points: [
+          {
+            period_label: 'x',
+            period_start: today,
+            period_end: today,
+            calories: 1000,
+            protein_g: 75,
+            carbs_g: 100,
+            fat_g: 30,
+            days_logged: 1,
+            calorie_goal: 2000,
+            protein_goal_g: 150,
+            carbs_goal_g: 200,
+            fat_goal_g: 65,
+          },
+        ],
+        days_logged: 1,
+        days_in_range: 14,
+      })
+    )
+    renderHistory()
+    await screen.findByText('Last 14 days')
+
+    for (const label of ['Calories', 'Protein', 'Carbs', 'Fat']) {
+      await user.click(screen.getByRole('button', { name: label }))
+    }
+
+    expect(document.querySelectorAll('.chart__bar')).toHaveLength(0)
+    expect(screen.getByText('Pick at least one metric above to see its bars.')).toBeInTheDocument()
+  })
+
+  it('labels each bar with its logged amount without changing the % of goal shown', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({
+        points: [
+          {
+            period_label: 'x',
+            period_start: today,
+            period_end: today,
+            calories: 1000,
+            protein_g: 75,
+            carbs_g: 100,
+            fat_g: 30,
+            days_logged: 1,
+            calorie_goal: 2000,
+            protein_goal_g: 150,
+            carbs_goal_g: 200,
+            fat_goal_g: 65,
+          },
+        ],
+        days_logged: 1,
+        days_in_range: 14,
+      })
+    )
+    renderHistory()
+    await screen.findByText('Last 14 days')
+    expect(screen.getByText(/% of each metric's own daily goal met/)).toBeInTheDocument()
+    expect(document.querySelectorAll('.chart__bar-amount')).toHaveLength(0)
+    // The goal line is always drawn - bars are always scaled as % of goal.
+    expect(document.querySelector('.chart__bar-goal')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Show amounts' }))
+    expect(screen.getByText(/The logged amount is labeled above each bar\./)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Hide amounts' })).toBeInTheDocument()
+    expect(document.querySelector('.chart__bar-goal')).toBeInTheDocument()
+    // 1000/2000 kcal, 75/150g protein, 100/200g carbs, 30/65g fat - queried from the chart's own
+    // labels, not the page at large, since the daily stat tiles above can coincidentally show the
+    // same numbers (e.g. today's mocked protein_g is also 30).
+    const amountLabels = Array.from(document.querySelectorAll('.chart__bar-amount')).map((el) => el.textContent)
+    expect(amountLabels).toEqual(['1000 kcal', '75g', '100g', '30g'])
+
+    await user.click(screen.getByRole('button', { name: 'Hide amounts' }))
+    expect(document.querySelectorAll('.chart__bar-amount')).toHaveLength(0)
   })
 
   const createdEntry: FoodEntry = {

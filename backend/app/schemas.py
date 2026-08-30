@@ -252,6 +252,9 @@ class RangeStatsPointOut(msgspec.Struct):
     fat_g: float
     days_logged: int
     calorie_goal: int
+    protein_goal_g: int
+    carbs_goal_g: int
+    fat_goal_g: int
 
 
 class RangeStatsOut(msgspec.Struct):

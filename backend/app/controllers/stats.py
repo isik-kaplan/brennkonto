@@ -126,6 +126,9 @@ async def range_stats(
                 fat_g=sum(entry.fat_g for entry in bucket_entries),
                 days_logged=len({entry.consumed_at.date() for entry in bucket_entries}),
                 calorie_goal=goal.calorie_goal,
+                protein_goal_g=goal.protein_goal_g,
+                carbs_goal_g=goal.carbs_goal_g,
+                fat_goal_g=goal.fat_goal_g,
             )
         )
 

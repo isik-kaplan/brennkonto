@@ -1121,6 +1121,11 @@ svg {
   fill: var(--color-neutral);
 }
 
+.chart__bar-amount {
+  font-size: 0.55rem;
+  fill: var(--color-neutral);
+}
+
 .chart__placeholder {
   fill: none;
   stroke: var(--color-rule);
@@ -1242,6 +1247,54 @@ svg {
 .segmented button.is-active {
   background: var(--color-ink);
   color: var(--color-paper);
+}
+
+/* ---------- metric toggles (History's trend chart) ---------- */
+
+.metric-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2xs);
+  margin-bottom: var(--space-md);
+}
+
+.metric-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-sm);
+  border: 1.5px solid var(--color-ink);
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-weight: 600;
+  font-size: var(--text-sm);
+  cursor: pointer;
+  transition:
+    background var(--dur-base) var(--ease-out),
+    color var(--dur-base) var(--ease-out);
+}
+
+.metric-toggle:hover {
+  background: var(--color-paper-3);
+}
+
+.metric-toggle:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.metric-toggle[aria-pressed='true'] {
+  background: var(--color-ink);
+  color: var(--color-paper);
+}
+
+.metric-toggle__dot {
+  width: 0.625rem;
+  height: 0.625rem;
+  flex-shrink: 0;
+  background: var(--dot-color);
 }
 
 /* ---------- auth pages ---------- */
