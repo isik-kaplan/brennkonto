@@ -74,6 +74,10 @@ export default function GoalHistory() {
     }
   }
 
+  function handleEffectiveDateChange(event: ChangeEvent<HTMLInputElement>) {
+    setFormState((prev) => ({ ...prev, effective_date: event.target.value }))
+  }
+
   function startEditing(version: GoalVersion) {
     setFormState({
       effective_date: version.effective_date,
@@ -169,7 +173,7 @@ export default function GoalHistory() {
               type="date"
               required
               value={formState.effective_date}
-              onChange={(event) => setFormState((prev) => ({ ...prev, effective_date: event.target.value }))}
+              onChange={handleEffectiveDateChange}
             />
           </div>
           <div className="form__row" style={{ marginTop: 'var(--space-md)' }}>
