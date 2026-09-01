@@ -88,6 +88,9 @@ describe('GoalHistory', () => {
     renderGoalHistory()
     await waitFor(() => expect(endpoints.fetchGoalVersions).toHaveBeenCalled())
 
+    // Changed twice - covers picking a date, then changing your mind before saving, not just
+    // picking one and going straight to Save.
+    fireEvent.change(screen.getByLabelText('Starting'), { target: { value: '2026-08-15' } })
     fireEvent.change(screen.getByLabelText('Starting'), { target: { value: '2026-09-01' } })
     const caloriesInput = screen.getByLabelText('Calories')
     await clickUser.clear(caloriesInput)
