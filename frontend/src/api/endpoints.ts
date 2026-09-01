@@ -57,8 +57,8 @@ export function changePassword(currentPassword: string, newPassword: string) {
   return api.post<User>('/account/password', { current_password: currentPassword, new_password: newPassword })
 }
 
-export function searchFoods(query: string) {
-  return api.get<FoodSearchResult[]>(`/foods/search?q=${encodeURIComponent(query)}`)
+export function searchFoods(query: string, page = 1) {
+  return api.get<FoodSearchResult[]>(`/foods/search?q=${encodeURIComponent(query)}&page=${page}`)
 }
 
 export function lookupBarcode(barcode: string) {

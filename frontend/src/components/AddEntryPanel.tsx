@@ -2,8 +2,9 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import type { ChangeEvent, FormEvent } from 'react'
 
 import { ApiError } from '../api/client'
-import { createEntry, fetchFavorites, lookupBarcode, searchFoods } from '../api/endpoints'
+import { createEntry, fetchFavorites, lookupBarcode } from '../api/endpoints'
 import type { Favorite, FoodSearchResult } from '../api/types'
+import { useFoodSearch } from '../hooks/useFoodSearch'
 import { combineDateAndTime, toISOTime } from '../lib/dates'
 import { defaultAmountFor, unitLabel } from '../lib/units'
 import HistoryPicker from './HistoryPicker'
@@ -38,10 +39,8 @@ function favoriteAsResult(favorite: Favorite): FoodSearchResult {
 export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<FoodSearchResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
+  const { query, setQuery, results, isSearching, isLoadingMore, searchError, setSearchError, sentinelRef } =
+    useFoodSearch()
 
   const [barcode, setBarcode] = useState('')
   const [isLookingUp, setIsLookingUp] = useState(false)
@@ -76,22 +75,6 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
   useEffect(() => {
     if (isOpen) fetchFavorites().then(setFavorites)
   }, [isOpen])
-
-  useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([])
-      return
-    }
-    setIsSearching(true)
-    setSearchError(null)
-    const timeout = setTimeout(() => {
-      searchFoods(query.trim())
-        .then(setResults)
-        .catch((error) => setSearchError(error instanceof ApiError ? error.message : 'Search failed.'))
-        .finally(() => setIsSearching(false))
-    }, 350)
-    return () => clearTimeout(timeout)
-  }, [query])
 
   function selectResult(result: FoodSearchResult) {
     setSelected(result)
@@ -249,7 +232,6 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
       setJustAdded(product.name)
       setSelected(null)
       setQuery('')
-      setResults([])
       setBarcode('')
       await onAdded()
     } catch (error) {
@@ -263,7 +245,6 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
     setIsOpen(false)
     setSelected(null)
     setQuery('')
-    setResults([])
     setBarcode('')
     setJustAdded(null)
     setSaveError(null)
@@ -369,6 +350,10 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
                   </button>
                 </div>
               ))}
+              {/* Scrolling this into view loads the next page - see useFoodSearch. */}
+              <div ref={sentinelRef} className="search-results__sentinel">
+                {isLoadingMore && <span className="btn__spinner" aria-hidden="true" />}
+              </div>
             </div>
           )}
 

@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.19.0]
+
+### Fixed
+
+- Food search no longer floods the top of the results list with a wall of near-identical entries: results are now deduplicated by name+brand, so the many separate barcode listings Open Food Facts often carries for what reads as the same product (e.g. a dozen unbranded "Blueberry muffin" scans) collapse into one.
+
+### Added
+
+- Food search results now load more as you scroll, instead of stopping at a fixed top-25 cutoff.
+
 ## [0.16.0]
 
 ### Added

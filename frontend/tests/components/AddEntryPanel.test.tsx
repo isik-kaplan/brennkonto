@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -6,6 +6,7 @@ import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
 import type { Favorite, FoodSearchResult } from '../../src/api/types'
 import AddEntryPanel from '../../src/components/AddEntryPanel'
+import { triggerIntersection } from '../testUtils/intersectionObserver'
 
 vi.mock('../../src/api/endpoints')
 
@@ -45,6 +46,32 @@ const eggs: FoodSearchResult = {
   fat_per_100g: 11,
   suggested_unit: 'count',
   unit_to_grams: 53,
+}
+
+// Matches the backend's _PAGE_SIZE (backend/app/controllers/foods.py) - a page this long is what
+// tells the search UI there may be a next one to scroll to.
+const PAGE_SIZE = 25
+
+function fullPageOfResults(offset = 0): FoodSearchResult[] {
+  return Array.from({ length: PAGE_SIZE }, (_, i) => ({
+    barcode: String(offset + i),
+    name: `Product ${offset + i}`,
+    brand: 'Brand',
+    calories_per_100g: 100,
+    protein_per_100g: 1,
+    carbs_per_100g: 2,
+    fat_per_100g: 3,
+    suggested_unit: 'g',
+    unit_to_grams: 1,
+  }))
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((res) => {
+    resolve = res
+  })
+  return { promise, resolve }
 }
 
 function makeFavorite(overrides: Partial<Favorite> = {}): Favorite {
@@ -102,6 +129,29 @@ describe('AddEntryPanel', () => {
     expect(screen.queryByLabelText('Product name')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '+ Add entry' }))
     expect(screen.getByLabelText('Product name')).toHaveValue('')
+  })
+
+  it('loads the next page of results when scrolled into view', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.searchFoods).mockResolvedValueOnce(fullPageOfResults(0))
+    const { container } = render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.type(screen.getByLabelText('Product name'), 'product')
+    expect(await screen.findByText('Product 0')).toBeInTheDocument()
+    expect(screen.getByText('Product 24')).toBeInTheDocument()
+    expect(container.querySelector('.search-results__sentinel .btn__spinner')).not.toBeInTheDocument()
+
+    const secondPage = deferred<FoodSearchResult[]>()
+    vi.mocked(endpoints.searchFoods).mockReturnValueOnce(secondPage.promise)
+
+    act(() => triggerIntersection())
+    await waitFor(() => expect(container.querySelector('.search-results__sentinel .btn__spinner')).toBeInTheDocument())
+    expect(endpoints.searchFoods).toHaveBeenCalledWith('product', 2)
+
+    await act(async () => secondPage.resolve(fullPageOfResults(PAGE_SIZE)))
+    expect(await screen.findByText('Product 25')).toBeInTheDocument()
+    expect(container.querySelector('.search-results__sentinel .btn__spinner')).not.toBeInTheDocument()
   })
 
   it('searches, selects a result, and saves it against the viewed date', async () => {

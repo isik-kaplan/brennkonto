@@ -4,16 +4,10 @@ import type { ChangeEvent, FormEvent, ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 
 import { ApiError } from '../api/client'
-import {
-  createEntry,
-  deleteFavorite,
-  fetchFavorites,
-  lookupBarcode,
-  searchFoods,
-  upsertFavorite,
-} from '../api/endpoints'
+import { createEntry, deleteFavorite, fetchFavorites, lookupBarcode, upsertFavorite } from '../api/endpoints'
 import type { Favorite, FoodSearchResult } from '../api/types'
 import HistoryPicker from '../components/HistoryPicker'
+import { useFoodSearch } from '../hooks/useFoodSearch'
 import { combineDateAndTime, toISODate, toISOTime } from '../lib/dates'
 import { defaultAmountFor, unitLabel } from '../lib/units'
 
@@ -41,10 +35,8 @@ function StarIcon({ filled }: { filled: boolean }): ReactNode {
 
 export default function LogFood() {
   const navigate = useNavigate()
-  const [query, setQuery] = useState('')
-  const [results, setResults] = useState<FoodSearchResult[]>([])
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState<string | null>(null)
+  const { query, setQuery, results, isSearching, isLoadingMore, searchError, setSearchError, sentinelRef } =
+    useFoodSearch()
 
   const [barcode, setBarcode] = useState('')
   const [isLookingUp, setIsLookingUp] = useState(false)
@@ -85,22 +77,6 @@ export default function LogFood() {
   }, [loadFavorites])
 
   const favoriteByBarcode = new Map(favorites.map((favorite) => [favorite.barcode, favorite]))
-
-  useEffect(() => {
-    if (query.trim().length < 2) {
-      setResults([])
-      return
-    }
-    setIsSearching(true)
-    setSearchError(null)
-    const timeout = setTimeout(() => {
-      searchFoods(query.trim())
-        .then(setResults)
-        .catch((error) => setSearchError(error instanceof ApiError ? error.message : 'Search failed.'))
-        .finally(() => setIsSearching(false))
-    }, 350)
-    return () => clearTimeout(timeout)
-  }, [query])
 
   async function handleBarcodeLookup(event: FormEvent) {
     event.preventDefault()
@@ -362,7 +338,6 @@ export default function LogFood() {
       setSavedName(product.name)
       setSelected(null)
       setQuery('')
-      setResults([])
       setBarcode('')
     } catch (error) {
       setSaveError(error instanceof ApiError ? error.message : 'Could not save this entry.')
@@ -445,6 +420,12 @@ export default function LogFood() {
                     </div>
                   )
                 })}
+                {/* Scrolling this into view loads the next page - see useFoodSearch. Rendered
+                    even while a page is loading so the observer stays attached; the spinner is
+                    just a visual cue, not what triggers the fetch. */}
+                <div ref={sentinelRef} className="search-results__sentinel">
+                  {isLoadingMore && <span className="btn__spinner" aria-hidden="true" />}
+                </div>
               </div>
             )}
           </div>

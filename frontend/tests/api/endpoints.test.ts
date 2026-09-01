@@ -61,9 +61,14 @@ describe('account endpoints', () => {
 })
 
 describe('food endpoints', () => {
-  it('searchFoods URL-encodes the query', () => {
+  it('searchFoods URL-encodes the query and defaults to page 1', () => {
     endpoints.searchFoods('greek yogurt')
-    expect(api.get).toHaveBeenCalledWith('/foods/search?q=greek%20yogurt')
+    expect(api.get).toHaveBeenCalledWith('/foods/search?q=greek%20yogurt&page=1')
+  })
+
+  it('searchFoods passes through an explicit page', () => {
+    endpoints.searchFoods('greek yogurt', 3)
+    expect(api.get).toHaveBeenCalledWith('/foods/search?q=greek%20yogurt&page=3')
   })
 
   it('lookupBarcode URL-encodes the barcode', () => {

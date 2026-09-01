@@ -299,6 +299,74 @@ async def test_search_skips_boosting_a_barcode_less_logged_entry(authed_client, 
     assert response.json() == []
 
 
+async def test_search_dedupes_results_sharing_a_name_and_brand(authed_client, monkeypatch) -> None:
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return [
+            FoodSearchResultOut(
+                barcode="1",
+                name="Blueberry Muffin",
+                brand=None,
+                calories_per_100g=380.0,
+                protein_per_100g=5.0,
+                carbs_per_100g=50.0,
+                fat_per_100g=15.0,
+            ),
+            # Same name+brand (case/whitespace aside), different barcode - a separate scan of
+            # what reads as the same product in the list, and should be dropped.
+            FoodSearchResultOut(
+                barcode="2",
+                name="  blueberry muffin  ",
+                brand="",
+                calories_per_100g=390.0,
+                protein_per_100g=5.5,
+                carbs_per_100g=49.0,
+                fat_per_100g=16.0,
+            ),
+            # Same name, but a real distinguishing brand - a genuinely different product, kept.
+            NUTELLA,
+        ]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    response = await authed_client.get("/api/foods/search?q=blueberry")
+    assert response.status_code == 200
+    results = response.json()
+    barcodes = [result["barcode"] for result in results]
+    assert barcodes == ["1", "3017620422003"]
+
+
+async def test_search_paginates_without_gaps_or_repeats(authed_client, monkeypatch) -> None:
+    all_results = [
+        FoodSearchResultOut(
+            barcode=str(i),
+            name=f"Product {i}",
+            brand="Brand",
+            calories_per_100g=100.0,
+            protein_per_100g=1.0,
+            carbs_per_100g=2.0,
+            fat_per_100g=3.0,
+        )
+        for i in range(60)
+    ]
+
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return all_results[:page_size]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+
+    first_page = (await authed_client.get("/api/foods/search?q=product")).json()
+    second_page = (await authed_client.get("/api/foods/search?q=product&page=2")).json()
+    assert [r["barcode"] for r in first_page] == [str(i) for i in range(25)]
+    assert [r["barcode"] for r in second_page] == [str(i) for i in range(25, 50)]
+    # The two pages never repeat a result between them.
+    assert not set(r["barcode"] for r in first_page) & set(r["barcode"] for r in second_page)
+
+
+async def test_search_rejects_a_page_below_one(authed_client) -> None:
+    response = await authed_client.get("/api/foods/search?q=nutella&page=0")
+    assert response.status_code == 400
+
+
 async def test_search_prioritizes_unbranded_results(authed_client, monkeypatch) -> None:
     async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
         return [

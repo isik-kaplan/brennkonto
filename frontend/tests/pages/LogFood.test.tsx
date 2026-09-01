@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, waitForElementToBeRemoved } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,7 @@ import * as endpoints from '../../src/api/endpoints'
 import type { Favorite, FoodSearchResult } from '../../src/api/types'
 import { toISODate } from '../../src/lib/dates'
 import LogFood from '../../src/pages/LogFood'
+import { triggerIntersection } from '../testUtils/intersectionObserver'
 
 vi.mock('../../src/api/endpoints')
 
@@ -59,6 +60,24 @@ const milk: FoodSearchResult = {
   fat_per_100g: 1,
   suggested_unit: 'l',
   unit_to_grams: 1000,
+}
+
+// Matches the backend's _PAGE_SIZE (backend/app/controllers/foods.py) - a page this long is what
+// tells the search UI there may be a next one to scroll to.
+const PAGE_SIZE = 25
+
+function fullPageOfResults(offset = 0): FoodSearchResult[] {
+  return Array.from({ length: PAGE_SIZE }, (_, i) => ({
+    barcode: String(offset + i),
+    name: `Product ${offset + i}`,
+    brand: 'Brand',
+    calories_per_100g: 100,
+    protein_per_100g: 1,
+    carbs_per_100g: 2,
+    fat_per_100g: 3,
+    suggested_unit: 'g',
+    unit_to_grams: 1,
+  }))
 }
 
 function deferred<T>() {
@@ -125,9 +144,31 @@ describe('LogFood search', () => {
     await user.type(screen.getByLabelText('Product name'), 'nutella')
     expect(screen.getByText('Searching…')).toBeInTheDocument()
 
-    await waitFor(() => expect(endpoints.searchFoods).toHaveBeenCalledWith('nutella'), { timeout: 1000 })
+    await waitFor(() => expect(endpoints.searchFoods).toHaveBeenCalledWith('nutella', 1), { timeout: 1000 })
     expect(await screen.findByText('Nutella')).toBeInTheDocument()
     expect(screen.getByText('539 kcal/100g')).toBeInTheDocument()
+  })
+
+  it('loads the next page of results when scrolled into view', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.searchFoods).mockResolvedValueOnce(fullPageOfResults(0))
+    const { container } = renderLogFood()
+
+    await user.type(screen.getByLabelText('Product name'), 'product')
+    expect(await screen.findByText('Product 0')).toBeInTheDocument()
+    expect(screen.getByText('Product 24')).toBeInTheDocument()
+    expect(container.querySelector('.search-results__sentinel .btn__spinner')).not.toBeInTheDocument()
+
+    const secondPage = deferred<FoodSearchResult[]>()
+    vi.mocked(endpoints.searchFoods).mockReturnValueOnce(secondPage.promise)
+
+    act(() => triggerIntersection())
+    await waitFor(() => expect(container.querySelector('.search-results__sentinel .btn__spinner')).toBeInTheDocument())
+    expect(endpoints.searchFoods).toHaveBeenCalledWith('product', 2)
+
+    await act(async () => secondPage.resolve(fullPageOfResults(PAGE_SIZE)))
+    expect(await screen.findByText('Product 25')).toBeInTheDocument()
+    expect(container.querySelector('.search-results__sentinel .btn__spinner')).not.toBeInTheDocument()
   })
 
   it('shows a search error message', async () => {

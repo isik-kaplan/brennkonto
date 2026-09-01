@@ -11,9 +11,35 @@ from app.services.food_history import logged_foods_matching
 from app.services.off_client import off_client
 
 
-# Cap on returned results - kept a bit above the historical 20 so a handful of boosted "you've
-# logged this before" items don't crowd out fresh OFF matches entirely.
-_RESULT_LIMIT = 25
+# Results per page returned to the client - also the unit `page` counts in.
+_PAGE_SIZE = 25
+
+# Minimum pool of OFF results to fetch and rank locally before slicing into pages - kept a bit
+# above one page so a handful of boosted "you've logged this before" items, or unbranded results
+# ranked slightly lower on text relevance, don't crowd out fresh OFF matches entirely. Grows with
+# `page` so later pages still have a freshly-ranked pool to slice from instead of running dry.
+_MIN_POOL = 100
+
+
+def _name_key(result: FoodSearchResultOut) -> tuple[str, str]:
+    return (result.name.strip().lower(), (result.brand or "").strip().lower())
+
+
+def _dedupe_by_name(results: list[FoodSearchResultOut]) -> list[FoodSearchResultOut]:
+    # Open Food Facts often carries several separate barcode entries for what reads, in a search
+    # result list, as the same product - repeat scans of the same store item, near-duplicate
+    # regional listings, and so on. None of that distinction is visible to the user, so results
+    # are deduplicated by name+brand text rather than by barcode, keeping the first (best-ranked)
+    # occurrence of each.
+    seen: set[tuple[str, str]] = set()
+    deduped: list[FoodSearchResultOut] = []
+    for result in results:
+        key = _name_key(result)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(result)
+    return deduped
 
 
 def _cache_out(cache: ProductCache) -> FoodSearchResultOut:
@@ -48,11 +74,19 @@ async def _upsert_cache(db_session: AsyncSession, result: FoodSearchResultOut) -
 
 @get("/search")
 async def search_foods(
-    db_session: AsyncSession, request: Request, q: str = Parameter(min_length=2)
+    db_session: AsyncSession,
+    request: Request,
+    q: str = Parameter(min_length=2),
+    page: int = Parameter(default=1, ge=1),
 ) -> list[FoodSearchResultOut]:
     counts, latest_by_key = await logged_foods_matching(db_session, request.user.id, q.strip().lower())
 
-    results = await off_client.search(q, page_size=100)
+    # The full candidate list (deduplicated, unbranded-first, logged-history boosted) is rebuilt
+    # the same way regardless of page - only the OFF pool size and the final slice move with
+    # `page` - so pages tile onto each other without gaps or repeats for infinite scroll.
+    pool_size = max(_MIN_POOL, _PAGE_SIZE * page)
+    results = await off_client.search(q, page_size=pool_size)
+    results = _dedupe_by_name(results)
     results.sort(key=lambda x: 0 if not x.brand else 1)
 
     # Split OFF's results into things this user has logged before (barcode-keyed, same identity
@@ -97,7 +131,8 @@ async def search_foods(
     # Most-logged first; ties broken by whichever was logged most recently.
     logged_tier.sort(key=_logged_sort_key, reverse=True)
 
-    top_results = (logged_tier + new_tier)[:_RESULT_LIMIT]
+    start = (page - 1) * _PAGE_SIZE
+    top_results = (logged_tier + new_tier)[start : start + _PAGE_SIZE]
     for result in top_results:
         await _upsert_cache(db_session, result)
     return top_results

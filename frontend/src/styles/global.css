@@ -1031,6 +1031,19 @@ svg {
   background: var(--color-paper-3);
 }
 
+/* Invisible when there's nothing more to load (zero height) - only takes up space, as a small
+   spinner strip, while a further page is actually being fetched. */
+.search-results__sentinel {
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.search-results__sentinel:has(.btn__spinner) {
+  padding: var(--space-sm) 0;
+}
+
 /* The row's primary action - only this part (not the favorite toggle) selects the product, so it
    can't be the whole row's own <button> anymore (a button can't contain another button). */
 .search-result__select {

@@ -2,6 +2,10 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup } from '@testing-library/react'
 import { afterEach } from 'vitest'
 
+import { installIntersectionObserverMock } from './tests/testUtils/intersectionObserver'
+
+installIntersectionObserverMock()
+
 // jsdom doesn't implement the Pointer Capture APIs that @dnd-kit's PointerSensor touches.
 if (!Element.prototype.hasPointerCapture) {
   Element.prototype.hasPointerCapture = () => false
@@ -35,4 +39,8 @@ if (typeof window.PointerEvent === 'undefined') {
 
 afterEach(() => {
   cleanup()
+  // Constructed IntersectionObserver instances would otherwise leak between tests within the
+  // same file - a stale one from an earlier test could satisfy a later test's
+  // triggerIntersection() call even though that test's own hook never observed anything.
+  installIntersectionObserverMock()
 })
