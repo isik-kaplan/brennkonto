@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.21.0]
+
+### Added
+
+- History's trend chart (which metrics are shown, whether amounts are labeled) and the new Range summary section's default preset can now be configured in Settings, so History opens on what you actually want to see instead of resetting every visit.
+- History now has a Range summary section: pick "Last week" / "Last 2 weeks" / "Last month" / "Last 6 months" or a custom date range to see average calories/macros, total calories, and days logged over that range.
+
 ## [0.20.0]
 
 ### Fixed

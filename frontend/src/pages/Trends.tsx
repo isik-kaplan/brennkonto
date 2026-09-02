@@ -3,7 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { fetchRangeStats } from '../api/endpoints'
 import type { GroupBy, RangeStats } from '../api/types'
 import BarChart from '../components/BarChart'
-import { addDays, fromISODate, toISODate } from '../lib/dates'
+import { addDays, daysBetween, fromISODate, toISODate } from '../lib/dates'
 
 type Preset = '7' | '30' | '90' | 'custom'
 
@@ -29,11 +29,6 @@ function shortLabel(periodStart: string, groupBy: GroupBy): string {
     return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
   }
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-}
-
-function daysBetween(start: string, end: string): number {
-  const MS_PER_DAY = 24 * 60 * 60 * 1000
-  return Math.round((fromISODate(end).getTime() - fromISODate(start).getTime()) / MS_PER_DAY) + 1
 }
 
 function previousPeriod(start: string, end: string): { start: string; end: string } {

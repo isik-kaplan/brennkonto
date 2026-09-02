@@ -585,6 +585,73 @@ describe('History', () => {
     expect(document.querySelectorAll('.chart__bar-amount')).toHaveLength(0)
   })
 
+  describe('Range summary', () => {
+    it('renders below the day view, defaulting to the "Last month" preset', async () => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      renderHistory()
+
+      expect(await screen.findByText('Range summary')).toBeInTheDocument()
+      await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledWith(addDays(today, -29), today, 'day'))
+      expect(screen.getByRole('button', { name: 'Last month' })).toHaveClass('is-active')
+    })
+  })
+
+  describe('History defaults (Settings)', () => {
+    const STORAGE_KEY = 'brennkonto-history-prefs'
+
+    it('seeds the trend chart, amounts, and range summary preset from the stored preferences', async () => {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ activeMetrics: ['calories', 'carbs'], showAmounts: true, aggregateRangePreset: 'week' })
+      )
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+        makeRangeStats({
+          points: [
+            {
+              period_label: 'x',
+              period_start: today,
+              period_end: today,
+              calories: 1000,
+              protein_g: 75,
+              carbs_g: 100,
+              fat_g: 30,
+              days_logged: 1,
+              calorie_goal: 2000,
+              protein_goal_g: 150,
+              carbs_goal_g: 200,
+              fat_goal_g: 65,
+            },
+          ],
+          days_logged: 1,
+          days_in_range: 14,
+        })
+      )
+      renderHistory()
+
+      await screen.findByText('Last 14 days')
+      // Only calories + carbs were stored as active - protein and fat start off.
+      expect(document.querySelectorAll('.chart__bar')).toHaveLength(2)
+      expect(screen.getByRole('button', { name: 'Protein' })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByRole('button', { name: 'Calories' })).toHaveAttribute('aria-pressed', 'true')
+      // showAmounts started true, so the toggle already reads "Hide amounts".
+      expect(screen.getByRole('button', { name: 'Hide amounts' })).toBeInTheDocument()
+
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Last week' })).toHaveClass('is-active'))
+    })
+
+    it('falls back to every metric active and amounts hidden when nothing is stored', async () => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      renderHistory()
+
+      await screen.findByText('Last 14 days')
+      for (const label of ['Calories', 'Protein', 'Carbs', 'Fat']) {
+        expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
+      }
+      expect(screen.getByRole('button', { name: 'Show amounts' })).toBeInTheDocument()
+    })
+  })
+
   const createdEntry: FoodEntry = {
     id: '99',
     name: 'Nutella',

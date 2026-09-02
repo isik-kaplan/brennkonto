@@ -43,4 +43,7 @@ afterEach(() => {
   // same file - a stale one from an earlier test could satisfy a later test's
   // triggerIntersection() call even though that test's own hook never observed anything.
   installIntersectionObserverMock()
+  // localStorage persists across tests within the same file (theme, history prefs, ...) - clear
+  // it so one test's writes can't seed the "stored default" another test's initial render reads.
+  localStorage.clear()
 })

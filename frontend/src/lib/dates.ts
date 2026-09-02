@@ -21,6 +21,14 @@ export function addDays(value: string, amount: number): string {
   return toISODate(date)
 }
 
+// Inclusive day count between two ISO dates (a range from a date to itself is 1 day) - used
+// anywhere a date range needs to know its own length, e.g. to mirror it as the "previous period"
+// or to pick a bucket size that keeps a long range's point count sane.
+export function daysBetween(start: string, end: string): number {
+  const MS_PER_DAY = 24 * 60 * 60 * 1000
+  return Math.round((fromISODate(end).getTime() - fromISODate(start).getTime()) / MS_PER_DAY) + 1
+}
+
 export function displayDate(value: string): string {
   return formattedDate('EEE, d MMM', fromISODate(value))
 }

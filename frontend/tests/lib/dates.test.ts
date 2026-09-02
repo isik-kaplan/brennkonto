@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   addDays,
   combineDateAndTime,
+  daysBetween,
   displayDate,
   displayDateLong,
   fromDatetimeLocalValue,
@@ -57,6 +58,28 @@ describe('addDays', () => {
   it('handles negative offsets, including into a shorter month', () => {
     expect(addDays('2026-03-01', -1)).toBe('2026-02-28')
   })
+})
+
+describe('daysBetween', () => {
+  it('is 1 for a range from a date to itself', () => {
+    expect(daysBetween('2026-08-01', '2026-08-01')).toBe(1)
+  })
+
+  it('is inclusive of both endpoints', () => {
+    expect(daysBetween('2026-08-01', '2026-08-07')).toBe(7)
+  })
+
+  it('spans a month boundary', () => {
+    expect(daysBetween('2026-01-25', '2026-02-03')).toBe(10)
+  })
+
+  test.prop([dateArb, fc.integer({ min: 0, max: 400 })])(
+    'matches addDays: daysBetween(x, addDays(x, n)) === n + 1',
+    (date, n) => {
+      const start = toISODate(date)
+      expect(daysBetween(start, addDays(start, n))).toBe(n + 1)
+    }
+  )
 })
 
 describe('displayDate / displayDateLong', () => {

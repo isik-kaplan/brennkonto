@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { CSSProperties, FormEvent } from 'react'
 
 import { useFormState } from '@isik-kaplan/core/hooks'
 import { Link } from 'react-router'
@@ -9,7 +9,11 @@ import { changePassword, fetchDailyStats, updateProfile } from '../api/endpoints
 import type { User } from '../api/types'
 import ThemeToggle from '../components/ThemeToggle'
 import { useAuth } from '../hooks/useAuth'
+import { useHistoryPreferences } from '../hooks/useHistoryPreferences'
 import { toISODate } from '../lib/dates'
+import type { MetricKey } from '../lib/metrics'
+import { METRICS } from '../lib/metrics'
+import { RANGE_PRESETS } from '../lib/rangePresets'
 
 export default function Settings() {
   const { user, setUser, logout } = useAuth()
@@ -25,6 +29,7 @@ export default function Settings() {
         <ProfileCard displayName={user.display_name} onSaved={setUser} />
         <GoalsCard />
         <MealsCard />
+        <HistoryDefaultsCard />
         <PasswordCard />
         <div className="card">
           <h2 className="card__title">Appearance</h2>
@@ -144,6 +149,84 @@ function MealsCard() {
       <Link to="/settings/meals" className="btn btn--ghost">
         Manage meals →
       </Link>
+    </div>
+  )
+}
+
+// Everything here writes straight to localStorage on click, the same immediate-apply feel as
+// ThemeToggle above - a Save button would suggest these choices need confirming, when really
+// they're just "what History starts on next time", already reversible with another click.
+function HistoryDefaultsCard() {
+  const { preferences, setPreferences } = useHistoryPreferences()
+
+  function toggleMetric(key: MetricKey) {
+    const isActive = preferences.activeMetrics.includes(key)
+    setPreferences({
+      ...preferences,
+      activeMetrics: isActive
+        ? preferences.activeMetrics.filter((metric) => metric !== key)
+        : [...preferences.activeMetrics, key],
+    })
+  }
+
+  return (
+    <div className="card">
+      <h2 className="card__title">History defaults</h2>
+      <p className="entry-row__meta" style={{ marginBottom: 'var(--space-md)' }}>
+        What the History tab opens with, before you touch anything.
+      </p>
+
+      <div className="field">
+        <label>Metrics shown in the trend chart</label>
+        <div className="metric-toggles" role="group" aria-label="Default metrics">
+          {METRICS.map((metric) => {
+            const isActive = preferences.activeMetrics.includes(metric.key)
+            return (
+              <button
+                key={metric.key}
+                type="button"
+                className="metric-toggle"
+                aria-pressed={isActive}
+                style={{ '--dot-color': `var(${metric.colorVar})` } as CSSProperties}
+                onClick={() => toggleMetric(metric.key)}
+              >
+                <span className="metric-toggle__dot" aria-hidden="true" />
+                {metric.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div className="field">
+        <label>Amounts on the trend chart</label>
+        <div>
+          <button
+            type="button"
+            className="btn btn--ghost btn--small"
+            aria-pressed={preferences.showAmounts}
+            onClick={() => setPreferences({ ...preferences, showAmounts: !preferences.showAmounts })}
+          >
+            {preferences.showAmounts ? 'Shown by default' : 'Hidden by default'}
+          </button>
+        </div>
+      </div>
+
+      <div className="field" style={{ marginBottom: 0 }}>
+        <label>Range summary default</label>
+        <div className="segmented" role="group" aria-label="Default range summary preset">
+          {RANGE_PRESETS.map((option) => (
+            <button
+              key={option.key}
+              type="button"
+              className={preferences.aggregateRangePreset === option.key ? 'is-active' : ''}
+              onClick={() => setPreferences({ ...preferences, aggregateRangePreset: option.key })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

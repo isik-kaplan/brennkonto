@@ -145,6 +145,73 @@ describe('Settings', () => {
     })
   })
 
+  describe('HistoryDefaultsCard', () => {
+    const STORAGE_KEY = 'brennkonto-history-prefs'
+
+    it('starts with every metric active, amounts hidden, and the month preset', () => {
+      mockAuth()
+      renderSettings()
+
+      for (const label of ['Calories', 'Protein', 'Carbs', 'Fat']) {
+        expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
+      }
+      expect(screen.getByRole('button', { name: 'Hidden by default' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Last month' })).toHaveClass('is-active')
+    })
+
+    it('picks up previously stored preferences on mount', () => {
+      mockAuth()
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({ activeMetrics: ['protein'], showAmounts: true, aggregateRangePreset: '6months' })
+      )
+      renderSettings()
+
+      expect(screen.getByRole('button', { name: 'Protein' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: 'Calories' })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByRole('button', { name: 'Shown by default' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Last 6 months' })).toHaveClass('is-active')
+    })
+
+    it('toggling a metric flips its pressed state and persists the change', async () => {
+      const clickUser = userEvent.setup()
+      mockAuth()
+      renderSettings()
+
+      const proteinToggle = screen.getByRole('button', { name: 'Protein' })
+      await clickUser.click(proteinToggle)
+
+      expect(proteinToggle).toHaveAttribute('aria-pressed', 'false')
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeMetrics).toEqual(['calories', 'carbs', 'fat'])
+
+      await clickUser.click(proteinToggle)
+      expect(proteinToggle).toHaveAttribute('aria-pressed', 'true')
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).activeMetrics).toContain('protein')
+    })
+
+    it('toggling amounts flips its label and persists the change', async () => {
+      const clickUser = userEvent.setup()
+      mockAuth()
+      renderSettings()
+
+      await clickUser.click(screen.getByRole('button', { name: 'Hidden by default' }))
+      expect(screen.getByRole('button', { name: 'Shown by default' })).toBeInTheDocument()
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).showAmounts).toBe(true)
+    })
+
+    it('picking a range preset marks it active and persists the change', async () => {
+      const clickUser = userEvent.setup()
+      mockAuth()
+      renderSettings()
+
+      await clickUser.click(screen.getByRole('button', { name: 'Last 2 weeks' }))
+
+      expect(screen.getByRole('button', { name: 'Last 2 weeks' })).toHaveClass('is-active')
+      expect(screen.getByRole('button', { name: 'Last month' })).not.toHaveClass('is-active')
+      expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).aggregateRangePreset).toBe('2weeks')
+    })
+  })
+
   describe('PasswordCard', () => {
     it('changes the password and resets the form on success', async () => {
       const clickUser = userEvent.setup()
