@@ -15,10 +15,12 @@ export default defineConfig({
         name: 'brennkonto',
         short_name: 'brennkonto',
         description: 'A calorie and macro tracker.',
-        // Matches index.html's <meta name="theme-color"> and the light-mode --color-paper/--color-bg
-        // tokens - the manifest can't reference CSS custom properties, so this is a plain hex copy.
-        theme_color: '#f7f0e4',
-        background_color: '#f7f0e4',
+        // The manifest can't reference CSS custom properties or media queries like index.html's
+        // <meta name="theme-color"> pair does, so this static color is what an installed app shows
+        // at launch (splash background, desktop title bar) before useTheme's live meta-tag update
+        // can apply - a plain hex copy of the dark --color-paper token, matching useTheme.tsx.
+        theme_color: '#211e1a',
+        background_color: '#211e1a',
         display: 'standalone',
         start_url: '/',
         scope: '/',

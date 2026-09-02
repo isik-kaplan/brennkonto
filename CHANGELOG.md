@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.20.0]
+
+### Fixed
+
+- The installed PWA's title bar/splash background was hardcoded to the light theme color regardless of dark mode. The manifest can't react to the in-app theme toggle the way `index.html`'s `<meta name="theme-color">` does, so it now defaults to the dark color instead.
+
 ## [0.19.0]
 
 ### Fixed
