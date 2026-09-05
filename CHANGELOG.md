@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.22.0]
+
+### Fixed
+
+- Range summary's preset buttons (and Settings' matching "Range summary default" picker) no longer overflow/clip on narrow screens: the segmented control now wraps onto multiple rows below 640px instead of forcing its labels to shrink and wrap mid-word inside a fixed-height strip.
+
 ## [0.21.0]
 
 ### Added
