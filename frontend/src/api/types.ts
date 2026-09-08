@@ -169,7 +169,6 @@ export interface RangeStats {
   average_protein_g: number
   average_carbs_g: number
   average_fat_g: number
-  total_calories: number
   days_in_range: number
   days_logged: number
 }

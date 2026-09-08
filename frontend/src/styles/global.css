@@ -565,6 +565,10 @@ svg {
   border: 1px solid var(--color-rule);
   border-radius: var(--radius);
   padding: var(--space-lg);
+  /* Lets descendants (.segmented, below) query the card's own rendered width rather than the
+     viewport's - a .grid--2 column can be well under 640px wide on a viewport nowhere near that
+     narrow, which a viewport media query can't see. */
+  container-type: inline-size;
 }
 
 @media (max-width: 640px) {
@@ -1210,6 +1214,10 @@ svg {
   align-items: center;
   gap: var(--space-md);
   margin-bottom: var(--space-xl);
+  /* Same reasoning as .card above - Trends' range-controls sits outside any .card, so it needs
+     its own containment to give its .segmented children something other than the viewport to
+     query. */
+  container-type: inline-size;
 }
 
 /* Without a cap, the date field's flex item grows to fill whatever row space is left (its 100%-
@@ -1265,10 +1273,12 @@ svg {
 
 /* A segmented control with too many/long options for one row (Range summary's five presets,
    Settings' four) forced its buttons to shrink narrower than their label, wrapping text onto a
-   second line inside the fixed-height strip. Below 640px, trade the joined single-strip look for
-   a wrapping chip group (same treatment as .metric-toggles) so every option stays one line and
+   second line inside the fixed-height strip. Below 640px of *available width* - the nearest
+   .card/.range-controls container, not necessarily the viewport, since a .grid--2 column can be
+   this narrow on a viewport nowhere near 640px - trade the joined single-strip look for a
+   wrapping chip group (same treatment as .metric-toggles) so every option stays one line and
    reachable without a horizontal scroll. */
-@media (max-width: 640px) {
+@container (max-width: 640px) {
   .segmented {
     display: flex;
     flex-wrap: wrap;
@@ -1328,11 +1338,16 @@ svg {
   color: var(--color-paper);
 }
 
+/* currentColor tracks the button's own text color, which the button styles above always flip
+   opposite its background (ink-on-paper unpressed, paper-on-ink pressed) - so the border reads
+   even for Calories, whose --dot-color is --color-ink and would otherwise vanish into a pressed
+   toggle's identically-ink background. */
 .metric-toggle__dot {
   width: 0.625rem;
   height: 0.625rem;
   flex-shrink: 0;
   background: var(--dot-color);
+  border: 1.5px solid currentColor;
 }
 
 /* ---------- auth pages ---------- */

@@ -36,7 +36,6 @@ function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {
     average_protein_g: 0,
     average_carbs_g: 0,
     average_fat_g: 0,
-    total_calories: 0,
     days_in_range: 14,
     days_logged: 0,
     ...overrides,

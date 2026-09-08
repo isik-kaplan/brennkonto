@@ -112,10 +112,6 @@ export default function RangeSummary({ defaultPreset }: RangeSummaryProps) {
             <div className="stat-tile__value">{Math.round(stats.average_fat_g)}g</div>
           </div>
           <div className="stat-tile">
-            <div className="stat-tile__label">Total calories</div>
-            <div className="stat-tile__value">{Math.round(stats.total_calories)}</div>
-          </div>
-          <div className="stat-tile">
             <div className="stat-tile__label">Days logged</div>
             <div className="stat-tile__value">
               {stats.days_logged} / {stats.days_in_range}

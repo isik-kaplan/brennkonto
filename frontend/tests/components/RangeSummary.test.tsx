@@ -18,7 +18,6 @@ function makeRangeStats(overrides: Partial<RangeStats> = {}): RangeStats {
     average_protein_g: 140,
     average_carbs_g: 190,
     average_fat_g: 60,
-    total_calories: 12600,
     days_in_range: 7,
     days_logged: 5,
     ...overrides,
@@ -48,7 +47,6 @@ describe('RangeSummary', () => {
     expect(screen.getByText('140g')).toBeInTheDocument()
     expect(screen.getByText('190g')).toBeInTheDocument()
     expect(screen.getByText('60g')).toBeInTheDocument()
-    expect(screen.getByText('12600')).toBeInTheDocument()
     expect(screen.getByText('5 / 7')).toBeInTheDocument()
   })
 

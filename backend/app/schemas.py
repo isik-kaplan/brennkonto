@@ -263,6 +263,8 @@ class RangeStatsOut(msgspec.Struct):
     average_protein_g: float
     average_carbs_g: float
     average_fat_g: float
-    total_calories: float
+    # Capped to the user's own logging history - a "last 6 months" query for someone who signed
+    # up 40 days ago reports 40, not 182, so the days_logged/days_in_range ratio doesn't read as
+    # a mostly-empty streak. See range_stats() in controllers/stats.py.
     days_in_range: int
     days_logged: int

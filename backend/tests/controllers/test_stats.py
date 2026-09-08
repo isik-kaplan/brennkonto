@@ -160,6 +160,26 @@ async def test_range_stats_average_ignores_days_with_no_entries(authed_client) -
     assert body["days_logged"] == 1
 
 
+async def test_range_stats_caps_days_in_range_to_the_users_own_history(authed_client) -> None:
+    # The first-ever entry sits well inside a much longer requested range - days_in_range should
+    # stop there instead of spanning the full request, so someone who joined partway through
+    # doesn't read as having skipped days that came before they ever used the app.
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-05T12:00:00Z"})
+
+    response = await authed_client.get("/api/stats/range?start=2026-01-01&end=2026-08-31&group_by=month")
+    body = response.json()
+    assert body["days_in_range"] == 27  # Aug 5 through Aug 31, inclusive
+    assert body["days_logged"] == 1
+
+
+async def test_range_stats_days_in_range_is_zero_before_the_users_first_entry(authed_client) -> None:
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-05T12:00:00Z"})
+
+    response = await authed_client.get("/api/stats/range?start=2026-01-01&end=2026-01-31&group_by=day")
+    body = response.json()
+    assert body["days_in_range"] == 0
+
+
 async def test_range_stats_requires_authentication(client) -> None:
     response = await client.get("/api/stats/range?start=2026-08-01&end=2026-08-07&group_by=day")
     assert response.status_code == 401

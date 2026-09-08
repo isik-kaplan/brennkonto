@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from litestar import Request, Router, get
 from litestar.exceptions import ValidationException
 from litestar.params import Parameter
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.controllers.goals import resolve_goal_for_date
@@ -132,6 +132,19 @@ async def range_stats(
             )
         )
 
+    # The denominator for "days logged" shouldn't reach further back than the user's own first
+    # entry - a "last 6 months" query for someone who started 40 days ago should read 40/40 (if
+    # they've logged every day since), not 40/182, which reads as if most of that history was
+    # skipped. Unbounded by the requested range - it's the user's actual logging history.
+    first_entry_at = await db_session.scalar(
+        select(func.min(FoodEntry.consumed_at)).where(
+            FoodEntry.user_id == request.user.id,
+            FoodEntry.deleted_at.is_(None),
+        )
+    )
+    range_floor = max(start, first_entry_at.date()) if first_entry_at else start
+    days_in_range = max((end - range_floor).days + 1, 0)
+
     days_logged = len(logged_days)
     return RangeStatsOut(
         points=points,
@@ -139,8 +152,7 @@ async def range_stats(
         average_protein_g=sum(entry.protein_g for entry in entries) / days_logged if days_logged else 0,
         average_carbs_g=sum(entry.carbs_g for entry in entries) / days_logged if days_logged else 0,
         average_fat_g=sum(entry.fat_g for entry in entries) / days_logged if days_logged else 0,
-        total_calories=sum(entry.calories for entry in entries),
-        days_in_range=(end - start).days + 1,
+        days_in_range=days_in_range,
         days_logged=days_logged,
     )
 

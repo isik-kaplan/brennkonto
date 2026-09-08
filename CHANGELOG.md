@@ -3,7 +3,17 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.22.0]
+## [0.23.0]
+
+### Fixed
+
+- The Calories legend swatch (in History's metric toggles and their matching Settings picker) was invisible whenever its toggle was active/pressed - it uses the neutral ink color, which is also the pressed toggle's background. Legend swatches now get a border in the button's own text color, so the swatch outline stays visible no matter what it's sitting on.
+- The "Range summary default" picker in Settings could overflow past its card's edge: the control only wrapped onto multiple rows below a 640px *viewport*, but Settings lays its cards out two per row, so a card can be narrower than that on viewports nowhere near 640px. It now wraps based on the card's own width instead.
+- Range summary's "Days logged" denominator used the full length of the selected preset (e.g. 182 for "Last 6 months") even for an account newer than that - so someone who joined 40 days ago and logged every single day since would see it read as `40 / 182`, as if most of that history were empty. It's now capped to the user's own logging history, so the same account reads `40 / 40`.
+
+### Removed
+
+- Range summary's "Total calories" tile - redundant with "Avg calories / logged day" now that the range can also be reasoned about via "Days logged", and rarely the number anyone actually wants from a summary card.
 
 ### Fixed
 
