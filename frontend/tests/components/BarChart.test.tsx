@@ -133,6 +133,31 @@ describe('BarChart', () => {
     expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
   })
 
+  it.each([
+    ['a lone bar per day', 1],
+    ['grouped bars', 2],
+  ])('does not resize %s when amount labels are switched on', (_name, barCount) => {
+    const makePoints = (withLabels: boolean) =>
+      [
+        { label: 'Mon', value: 60 },
+        { label: 'Tue', value: 100 },
+      ].map((point) => ({
+        label: point.label,
+        bars: Array.from({ length: barCount }, (_, index) => ({
+          key: `m${index}`,
+          value: point.value,
+          colorVar: '',
+          amountLabel: withLabels ? '1000 kcal' : undefined,
+        })),
+      }))
+    const heights = () => Array.from(document.querySelectorAll('.chart__bar')).map((bar) => bar.getAttribute('height'))
+
+    const { rerender } = render(<BarChart points={makePoints(false)} goal={100} />)
+    const before = heights()
+    rerender(<BarChart points={makePoints(true)} goal={100} />)
+    expect(heights()).toEqual(before)
+  })
+
   it('keeps a unit-less amountLabel on one flat line', () => {
     render(
       <BarChart points={[{ label: 'Mon', bars: [{ key: 'protein', value: 50, colorVar: '', amountLabel: '75g' }] }]} />

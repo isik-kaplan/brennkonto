@@ -210,19 +210,9 @@ export default function History() {
 
           {trend && (
             <section className="trend" aria-labelledby="trend-title">
-              <div className="trend__head">
-                <h3 id="trend-title" className="card__title">
-                  Last {TREND_WINDOW_DAYS} days
-                </h3>
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--small"
-                  aria-pressed={showAmounts}
-                  onClick={() => setShowAmounts((v) => !v)}
-                >
-                  {showAmounts ? 'Hide amounts' : 'Show amounts'}
-                </button>
-              </div>
+              <h3 id="trend-title" className="card__title">
+                Last {TREND_WINDOW_DAYS} days
+              </h3>
               <div className="metric-toggles" role="group" aria-label="Metrics shown in the chart">
                 {METRICS.map((metric) => {
                   const isActive = activeMetrics.has(metric.key)
@@ -240,6 +230,14 @@ export default function History() {
                     </button>
                   )
                 })}
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  aria-pressed={showAmounts}
+                  onClick={() => setShowAmounts((v) => !v)}
+                >
+                  {showAmounts ? 'Hide amounts' : 'Show amounts'}
+                </button>
               </div>
 
               {activeMetrics.size === 0 ? (

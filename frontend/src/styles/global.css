@@ -1386,19 +1386,9 @@ svg {
   margin-bottom: var(--space-xl);
 }
 
-.trend__head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-xs);
-}
-
-.trend__head .card__title {
-  margin-bottom: 0;
-}
-
+/* The global 65ch cap on <p> would wrap this one-line caption. */
 .trend__legend {
+  max-width: none;
   margin-top: var(--space-sm);
   color: var(--color-neutral);
   font-size: var(--text-sm);

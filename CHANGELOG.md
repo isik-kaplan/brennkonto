@@ -3,6 +3,14 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.24.1]
+
+### Fixed
+
+- Showing amounts on History's trend chart no longer shrinks the bars: the chart now grows taller to make room for the labels and pushes what's below it down, instead of rescaling every bar to fit them in.
+- The trend chart's one-line caption no longer wraps mid-sentence (the global 65-character paragraph cap was cutting it short).
+- "Show/Hide amounts" is back beside the metric chips rather than up by the title.
+
 ## [0.24.0]
 
 ### Changed

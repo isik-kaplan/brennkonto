@@ -33,12 +33,10 @@ const GROUP_GAP = 4
 const GAP = 18
 const HEIGHT = 200
 const TOP_PADDING = 24
-// Grouped bars' amount labels run vertically above their bar (see the rotated <text> below) - they
-// need much more headroom than the plain top padding gives a label-less chart.
-const TOP_PADDING_WITH_LABELS = 64
-// A single bar per day has room for a flat, two-line label (value over unit), which needs far
-// less headroom than the rotated one.
-const TOP_PADDING_WITH_FLAT_LABELS = 40
+// Vertical room an amount label needs above its bar: grouped bars' labels run sideways (see the
+// rotated <text> below) and are much taller than a lone bar's two-line flat label.
+const ROTATED_LABEL_HEIGHT = 60
+const FLAT_LABEL_HEIGHT = 28
 const MIN_PLACEHOLDER_SLOTS = 6
 // Room to the right of the last bar for the goal line's tag, so it never sits on top of a bar.
 const GOAL_LABEL_GUTTER = 72
@@ -97,17 +95,22 @@ export default function BarChart({ points, goal, goalLabel, sparse = false }: Ba
   // Grouped bars are too narrow for flat text, so their labels run vertically; a lone bar per day
   // is wide enough for the label to sit upright, which is far easier to read.
   const flatLabels = maxBarsPerPoint === 1
-  const topPadding = !hasAmountLabels
-    ? TOP_PADDING
-    : flatLabels
-      ? TOP_PADDING_WITH_FLAT_LABELS
-      : TOP_PADDING_WITH_LABELS
-  const scale = (HEIGHT - topPadding) / (maxValue * 1.1)
+  // The scale never depends on the labels: toggling amounts must not resize the bars. Any headroom
+  // the labels need beyond the space already above the tallest bar is added to the top of the
+  // viewBox instead, so the chart grows taller and pushes what's below it down.
+  const scale = (HEIGHT - TOP_PADDING) / (maxValue * 1.1)
+  const tallestBarTop = HEIGHT - Math.max(...allBars.map((bar) => bar.value), 0) * scale
+  const labelHeight = flatLabels ? FLAT_LABEL_HEIGHT : ROTATED_LABEL_HEIGHT
+  const labelHeadroom = hasAmountLabels ? Math.max(0, labelHeight - tallestBarTop) : 0
   const goalY = goal ? HEIGHT - goal * scale : null
 
   return (
     <div className="chart">
-      <svg className="chart__svg" viewBox={`0 0 ${width} ${HEIGHT + 24}`} preserveAspectRatio="xMidYMid meet">
+      <svg
+        className="chart__svg"
+        viewBox={`0 ${-labelHeadroom} ${width} ${HEIGHT + 24 + labelHeadroom}`}
+        preserveAspectRatio="xMidYMid meet"
+      >
         {showPlaceholder && <path className="chart__placeholder" d={squigglePath(width, HEIGHT)} />}
         {goalY !== null && <line className="chart__bar-goal" x1={0} x2={width} y1={goalY} y2={goalY} />}
         {goalY !== null && goalLabel && (
