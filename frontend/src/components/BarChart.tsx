@@ -19,6 +19,8 @@ interface BarChartPoint {
 interface BarChartProps {
   points: BarChartPoint[]
   goal?: number
+  /** Optional tag printed at the right end of the dashed goal line, e.g. "100% of goal". */
+  goalLabel?: string
   /** True when there's too little real data yet to fill the chart meaningfully (e.g. a new
    * user's first few days) - widens the chart to a minimum width and fills it with a decorative
    * squiggle so it doesn't render as a stark, half-empty grid. */
@@ -31,10 +33,15 @@ const GROUP_GAP = 4
 const GAP = 18
 const HEIGHT = 200
 const TOP_PADDING = 24
-// Amount labels run vertically above their bar (see the rotated <text> below) - they need much
-// more headroom than the plain top padding gives a label-less chart.
+// Grouped bars' amount labels run vertically above their bar (see the rotated <text> below) - they
+// need much more headroom than the plain top padding gives a label-less chart.
 const TOP_PADDING_WITH_LABELS = 64
+// A single bar per day has room for a flat, two-line label (value over unit), which needs far
+// less headroom than the rotated one.
+const TOP_PADDING_WITH_FLAT_LABELS = 40
 const MIN_PLACEHOLDER_SLOTS = 6
+// Room to the right of the last bar for the goal line's tag, so it never sits on top of a bar.
+const GOAL_LABEL_GUTTER = 72
 
 // Deterministic, not Math.random() - a sum of a few sine waves at different frequencies and
 // phases reads as an organic, hand-drawn squiggle rather than a clean sinusoid, and stays
@@ -57,6 +64,12 @@ function squigglePath(width: number, height: number): string {
   return parts.join(' ')
 }
 
+// Splits on the last space so "1000 kcal" stacks as value over unit; a unit-less "75g" stays whole.
+function splitAmount(label: string): [string, string] {
+  const at = label.lastIndexOf(' ')
+  return at < 0 ? [label, ''] : [label.slice(0, at), label.slice(at + 1)]
+}
+
 // A point with no `bars` falls back to its single `value` as one full-width bar - this is what
 // keeps the single-series call sites (e.g. Trends' calorie chart) unchanged.
 function barsOf(point: BarChartPoint): BarChartBar[] {
@@ -69,26 +82,39 @@ function groupWidthFor(barCount: number): number {
   return barCount > 1 ? barCount * GROUP_BAR_WIDTH + (barCount - 1) * GROUP_GAP : BAR_WIDTH
 }
 
-export default function BarChart({ points, goal, sparse = false }: BarChartProps) {
+export default function BarChart({ points, goal, goalLabel, sparse = false }: BarChartProps) {
   const showPlaceholder = sparse || points.length === 0
   const slots = showPlaceholder ? Math.max(points.length, MIN_PLACEHOLDER_SLOTS) : points.length
 
   const maxBarsPerPoint = points.reduce((max, point) => Math.max(max, barsOf(point).length), 1)
   const groupWidth = groupWidthFor(maxBarsPerPoint)
-  const width = slots * (groupWidth + GAP) + GAP
+  const plotWidth = slots * (groupWidth + GAP) + GAP
+  const width = goalLabel ? plotWidth + GOAL_LABEL_GUTTER : plotWidth
 
   const allBars = points.flatMap((point) => barsOf(point))
   const maxValue = Math.max(...allBars.map((bar) => bar.value), goal ?? 0, 1)
   const hasAmountLabels = allBars.some((bar) => bar.amountLabel)
-  const topPadding = hasAmountLabels ? TOP_PADDING_WITH_LABELS : TOP_PADDING
+  // Grouped bars are too narrow for flat text, so their labels run vertically; a lone bar per day
+  // is wide enough for the label to sit upright, which is far easier to read.
+  const flatLabels = maxBarsPerPoint === 1
+  const topPadding = !hasAmountLabels
+    ? TOP_PADDING
+    : flatLabels
+      ? TOP_PADDING_WITH_FLAT_LABELS
+      : TOP_PADDING_WITH_LABELS
   const scale = (HEIGHT - topPadding) / (maxValue * 1.1)
   const goalY = goal ? HEIGHT - goal * scale : null
 
   return (
     <div className="chart">
-      <svg className="chart__svg" viewBox={`0 0 ${width} ${HEIGHT + 24}`} preserveAspectRatio="xMinYMid meet">
+      <svg className="chart__svg" viewBox={`0 0 ${width} ${HEIGHT + 24}`} preserveAspectRatio="xMidYMid meet">
         {showPlaceholder && <path className="chart__placeholder" d={squigglePath(width, HEIGHT)} />}
         {goalY !== null && <line className="chart__bar-goal" x1={0} x2={width} y1={goalY} y2={goalY} />}
+        {goalY !== null && goalLabel && (
+          <text x={width - 2} y={goalY - 5} textAnchor="end" className="chart__goal-label">
+            {goalLabel}
+          </text>
+        )}
         {points.map((point, index) => {
           const bars = barsOf(point)
           const barWidth = bars.length > 1 ? GROUP_BAR_WIDTH : BAR_WIDTH
@@ -111,7 +137,28 @@ export default function BarChart({ points, goal, sparse = false }: BarChartProps
                       width={barWidth}
                       height={barHeight}
                     />
-                    {bar.amountLabel && (
+                    {bar.amountLabel && flatLabels && (
+                      <text
+                        x={labelAnchorX}
+                        y={labelAnchorY}
+                        textAnchor="middle"
+                        className="chart__bar-amount chart__bar-amount--flat numeral"
+                      >
+                        {splitAmount(bar.amountLabel)[1] ? (
+                          <>
+                            <tspan x={labelAnchorX} y={labelAnchorY - 11}>
+                              {splitAmount(bar.amountLabel)[0]}
+                            </tspan>
+                            <tspan x={labelAnchorX} y={labelAnchorY} className="chart__bar-unit">
+                              {splitAmount(bar.amountLabel)[1]}
+                            </tspan>
+                          </>
+                        ) : (
+                          bar.amountLabel
+                        )}
+                      </text>
+                    )}
+                    {bar.amountLabel && !flatLabels && (
                       <text
                         x={labelAnchorX}
                         y={labelAnchorY}

@@ -209,8 +209,20 @@ export default function History() {
           </div>
 
           {trend && (
-            <div style={{ marginBottom: 'var(--space-lg)' }}>
-              <h3 className="card__title">Last {TREND_WINDOW_DAYS} days</h3>
+            <section className="trend" aria-labelledby="trend-title">
+              <div className="trend__head">
+                <h3 id="trend-title" className="card__title">
+                  Last {TREND_WINDOW_DAYS} days
+                </h3>
+                <button
+                  type="button"
+                  className="btn btn--ghost btn--small"
+                  aria-pressed={showAmounts}
+                  onClick={() => setShowAmounts((v) => !v)}
+                >
+                  {showAmounts ? 'Hide amounts' : 'Show amounts'}
+                </button>
+              </div>
               <div className="metric-toggles" role="group" aria-label="Metrics shown in the chart">
                 {METRICS.map((metric) => {
                   const isActive = activeMetrics.has(metric.key)
@@ -228,14 +240,6 @@ export default function History() {
                     </button>
                   )
                 })}
-                <button
-                  type="button"
-                  className="btn btn--ghost btn--small"
-                  aria-pressed={showAmounts}
-                  onClick={() => setShowAmounts((v) => !v)}
-                >
-                  {showAmounts ? 'Hide amounts' : 'Show amounts'}
-                </button>
               </div>
 
               {activeMetrics.size === 0 ? (
@@ -253,15 +257,16 @@ export default function History() {
                       })),
                     }))}
                     goal={100}
+                    goalLabel="100% of goal"
                     sparse={trend.days_logged < Math.min(3, trend.days_in_range)}
                   />
-                  <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
-                    % of each metric's own daily goal met. Dashed line marks 100%.
+                  <p className="trend__legend">
+                    % of each metric's own daily goal met.
                     {showAmounts && ' The logged amount is labeled above each bar.'}
                   </p>
                 </>
               )}
-            </div>
+            </section>
           )}
 
           <AddEntryPanel date={date} onAdded={handleEntryAdded} />

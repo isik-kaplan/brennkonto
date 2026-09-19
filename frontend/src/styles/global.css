@@ -1116,9 +1116,12 @@ svg {
   overflow-x: auto;
 }
 
+/* Scales with the card's width so the goal line spans the whole chart; the min-width keeps text
+   legible on a phone, where .chart's overflow-x then scrolls instead of shrinking everything. */
 .chart__svg {
   width: 100%;
-  height: 14rem;
+  min-width: 40rem;
+  height: auto;
 }
 
 .chart__bar {
@@ -1132,14 +1135,36 @@ svg {
   stroke-dasharray: 3 3;
 }
 
+.chart__goal-label {
+  font-family: var(--font-body);
+  font-size: 0.6rem;
+  font-weight: 600;
+  fill: var(--color-neutral);
+}
+
 .chart__axis-label {
   font-family: var(--font-body);
   font-size: 0.6rem;
   fill: var(--color-neutral);
 }
 
+/* The halo keeps a label readable where it crosses the dashed goal line. */
 .chart__bar-amount {
   font-size: 0.55rem;
+  fill: var(--color-ink);
+  stroke: var(--color-paper-2);
+  stroke-width: 3px;
+  paint-order: stroke;
+}
+
+.chart__bar-amount--flat {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.chart__bar-unit {
+  font-size: 0.5rem;
+  font-weight: 400;
   fill: var(--color-neutral);
 }
 
@@ -1313,14 +1338,15 @@ svg {
   gap: var(--space-2xs);
   height: var(--control-h-sm);
   padding: 0 var(--space-sm);
-  border: 1.5px solid var(--color-ink);
-  background: var(--color-paper);
-  color: var(--color-ink);
+  border: 1.5px solid var(--color-rule);
+  background: transparent;
+  color: var(--color-neutral);
   font-weight: 600;
   font-size: var(--text-sm);
   cursor: pointer;
   transition:
     background var(--dur-base) var(--ease-out),
+    border-color var(--dur-base) var(--ease-out),
     color var(--dur-base) var(--ease-out);
 }
 
@@ -1333,21 +1359,49 @@ svg {
   outline-offset: 2px;
 }
 
+/* On means "this series is drawn": an ink outline and a filled swatch. Deliberately not an
+   inverted ink block - a swatch sitting on a solid --color-ink background is invisible for
+   Calories, whose --dot-color is --color-ink itself. */
 .metric-toggle[aria-pressed='true'] {
-  background: var(--color-ink);
-  color: var(--color-paper);
+  border-color: var(--color-ink);
+  color: var(--color-ink);
 }
 
-/* currentColor tracks the button's own text color, which the button styles above always flip
-   opposite its background (ink-on-paper unpressed, paper-on-ink pressed) - so the border reads
-   even for Calories, whose --dot-color is --color-ink and would otherwise vanish into a pressed
-   toggle's identically-ink background. */
 .metric-toggle__dot {
   width: 0.625rem;
   height: 0.625rem;
   flex-shrink: 0;
+  border: 1.5px solid var(--dot-color);
+  background: transparent;
+  transition: background var(--dur-base) var(--ease-out);
+}
+
+.metric-toggle[aria-pressed='true'] .metric-toggle__dot {
   background: var(--dot-color);
-  border: 1.5px solid currentColor;
+}
+
+/* ---------- History's trend section ---------- */
+
+.trend {
+  margin-bottom: var(--space-xl);
+}
+
+.trend__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-xs);
+}
+
+.trend__head .card__title {
+  margin-bottom: 0;
+}
+
+.trend__legend {
+  margin-top: var(--space-sm);
+  color: var(--color-neutral);
+  font-size: var(--text-sm);
 }
 
 /* ---------- auth pages ---------- */

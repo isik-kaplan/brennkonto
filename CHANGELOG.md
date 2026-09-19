@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.24.0]
+
+### Changed
+
+- History's "Last 14 days" card is redesigned. The metric chips no longer flip to a solid block when on - an on chip gets an ink outline and a filled swatch, an off chip a dimmed outline and a hollow one - so each swatch keeps its color and stays visible (the same chips appear in Settings' default-metrics picker). "Show/Hide amounts" moved up beside the title, the chart now fills the card, and the dashed goal line is labeled "100% of goal" on the chart itself instead of in the caption.
+- With a single metric on, the amount above each bar now reads upright - the value large, the unit small beneath it - instead of rotated sideways. With several metrics on the labels stay vertical, since grouped bars are too narrow for flat text. Amount labels also get a background halo so the goal line no longer strikes through them.
+
 ## [0.23.0]
 
 ### Fixed
@@ -14,6 +21,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Removed
 
 - Range summary's "Total calories" tile - redundant with "Avg calories / logged day" now that the range can also be reasoned about via "Days logged", and rarely the number anyone actually wants from a summary card.
+
+## [0.22.0]
 
 ### Fixed
 

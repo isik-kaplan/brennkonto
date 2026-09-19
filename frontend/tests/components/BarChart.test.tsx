@@ -49,6 +49,17 @@ describe('BarChart', () => {
     expect(document.querySelector('.chart__bar-goal')).not.toBeInTheDocument()
   })
 
+  it('tags the goal line with its label only when both a goal and a label are given', () => {
+    const { rerender } = render(<BarChart points={[{ label: 'Mon', value: 1800 }]} goal={2000} />)
+    expect(document.querySelector('.chart__goal-label')).not.toBeInTheDocument()
+
+    rerender(<BarChart points={[{ label: 'Mon', value: 1800 }]} goalLabel="100% of goal" />)
+    expect(document.querySelector('.chart__goal-label')).not.toBeInTheDocument()
+
+    rerender(<BarChart points={[{ label: 'Mon', value: 1800 }]} goal={2000} goalLabel="100% of goal" />)
+    expect(screen.getByText('100% of goal')).toBeInTheDocument()
+  })
+
   it('renders a dashed goal line when a goal is given', () => {
     render(<BarChart points={[{ label: 'Mon', value: 1800 }]} goal={2000} />)
     expect(document.querySelector('.chart__bar-goal')).toBeInTheDocument()
@@ -115,8 +126,37 @@ describe('BarChart', () => {
         goal={100}
       />
     )
-    expect(screen.getByText('1000 kcal')).toBeInTheDocument()
+    // A lone bar per day gets a flat label: the value over a smaller unit.
+    expect(screen.getByText('1000')).toBeInTheDocument()
+    expect(screen.getByText('kcal')).toBeInTheDocument()
+    expect(document.querySelector('.chart__bar-amount')).not.toHaveAttribute('transform')
     expect(document.querySelectorAll('.chart__bar')).toHaveLength(1)
+  })
+
+  it('keeps a unit-less amountLabel on one flat line', () => {
+    render(
+      <BarChart points={[{ label: 'Mon', bars: [{ key: 'protein', value: 50, colorVar: '', amountLabel: '75g' }] }]} />
+    )
+    expect(screen.getByText('75g')).toBeInTheDocument()
+    expect(document.querySelector('.chart__bar-unit')).not.toBeInTheDocument()
+  })
+
+  it('rotates amount labels when several bars share a day', () => {
+    render(
+      <BarChart
+        points={[
+          {
+            label: 'Mon',
+            bars: [
+              { key: 'calories', value: 50, colorVar: '', amountLabel: '1000 kcal' },
+              { key: 'protein', value: 50, colorVar: '', amountLabel: '75g' },
+            ],
+          },
+        ]}
+      />
+    )
+    const label = screen.getByText('1000 kcal')
+    expect(label).toHaveAttribute('transform')
   })
 
   it('omits the amount-label text entirely when no bar sets one', () => {
