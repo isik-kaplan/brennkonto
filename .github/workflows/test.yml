@@ -60,24 +60,3 @@ jobs:
 
       - name: Build
         run: npm run build
-
-  # Deploys only once both suites above are green, and only for master. Coolify's own push webhook
-  # is switched off, so this is the one thing that ships a commit.
-  deploy:
-    name: Deploy to Coolify
-    needs: [backend, frontend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
-    runs-on: ubuntu-latest
-    # One deploy at a time, in push order - a newer push waits rather than cancelling one mid-way.
-    concurrency:
-      group: deploy-production
-      cancel-in-progress: false
-    steps:
-      - name: Trigger the deploy
-        env:
-          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
-          COOLIFY_APP_UUID: ${{ vars.COOLIFY_APP_UUID }}
-        run: |
-          curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer ${COOLIFY_TOKEN}" \
-            "https://infra.isik-kaplan.com/api/v1/deploy?uuid=${COOLIFY_APP_UUID}&force=false"
