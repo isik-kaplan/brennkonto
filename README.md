@@ -114,11 +114,6 @@ overrides from `example.env`) as environment variables, and mount a persistent v
 `/app/data` so the SQLite database survives redeploys. The image exposes port 8000 and ships a
 `/health` endpoint the platform's healthcheck can use.
 
-Deploys go through CI, not Coolify's push webhook: the `deploy` job in `.github/workflows/test.yml`
-runs only on master, only once the backend and frontend suites are green, and triggers Coolify's
-deploy API. It needs a `COOLIFY_TOKEN` repository secret (a Coolify API token with deploy
-permission) and a `COOLIFY_APP_UUID` repository variable, with Coolify's API access enabled.
-
 ## Layout
 
 ```
