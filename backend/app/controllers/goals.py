@@ -33,7 +33,6 @@ async def resolve_goal_for_date(db_session: AsyncSession, user_id: UUID, target_
         select(GoalVersion)
         .where(GoalVersion.user_id == user_id, GoalVersion.effective_date <= target_date)
         .order_by(GoalVersion.effective_date.desc())
-        .limit(1)
     )
     if version is None:
         return GoalSnapshot(DEFAULT_CALORIE_GOAL, DEFAULT_PROTEIN_GOAL_G, DEFAULT_CARBS_GOAL_G, DEFAULT_FAT_GOAL_G)

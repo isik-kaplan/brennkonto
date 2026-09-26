@@ -22,7 +22,7 @@ export const RANGE_PRESETS: RangePreset[] = [
 export const RANGE_PRESET_KEYS: RangePresetKey[] = RANGE_PRESETS.map((preset) => preset.key)
 
 export function isRangePresetKey(value: unknown): value is RangePresetKey {
-  return typeof value === 'string' && RANGE_PRESET_KEYS.includes(value as RangePresetKey)
+  return RANGE_PRESET_KEYS.includes(value as RangePresetKey)
 }
 
 // The date range a preset means "as of right now" - always ending today, since these presets are

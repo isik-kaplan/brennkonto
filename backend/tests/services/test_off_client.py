@@ -124,6 +124,9 @@ def test_to_result_happy_path() -> None:
     assert result.name == "Nutella"
     assert result.brand == "Ferrero"
     assert result.calories_per_100g == 539.0
+    assert result.protein_per_100g == 6.3
+    assert result.carbs_per_100g == 57.5
+    assert result.fat_per_100g == 30.9
     assert result.suggested_unit == "g"
     assert result.unit_to_grams == 1.0
 
@@ -146,7 +149,7 @@ async def test_search_filters_out_products_with_no_usable_macros() -> None:
                 },
             )
         )
-        results = await client.search("nutella")
+        results = await client.search("nutella", page_size=20)
     assert len(results) == 1
     assert results[0].name == "Good"
 
@@ -155,7 +158,7 @@ async def test_search_sends_the_configured_user_agent() -> None:
     client = OpenFoodFactsClient()
     with respx.mock(base_url=settings.OFF_SEARCH_BASE_URL) as mock:
         route = mock.get("/search").mock(return_value=httpx.Response(200, json={"hits": []}))
-        await client.search("nutella")
+        await client.search("nutella", page_size=20)
     assert route.calls.last.request.headers["User-Agent"] == settings.OFF_USER_AGENT
 
 
@@ -194,3 +197,56 @@ async def test_get_by_barcode_happy_path() -> None:
         result = await client.get_by_barcode("3017620422003")
     assert result is not None
     assert result.name == "Nutella"
+
+
+def test_to_result_carries_a_count_unit_through() -> None:
+    result = _to_result(
+        {"code": "4", "product_name": "Eggs", "quantity": "6 x 53 g", "nutriments": {"energy-kcal_100g": 155}}
+    )
+    assert (result.suggested_unit, result.unit_to_grams) == ("count", 53.0)
+
+
+def test_extract_macros_treats_a_missing_macro_as_zero() -> None:
+    assert _extract_macros({"nutriments": {"energy-kcal_100g": 100}}) == {
+        "calories_per_100g": 100.0,
+        "protein_per_100g": 0.0,
+        "carbs_per_100g": 0.0,
+        "fat_per_100g": 0.0,
+    }
+
+
+def test_infer_unit_treats_a_null_quantity_like_a_missing_one() -> None:
+    assert _infer_unit({"product_quantity_unit": None, "quantity": None}) == ("g", 1.0)
+
+
+# The request that actually leaves for Open Food Facts - its parameters, headers and time limit -
+# is this client's behavior at the boundary, so it's what these pin.
+TEN_SECONDS = {"connect": 10, "read": 10, "write": 10, "pool": 10}
+
+
+async def test_search_asks_for_the_query_page_size_and_fields_within_ten_seconds() -> None:
+    client = OpenFoodFactsClient()
+    with respx.mock(base_url=settings.OFF_SEARCH_BASE_URL) as mock:
+        route = mock.get("/search").mock(return_value=httpx.Response(200, json={"hits": []}))
+        await client.search("nutella", page_size=7)
+    request = route.calls.last.request
+    assert dict(request.url.params) == {"q": "nutella", "page_size": "7", "fields": OpenFoodFactsClient._fields}
+    assert request.extensions["timeout"] == TEN_SECONDS
+
+
+async def test_search_without_any_hits_is_empty() -> None:
+    client = OpenFoodFactsClient()
+    with respx.mock(base_url=settings.OFF_SEARCH_BASE_URL) as mock:
+        mock.get("/search").mock(return_value=httpx.Response(200, json={}))
+        assert await client.search("nutella", page_size=20) == []
+
+
+async def test_get_by_barcode_asks_for_the_fields_with_the_user_agent_within_ten_seconds() -> None:
+    client = OpenFoodFactsClient()
+    with respx.mock(base_url=settings.OFF_BASE_URL) as mock:
+        route = mock.get("/api/v2/product/000.json").mock(return_value=httpx.Response(404))
+        await client.get_by_barcode("000")
+    request = route.calls.last.request
+    assert dict(request.url.params) == {"fields": OpenFoodFactsClient._fields}
+    assert request.headers["User-Agent"] == settings.OFF_USER_AGENT
+    assert request.extensions["timeout"] == TEN_SECONDS

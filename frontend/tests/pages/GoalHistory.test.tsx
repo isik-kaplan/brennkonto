@@ -1,5 +1,6 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { renderToString } from 'react-dom/server'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -151,5 +152,87 @@ describe('GoalHistory', () => {
 
     await clickUser.click(screen.getByRole('button', { name: 'Save goal' }))
     expect(await screen.findByText('Could not save.')).toBeInTheDocument()
+  })
+
+  it('paints nothing about goals until they have loaded', () => {
+    // A server render runs no effects - the first frame, before the load even starts.
+    const html = renderToString(
+      <MemoryRouter>
+        <GoalHistory />
+      </MemoryRouter>
+    )
+    expect(html).not.toContain('No goals set yet')
+  })
+
+  it('hides the list and the hint while reloading after a change', async () => {
+    const clickUser = userEvent.setup()
+    let finishReload!: (versions: GoalVersion[]) => void
+    vi.mocked(endpoints.fetchGoalVersions)
+      .mockResolvedValueOnce([makeGoalVersion({ id: 'g1' })])
+      .mockReturnValueOnce(new Promise((resolve) => (finishReload = resolve)))
+    vi.mocked(endpoints.deleteGoalVersion).mockResolvedValue(undefined)
+    renderGoalHistory()
+
+    await clickUser.click(await screen.findByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(endpoints.fetchGoalVersions).toHaveBeenCalledTimes(2))
+    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/No goals set yet/)).not.toBeInTheDocument()
+
+    await act(async () => finishReload([]))
+    expect(screen.getByText(/No goals set yet/)).toBeInTheDocument()
+    expect(document.querySelector('.entry-list')).not.toBeInTheDocument()
+  })
+
+  it('shows no hint alongside existing goals, and no Active badge when every goal is still in the future', async () => {
+    vi.mocked(endpoints.fetchGoalVersions).mockResolvedValue([makeGoalVersion({ effective_date: '2999-01-01' })])
+    renderGoalHistory()
+    await screen.findByRole('button', { name: 'Remove' })
+    expect(screen.queryByText(/No goals set yet/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Active')).not.toBeInTheDocument()
+  })
+
+  it('saves every macro goal from the form', async () => {
+    const clickUser = userEvent.setup()
+    vi.mocked(endpoints.upsertGoalVersion).mockResolvedValue(makeGoalVersion())
+    renderGoalHistory()
+    await waitFor(() => expect(endpoints.fetchGoalVersions).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByLabelText('Protein (g)'), { target: { value: '160' } })
+    fireEvent.change(screen.getByLabelText('Carbs (g)'), { target: { value: '210' } })
+    fireEvent.change(screen.getByLabelText('Fat (g)'), { target: { value: '70' } })
+    await clickUser.click(screen.getByRole('button', { name: 'Save goal' }))
+
+    expect(endpoints.upsertGoalVersion).toHaveBeenCalledWith(
+      expect.objectContaining({ daily_protein_goal_g: 160, daily_carbs_goal_g: 210, daily_fat_goal_g: 70 })
+    )
+  })
+
+  it('styles a saved message as a success and a failure as an error', async () => {
+    const clickUser = userEvent.setup()
+    vi.mocked(endpoints.upsertGoalVersion)
+      .mockResolvedValueOnce(makeGoalVersion())
+      .mockRejectedValueOnce(new ApiError('Nope', 400))
+    renderGoalHistory()
+    await waitFor(() => expect(endpoints.fetchGoalVersions).toHaveBeenCalled())
+
+    await clickUser.click(screen.getByRole('button', { name: 'Save goal' }))
+    expect(await screen.findByText('Goal saved.')).toHaveClass('form__banner--success')
+    await clickUser.click(screen.getByRole('button', { name: 'Save goal' }))
+    expect(await screen.findByText('Nope')).not.toHaveClass('form__banner--success')
+  })
+
+  it('disables saving while it runs, and re-enables it after a failure', async () => {
+    let fail!: (error: Error) => void
+    vi.mocked(endpoints.upsertGoalVersion).mockReturnValue(new Promise((_, reject) => (fail = reject)))
+    renderGoalHistory()
+    await waitFor(() => expect(endpoints.fetchGoalVersions).toHaveBeenCalled())
+    const button = screen.getByRole('button', { name: 'Save goal' })
+    fireEvent.submit(button.closest('form')!)
+
+    await waitFor(() => expect(button).toBeDisabled())
+    expect(button.querySelector('.btn__spinner')).toBeInTheDocument()
+    await act(async () => fail(new ApiError('Nope', 400)))
+    expect(button).toBeEnabled()
+    expect(button.querySelector('.btn__spinner')).not.toBeInTheDocument()
   })
 })

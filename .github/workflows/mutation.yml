@@ -1,0 +1,66 @@
+name: Mutation
+
+# By hand and weekly rather than on every push: a full run re-tests every mutant, which takes a few
+# minutes on a many-core laptop and far longer on a two-core runner. The ordinary suites (and their
+# 100% coverage gates) still run on every push and pull request in test.yml.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 1"
+
+concurrency:
+  group: mutation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  backend:
+    name: Backend (mutmut, every mutant killed or exempt)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      SECRET_KEY: ci-test-secret-key-not-for-production
+      SESSION_COOKIE_SECURE: "False"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # `mutmut run` exits 0 whatever survives - check_mutants.py is what fails the job.
+      - name: Run mutants
+        run: uv run mutmut run
+
+      - name: Confirm survivors against the whole suite
+        run: uv run python scripts/check_mutants.py
+
+  frontend:
+    name: Frontend (Stryker, 100% score)
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --force: a fresh checkout has no incremental cache anyway, and a cached "survived" is never
+      # re-tested when only a test changed - so CI always measures every mutant.
+      - name: Run mutants
+        run: npx stryker run --force

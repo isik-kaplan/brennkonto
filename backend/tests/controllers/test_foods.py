@@ -32,7 +32,7 @@ async def test_search_returns_and_caches_results(authed_client, monkeypatch) -> 
     monkeypatch.setattr(off_client, "get_by_barcode", fail_get_by_barcode)
     cached = await authed_client.get("/api/foods/barcode/3017620422003")
     assert cached.status_code == 200
-    assert cached.json()["name"] == "Nutella"
+    assert cached.json() == body[0]
 
 
 async def test_search_requires_at_least_two_characters(authed_client) -> None:
@@ -420,3 +420,33 @@ async def test_search_prioritizes_unbranded_results(authed_client, monkeypatch) 
     # The two branded ones should follow, preserving their relative order
     assert results[2]["name"] == "Branded Product 1"
     assert results[3]["name"] == "Branded Product 2"
+
+
+async def test_search_dedupe_folds_case_the_way_lowercase_does(authed_client, monkeypatch) -> None:
+    # "ß" lowercases to itself but uppercases to "SS", so these only stay apart under a lowercase
+    # comparison - the same one food_history's keys use. And a brandless product is never the same
+    # as a branded one, whatever the brand is called.
+    def product(barcode: str, name: str, brand: str | None) -> FoodSearchResultOut:
+        return FoodSearchResultOut(
+            barcode=barcode,
+            name=name,
+            brand=brand,
+            calories_per_100g=1.0,
+            protein_per_100g=1.0,
+            carbs_per_100g=1.0,
+            fat_per_100g=1.0,
+        )
+
+    async def fake_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        return [
+            product("1", "Straße", None),
+            product("2", "Strasse", None),
+            product("3", "Brot", "Straße"),
+            product("4", "Brot", "Strasse"),
+            product("5", "Brot", "xxxx"),
+            product("6", "Brot", None),
+        ]
+
+    monkeypatch.setattr(off_client, "search", fake_search)
+    results = (await authed_client.get("/api/foods/search?q=stra")).json()
+    assert sorted(result["barcode"] for result in results) == ["1", "2", "3", "4", "5", "6"]

@@ -1,3 +1,4 @@
+import calendar
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
 
@@ -29,8 +30,7 @@ def _bucket_label(key: date, group_by: str) -> tuple[str, date, date]:
     if group_by == "week":
         end = key + timedelta(days=6)
         return f"{key.strftime('%d %b')} – {end.strftime('%d %b')}", key, end
-    next_month = key.replace(day=28) + timedelta(days=4)
-    month_end = next_month.replace(day=1) - timedelta(days=1)
+    month_end = key.replace(day=calendar.monthrange(key.year, key.month)[1])
     return key.strftime("%B %Y"), key, month_end
 
 

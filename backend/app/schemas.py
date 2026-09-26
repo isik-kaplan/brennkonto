@@ -187,19 +187,6 @@ class HistoryFoodOut(msgspec.Struct):
     times_logged: int
 
 
-class MealNameOut(msgspec.Struct):
-    """A meal grouping name, aggregated across every past occurrence - the management-page
-    counterpart to HistoryGroupOut, which only ever surfaces the most recent occurrence. See
-    app/controllers/meal_names.py."""
-
-    name: str
-    times_logged: int
-    last_logged_at: datetime
-    # Ingredient names from the most recently logged occurrence only, for a quick preview - not
-    # every occurrence's items, which could differ meal to meal.
-    items: list[str]
-
-
 class RenameMealNameRequest(msgspec.Struct):
     new_name: str
 
@@ -218,15 +205,64 @@ class HistoryGroupItemOut(msgspec.Struct):
     fat_per_100g: float
 
 
+class MealNameOut(msgspec.Struct):
+    """A meal, by name: a saved meal and/or every logged occurrence of a meal grouping with that
+    name, merged into one - see app/controllers/meal_names.py."""
+
+    name: str
+    # The saved meal's foods if there is one, otherwise the most recently logged occurrence's -
+    # occurrences can differ meal to meal.
+    items: list[HistoryGroupItemOut]
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    times_logged: int
+    # None (and times_logged 0) for a saved meal that hasn't been logged yet.
+    last_logged_at: datetime | None
+    saved_meal_id: uuid.UUID | None
+
+
 class HistoryGroupOut(msgspec.Struct):
     """A previously-logged, named combo of foods (a "meal") - deduplicated by name to its most
-    recently logged occurrence. See app/controllers/history.py's history_groups."""
+    recently logged occurrence - or a saved meal. See app/controllers/history.py's
+    history_groups."""
 
     name: str
     items: list[HistoryGroupItemOut]
     calories: float
-    last_logged_at: datetime
+    # None (and times_logged 0) for a saved meal that hasn't been logged yet.
+    last_logged_at: datetime | None
     times_logged: int
+    saved_meal_id: uuid.UUID | None = None
+
+
+class SavedMealItemIn(msgspec.Struct):
+    name: str
+    input_amount: float
+    calories_per_100g: float
+    protein_per_100g: float
+    carbs_per_100g: float
+    fat_per_100g: float
+    brand: str | None = None
+    barcode: str | None = None
+    input_unit: str = "g"
+    unit_to_grams: float = 1.0
+
+
+class UpsertSavedMealRequest(msgspec.Struct):
+    name: str
+    items: list[SavedMealItemIn]
+
+
+class SavedMealOut(msgspec.Struct):
+    id: uuid.UUID
+    name: str
+    items: list[HistoryGroupItemOut]
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
 
 
 class DailyStatsOut(msgspec.Struct):

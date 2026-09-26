@@ -56,22 +56,23 @@ function squigglePath(width: number, height: number): string {
       Math.sin(t * Math.PI * 2.4) * height * 0.24 +
       Math.sin(t * Math.PI * 6.1 + 1.3) * height * 0.11 +
       Math.sin(t * Math.PI * 13 + 0.4) * height * 0.05
-    const clamped = Math.min(Math.max(y, height * 0.06), height * 0.94)
-    parts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${clamped.toFixed(1)}`)
+    // The amplitudes sum to 0.4 of the height around its middle, so this always stays inside it.
+    parts.push(`${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`)
   }
   return parts.join(' ')
 }
 
-// Splits on the last space so "1000 kcal" stacks as value over unit; a unit-less "75g" stays whole.
-function splitAmount(label: string): [string, string] {
-  const at = label.lastIndexOf(' ')
-  return at < 0 ? [label, ''] : [label.slice(0, at), label.slice(at + 1)]
+// "1000 kcal" stacks as value over unit; a unit-less "75g" has no unit and stays whole. Amount labels
+// are always "<number> <unit>" or "<number><unit>" (see metrics.ts's formatAmount).
+function splitAmount(label: string): string[] {
+  return label.split(' ')
 }
 
 // A point with no `bars` falls back to its single `value` as one full-width bar - this is what
 // keeps the single-series call sites (e.g. Trends' calorie chart) unchanged.
 function barsOf(point: BarChartPoint): BarChartBar[] {
   if (point.bars) return point.bars
+  // Stryker disable next-line StringLiteral: only a React key, and a lone bar has no siblings to tell apart
   if (point.value !== undefined) return [{ key: 'default', value: point.value, colorVar: '' }]
   return []
 }
@@ -123,7 +124,7 @@ export default function BarChart({ points, goal, goalLabel, sparse = false }: Ba
           const barWidth = bars.length > 1 ? GROUP_BAR_WIDTH : BAR_WIDTH
           const slotX = GAP + index * (groupWidth + GAP)
           return (
-            <g key={`${point.label}-${index}`}>
+            <g key={index}>
               {bars.map((bar, barIndex) => {
                 const barHeight = Math.max(bar.value * scale, 1)
                 const x = slotX + barIndex * (barWidth + GROUP_GAP)

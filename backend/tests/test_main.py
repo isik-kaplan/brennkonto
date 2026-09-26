@@ -26,10 +26,27 @@ def test_build_cors_config_allows_configured_origins(monkeypatch) -> None:
 def test_build_route_handlers_without_static_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(main_module, "STATIC_DIR", tmp_path / "does-not-exist")
     handlers = main_module._build_route_handlers()
-    assert len(handlers) == 11
+    assert len(handlers) == 12
 
 
 def test_build_route_handlers_with_static_dir(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setattr(main_module, "STATIC_DIR", tmp_path)
     handlers = main_module._build_route_handlers()
-    assert len(handlers) == 12
+    assert len(handlers) == 13
+
+
+async def test_the_static_dir_serves_the_spa(monkeypatch, tmp_path: Path) -> None:
+    from litestar import Litestar
+    from litestar.testing import AsyncTestClient
+
+    (tmp_path / "index.html").write_text("<html>app shell</html>")
+    (tmp_path / "app.js").write_text("console.log('hi')")
+    monkeypatch.setattr(main_module, "STATIC_DIR", tmp_path)
+    app = Litestar(route_handlers=main_module._build_route_handlers())
+
+    async with AsyncTestClient(app=app) as client:
+        assert (await client.get("/")).text == "<html>app shell</html>"
+        assert (await client.get("/app.js")).text == "console.log('hi')"
+        # html_mode: a directory request gets its index.html; a client-side route gets nothing -
+        # nginx owns that fallback in production.
+        assert (await client.get("/history/2026-08-01")).status_code == 404

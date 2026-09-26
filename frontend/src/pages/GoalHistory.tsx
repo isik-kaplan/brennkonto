@@ -47,11 +47,12 @@ function dateRangeLabel(version: GoalVersion): string {
 }
 
 export default function GoalHistory() {
+  // Stryker disable next-line ArrayDeclaration: only read once loaded - everything that reads it waits on !isLoading
   const [versions, setVersions] = useState<GoalVersion[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const { formState, setFormState } = useFormState(emptyGoalForm())
   const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
   const load = useCallback(async () => {
     setIsLoading(true)
@@ -62,9 +63,13 @@ export default function GoalHistory() {
     }
   }, [])
 
-  useEffect(() => {
-    load()
-  }, [load])
+  useEffect(
+    () => {
+      load()
+    },
+    // Stryker disable next-line ArrayDeclaration: `load` keeps its identity (no dependencies), so both run once
+    [load]
+  )
 
   function handleNumberChange(key: keyof Omit<GoalFormState, 'effective_date'>) {
     // A native number input's .value is always a valid numeric string or "" - never text that
@@ -103,9 +108,9 @@ export default function GoalHistory() {
       // just "what should the goal be starting from this date".
       await upsertGoalVersion(formState)
       await load()
-      setMessage({ kind: 'success', text: 'Goal saved.' })
+      setMessage({ ok: true, text: 'Goal saved.' })
     } catch (error) {
-      setMessage({ kind: 'error', text: error instanceof ApiError ? error.message : 'Could not save.' })
+      setMessage({ ok: false, text: error instanceof ApiError ? error.message : 'Could not save.' })
     } finally {
       setIsSaving(false)
     }
@@ -125,9 +130,7 @@ export default function GoalHistory() {
       <div className="card">
         <h2 className="card__title">All goals</h2>
         {message && (
-          <div className={message.kind === 'success' ? 'form__banner form__banner--success' : 'form__banner'}>
-            {message.text}
-          </div>
+          <div className={message.ok ? 'form__banner form__banner--success' : 'form__banner'}>{message.text}</div>
         )}
         {!isLoading && versions.length > 0 && (
           <ul className="entry-list" style={{ marginBottom: 'var(--space-md)' }}>

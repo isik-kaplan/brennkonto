@@ -59,7 +59,7 @@ def _cache_out(cache: ProductCache) -> FoodSearchResultOut:
 async def _upsert_cache(db_session: AsyncSession, result: FoodSearchResultOut) -> None:
     cache = await db_session.get(ProductCache, result.barcode)
     if cache is None:
-        cache = ProductCache(barcode=result.barcode, name=result.name)
+        cache = ProductCache(barcode=result.barcode)
         db_session.add(cache)
     cache.name = result.name
     cache.brand = result.brand

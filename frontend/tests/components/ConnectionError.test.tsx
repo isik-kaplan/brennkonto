@@ -5,8 +5,9 @@ import { describe, expect, it, vi } from 'vitest'
 import ConnectionError from '../../src/components/ConnectionError'
 
 describe('ConnectionError', () => {
-  it("shows the can't-connect message and brand", () => {
-    render(<ConnectionError onRetry={vi.fn()} />)
+  it("shows the can't-connect message, its icon and brand", () => {
+    const { container } = render(<ConnectionError onRetry={vi.fn()} />)
+    expect(container.querySelector('svg circle')).toBeInTheDocument()
     expect(screen.getByText("Can't connect")).toBeInTheDocument()
     expect(
       screen.getByText("brennkonto couldn't reach the server. Check your connection and try again.")

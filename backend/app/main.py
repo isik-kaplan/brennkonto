@@ -16,6 +16,7 @@ from app.controllers.goals import goals_router
 from app.controllers.history import history_router
 from app.controllers.meal_groups import meal_groups_router
 from app.controllers.meal_names import meal_names_router
+from app.controllers.saved_meals import saved_meals_router
 from app.controllers.stats import stats_router
 from app.db import create_tables, get_db_session
 
@@ -37,15 +38,17 @@ def _build_route_handlers() -> list:
         entries_router,
         meal_groups_router,
         meal_names_router,
+        saved_meals_router,
         goals_router,
         favorites_router,
         stats_router,
         history_router,
     ]
     if STATIC_DIR.is_dir():
-        # Serves the built frontend SPA and falls back to index.html for client-side routes -
-        # only present once the frontend build has been copied in (see the Dockerfile).
-        handlers.append(create_static_files_router(path="/", directories=[STATIC_DIR], html_mode=True, name="spa"))
+        # Serves the built frontend SPA, index.html at / - only present once the frontend build has
+        # been copied in (see the Dockerfile). Deep links to client-side routes 404 here; in
+        # production nginx does that fallback (docker/nginx.conf).
+        handlers.append(create_static_files_router(path="/", directories=[STATIC_DIR], html_mode=True))
     return handlers
 
 

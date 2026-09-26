@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -76,7 +76,13 @@ describe('RangeSummary', () => {
     render(<RangeSummary defaultPreset="week" />)
     await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledTimes(1))
 
+    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Custom' })).not.toHaveClass('is-active')
     await user.click(screen.getByRole('button', { name: 'Custom' }))
+    // The custom range opens on the preset it replaced, not blank.
+    expect(screen.getByLabelText('Start date')).toHaveValue(addDays(today, -6))
+    expect(screen.getByRole('button', { name: 'Custom' })).toHaveClass('is-active')
+    expect(screen.getByRole('button', { name: 'Last week' })).not.toHaveClass('is-active')
     expect(screen.getByLabelText('Start date')).toBeInTheDocument()
     expect(screen.getByLabelText('End date')).toBeInTheDocument()
 
@@ -85,5 +91,22 @@ describe('RangeSummary', () => {
 
     fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-01-15' } })
     await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledWith('2026-01-01', '2026-01-15', 'day'))
+  })
+
+  it('swaps the averages for the loader while a new range loads', async () => {
+    const user = userEvent.setup()
+    let finish!: (stats: RangeStats) => void
+    vi.mocked(endpoints.fetchRangeStats)
+      .mockResolvedValueOnce(makeRangeStats())
+      .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+    render(<RangeSummary defaultPreset="week" />)
+    await screen.findByText('1800')
+
+    await user.click(screen.getByRole('button', { name: 'Last month' }))
+    expect(await screen.findByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('1800')).not.toBeInTheDocument()
+
+    await act(async () => finish(makeRangeStats({ average_calories: 2100 })))
+    expect(screen.getByText('2100')).toBeInTheDocument()
   })
 })

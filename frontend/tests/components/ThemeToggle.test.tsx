@@ -40,4 +40,14 @@ describe('ThemeToggle', () => {
     expect(screen.getByRole('button', { name: 'Dark' })).toHaveClass('is-active')
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
   })
+
+  it('switches to light, and back to auto', async () => {
+    const user = userEvent.setup()
+    renderToggle()
+    await user.click(screen.getByRole('button', { name: 'Light' }))
+    expect(screen.getByRole('button', { name: 'Light' })).toHaveClass('is-active')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+    await user.click(screen.getByRole('button', { name: 'Auto' }))
+    expect(document.documentElement.hasAttribute('data-theme')).toBe(false)
+  })
 })

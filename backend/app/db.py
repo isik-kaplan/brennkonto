@@ -70,9 +70,9 @@ def _add_deleted_at_column_if_missing(connection: Connection) -> None:
 
 
 def _column_type_str(connection: Connection, table_name: str, column_name: str) -> str:
+    # Only ever asked about a column its table always has (users.id, meal_groups.user_id).
     columns = {column["name"]: column for column in inspect(connection).get_columns(table_name)}
-    column = columns.get(column_name)
-    return str(column["type"]).upper() if column else ""
+    return str(columns[column_name]["type"]).upper()
 
 
 def _users_table_needs_uuid_migration(connection: Connection) -> bool:
@@ -91,8 +91,7 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
     )
 
     old_metadata = MetaData()
-    reflect_tables = ["users", "food_entries"] + (["meal_groups"] if migrate_meal_groups else [])
-    old_metadata.reflect(bind=connection, only=reflect_tables)
+    old_metadata.reflect(bind=connection)
 
     old_users = [dict(row._mapping) for row in connection.execute(select(old_metadata.tables["users"]))]
     old_entries = [dict(row._mapping) for row in connection.execute(select(old_metadata.tables["food_entries"]))]
@@ -126,7 +125,7 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
     goal_versions = Base.metadata.tables["goal_versions"]
     for row in old_users:
         new_id = user_id_map[row["id"]]
-        connection.execute(new_users.insert(), {**row, "id": new_id, "updated_at": None})
+        connection.execute(new_users.insert(), {**row, "id": new_id})
         # The new `users` table (built from the current model, above) never has the legacy
         # daily_*_goal columns at all - inserting **row into it silently drops them, so this is
         # the one chance to carry that data forward, into goal_versions, using the just-computed
@@ -138,15 +137,12 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
         connection.execute(
             goal_versions.insert(),
             {
-                "id": uuid7(),
                 "user_id": new_id,
                 "effective_date": row["created_at"].date(),
                 "daily_calorie_goal": row["daily_calorie_goal"],
                 "daily_protein_goal_g": row["daily_protein_goal_g"],
                 "daily_carbs_goal_g": row["daily_carbs_goal_g"],
                 "daily_fat_goal_g": row["daily_fat_goal_g"],
-                "created_at": datetime.now(UTC),
-                "updated_at": None,
             },
         )
     for row in old_groups:
@@ -174,8 +170,7 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
                 # date object for a DATE-affinity column, not a string) - every pre-existing row
                 # is backfilled to 13:00 on its original date, since no real time-of-day was ever
                 # recorded for it. New entries capture the actual logged time going forward.
-                "consumed_at": datetime.combine(row["consumed_at"], time(13, 0), tzinfo=UTC),
-                "updated_at": None,
+                "consumed_at": datetime.combine(row["consumed_at"], time(13), tzinfo=UTC),
                 "meal_group_id": old_meal_group_id,
             },
         )
@@ -194,7 +189,7 @@ def _backfill_goal_versions_from_user_columns(connection: Connection) -> None:
         return
 
     old_metadata = MetaData()
-    old_metadata.reflect(bind=connection, only=["users"])
+    old_metadata.reflect(bind=connection)
     old_users = old_metadata.tables["users"]
     goal_versions = Base.metadata.tables["goal_versions"]
 
@@ -209,15 +204,12 @@ def _backfill_goal_versions_from_user_columns(connection: Connection) -> None:
         connection.execute(
             goal_versions.insert(),
             {
-                "id": uuid7(),
                 "user_id": user_id,
                 "effective_date": row.created_at.date(),
                 "daily_calorie_goal": row.daily_calorie_goal,
                 "daily_protein_goal_g": row.daily_protein_goal_g,
                 "daily_carbs_goal_g": row.daily_carbs_goal_g,
                 "daily_fat_goal_g": row.daily_fat_goal_g,
-                "created_at": datetime.now(UTC),
-                "updated_at": None,
             },
         )
 
@@ -244,7 +236,7 @@ def _backfill_meal_group_id_for_ungrouped_entries(connection: Connection) -> Non
         group_id = uuid7()
         connection.execute(
             meal_groups.insert(),
-            {"id": group_id, "user_id": user_id, "name": None, "created_at": datetime.now(UTC), "updated_at": None},
+            {"id": group_id, "user_id": user_id},
         )
         connection.execute(food_entries.update().where(food_entries.c.id == entry_id).values(meal_group_id=group_id))
 

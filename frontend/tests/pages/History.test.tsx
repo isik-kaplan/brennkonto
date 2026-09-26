@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -114,7 +114,9 @@ describe('History', () => {
 
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
     await user.click(screen.getByRole('button', { name: 'Next day' }))
-    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledWith(today))
+    // Today was already fetched once, on mount - so check the date really moved.
+    expect(dateInput.value).toBe(today)
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenLastCalledWith(today))
   })
 
   it('deletes an entry and reloads the selected day', async () => {
@@ -847,5 +849,160 @@ describe('History', () => {
 
     expect(endpoints.moveEntryToGroup).toHaveBeenCalledWith('1', 'g2')
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+  })
+
+  describe('what the tests above leave unpinned', () => {
+    function entryNamed(name: string, id = '9'): DailyStats['entries'][number] {
+      return {
+        id,
+        name,
+        brand: null,
+        barcode: null,
+        grams: 80,
+        input_unit: 'g',
+        input_amount: 80,
+        unit_to_grams: 1,
+        calories_per_100g: 100,
+        protein_per_100g: 1,
+        carbs_per_100g: 1,
+        fat_per_100g: 1,
+        calories: 80,
+        protein_g: 0.8,
+        carbs_g: 0.8,
+        fat_g: 0.8,
+        consumed_at: `${today}T08:00:00`,
+        created_at: `${today}T08:00:00Z`,
+        updated_at: null,
+        meal_group_id: null,
+        deleted_at: null,
+      }
+    }
+
+    function trendPoint(overrides: Partial<RangeStats['points'][number]> = {}): RangeStats['points'][number] {
+      return {
+        period_label: 'x',
+        period_start: '2026-08-01',
+        period_end: '2026-08-01',
+        calories: 1000,
+        protein_g: 150,
+        carbs_g: 0,
+        fat_g: 7,
+        days_logged: 1,
+        calorie_goal: 2000,
+        protein_goal_g: 150,
+        carbs_goal_g: 200,
+        fat_goal_g: 0,
+        ...overrides,
+      }
+    }
+
+    it("draws each bar as that day's percent of its own goal, a zero goal counting as 1", async () => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(makeRangeStats({ points: [trendPoint()], days_logged: 5 }))
+      renderHistory()
+      await screen.findByText('Last 14 days')
+
+      // Calories 1000/2000 = 50%, protein 150/150 = 100%, carbs 0%, fat 7/max(0, 1) = 700%.
+      const heights = [...document.querySelectorAll('.chart__bar')].map((bar) => Number(bar.getAttribute('height')))
+      expect(heights[1] / heights[0]).toBeCloseTo(2)
+      expect(heights[3] / heights[1]).toBeCloseTo(7)
+    })
+
+    it('labels each day on the axis by its short date', async () => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+        makeRangeStats({ points: [trendPoint(), trendPoint({ period_start: '2026-08-12' })], days_logged: 5 })
+      )
+      renderHistory()
+      await screen.findByText('Last 14 days')
+      const labels = [...document.querySelectorAll('.chart__axis-label')].map((label) => label.textContent)
+      expect(labels).toEqual(['Aug 1', 'Aug 12'])
+    })
+
+    it.each([
+      [2, 14, true],
+      [3, 14, false],
+      [1, 1, false],
+      [0, 1, true],
+    ])('with %i of %i days logged, marks the chart sparse: %s', async (logged, inRange, sparse) => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+        makeRangeStats({ points: [trendPoint()], days_logged: logged, days_in_range: inRange })
+      )
+      renderHistory()
+      await screen.findByText('Last 14 days')
+      expect(document.querySelector('.chart__placeholder') !== null).toBe(sparse)
+    })
+
+    it('swaps the day for the loader while another day loads', async () => {
+      let finish!: (stats: DailyStats) => void
+      vi.mocked(endpoints.fetchDailyStats)
+        .mockResolvedValueOnce(makeStats(today, [entryNamed('Oatmeal')]))
+        .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+      renderHistory()
+      await screen.findByText('Oatmeal')
+
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: yesterday } })
+      expect(await screen.findByText('Loading…')).toBeInTheDocument()
+      expect(screen.queryByText('Oatmeal')).not.toBeInTheDocument()
+      await act(async () => finish(makeStats(yesterday, [])))
+      expect(screen.getByText('Nothing was logged on this day.')).toBeInTheDocument()
+    })
+
+    it('offers the log-food link only on an empty today', async () => {
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryNamed('Oatmeal')]))
+      renderHistory()
+      await screen.findByText('Oatmeal')
+      expect(screen.queryByRole('link', { name: '+ Log food' })).not.toBeInTheDocument()
+    })
+
+    it("leaves the archive alone after a delete while it's hidden, and clears the delete in progress", async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entryNamed('Oatmeal')]))
+      vi.mocked(endpoints.deleteEntry).mockResolvedValue(undefined)
+      renderHistory()
+      await screen.findByText('Oatmeal')
+
+      await user.click(screen.getByRole('button', { name: 'Delete Oatmeal' }))
+      await user.click(screen.getByRole('button', { name: 'Remove' }))
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+      // The reload still has it (say, a slow delete) - its row must be usable again.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Delete Oatmeal' })).toHaveTextContent('Remove'))
+      expect(screen.getByRole('button', { name: 'Delete Oatmeal' })).toBeEnabled()
+      expect(endpoints.fetchArchivedEntries).not.toHaveBeenCalled()
+    })
+
+    it('shows the empty archive, not stale rows, while the archive loads - and reloads it for a new date', async () => {
+      const user = userEvent.setup()
+      let finish!: (entries: FoodEntry[]) => void
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      vi.mocked(endpoints.fetchArchivedEntries)
+        .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+        .mockResolvedValue([])
+      renderHistory()
+      await screen.findByText('Nothing logged yet today.')
+
+      await user.click(screen.getByRole('button', { name: 'Show removed' }))
+      expect(screen.getByText('Nothing removed on this day.')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Restore' })).not.toBeInTheDocument()
+      await act(async () => finish([entryNamed('Chips', '3') as FoodEntry]))
+      expect(screen.getByText('Chips')).toBeInTheDocument()
+
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(yesterday, []))
+      fireEvent.change(screen.getByLabelText('Date'), { target: { value: yesterday } })
+      await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenLastCalledWith(yesterday))
+    })
+
+    it('names the entry in the permanent-delete confirmation', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, []))
+      vi.mocked(endpoints.fetchArchivedEntries).mockResolvedValue([entryNamed('Chips', '3') as FoodEntry])
+      renderHistory()
+      await user.click(await screen.findByRole('button', { name: 'Show removed' }))
+      await user.click(await screen.findByRole('button', { name: 'Delete permanently' }))
+      expect(screen.getByRole('dialog')).toHaveTextContent(
+        '"Chips" will be permanently deleted. This cannot be undone.'
+      )
+    })
   })
 })

@@ -1,9 +1,9 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 
-import App from '../src/App'
+import App, { RequireAuth, RequireGuest } from '../src/App'
 import type { User } from '../src/api/types'
 import { useAuth } from '../src/hooks/useAuth'
 
@@ -15,6 +15,7 @@ vi.mock('../src/pages/LogFood', () => ({ default: () => <div>Log food page</div>
 vi.mock('../src/pages/History', () => ({ default: () => <div>History page</div> }))
 vi.mock('../src/pages/Trends', () => ({ default: () => <div>Trends page</div> }))
 vi.mock('../src/pages/Settings', () => ({ default: () => <div>Settings page</div> }))
+vi.mock('../src/pages/Meals', () => ({ default: () => <div>Meals page</div> }))
 
 const user: User = {
   id: '1',
@@ -53,6 +54,27 @@ describe('App routing', () => {
     expect(screen.getByText('Loading…')).toBeInTheDocument()
   })
 
+  it('shows a loader, not the page, on a protected route while auth reloads with a user already set', () => {
+    mockAuth({ isLoading: true, user })
+    renderAt('/trends')
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('Trends page')).not.toBeInTheDocument()
+  })
+
+  it('shows "Can\'t connect", not the page, on a protected route when offline with a user set', () => {
+    mockAuth({ isOffline: true, user })
+    renderAt('/trends')
+    expect(screen.getByText("Can't connect")).toBeInTheDocument()
+    expect(screen.queryByText('Trends page')).not.toBeInTheDocument()
+  })
+
+  it('shows a loader, not the page, on a guest route while auth reloads with a user set', () => {
+    mockAuth({ isLoading: true, user })
+    renderAt('/login')
+    expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('Dashboard page')).not.toBeInTheDocument()
+  })
+
   it('shows a loader on a guest route while auth is loading', () => {
     mockAuth({ isLoading: true })
     renderAt('/login')
@@ -83,6 +105,18 @@ describe('App routing', () => {
     expect(screen.getByText('Dashboard page')).toBeInTheDocument()
   })
 
+  it('serves Meals at /meals', () => {
+    mockAuth({ user })
+    renderAt('/meals')
+    expect(screen.getByText('Meals page')).toBeInTheDocument()
+  })
+
+  it('redirects the old /settings/meals path to /meals', () => {
+    mockAuth({ user })
+    renderAt('/settings/meals')
+    expect(screen.getByText('Meals page')).toBeInTheDocument()
+  })
+
   it('redirects an unknown path to /', () => {
     mockAuth({ user })
     renderAt('/does-not-exist')
@@ -110,5 +144,53 @@ describe('App routing', () => {
 
     await userEventInstance.click(screen.getByRole('button', { name: 'Retry' }))
     expect(retryConnection).toHaveBeenCalled()
+  })
+})
+
+// Each guard on its own, redirecting to a plain page - through App, a guard that always redirected
+// would bounce between the two forever instead of failing.
+describe('route guards in isolation', () => {
+  function renderGuarded(guarded: 'auth' | 'guest') {
+    const Guard = guarded === 'auth' ? RequireAuth : RequireGuest
+    return render(
+      <MemoryRouter initialEntries={['/guarded']}>
+        <Routes>
+          <Route
+            path="/guarded"
+            element={
+              <Guard>
+                <div>Guarded page</div>
+              </Guard>
+            }
+          />
+          <Route path="/login" element={<div>Login redirect</div>} />
+          <Route path="/" element={<div>Home redirect</div>} />
+        </Routes>
+      </MemoryRouter>
+    )
+  }
+
+  it('RequireAuth lets a signed-in user through', () => {
+    mockAuth({ user })
+    renderGuarded('auth')
+    expect(screen.getByText('Guarded page')).toBeInTheDocument()
+  })
+
+  it('RequireAuth sends everyone else to /login', () => {
+    mockAuth({ user: null })
+    renderGuarded('auth')
+    expect(screen.getByText('Login redirect')).toBeInTheDocument()
+  })
+
+  it('RequireGuest lets a signed-out visitor through', () => {
+    mockAuth({ user: null })
+    renderGuarded('guest')
+    expect(screen.getByText('Guarded page')).toBeInTheDocument()
+  })
+
+  it('RequireGuest sends a signed-in user home', () => {
+    mockAuth({ user })
+    renderGuarded('guest')
+    expect(screen.getByText('Home redirect')).toBeInTheDocument()
   })
 })

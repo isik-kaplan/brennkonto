@@ -1,7 +1,7 @@
 import uuid as uuid_module
 from datetime import UTC, date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint, Uuid
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, String, UniqueConstraint, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from uuid6 import uuid7
 
@@ -109,6 +109,24 @@ class MealGroup(Base):
     id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
     user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+
+class SavedMeal(Base):
+    """A meal defined up front on the Meals page rather than grown out of logging - a reusable
+    template, not a record of anything eaten. Its items are snapshotted the same way a FoodEntry
+    snapshots its macros, so nothing about them changes if the underlying product does. Stored as
+    a JSON list rather than a child table: items are only ever read and written as a whole, never
+    queried individually. Logging one creates ordinary entries + a MealGroup under the same name,
+    so it then shows up in history exactly like a meal that was logged ad hoc."""
+
+    __tablename__ = "saved_meals"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
+    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    items: Mapped[list[dict]] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 

@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, NetworkError } from '../../src/api/client'
@@ -145,5 +146,30 @@ describe('useAuth', () => {
       result.current.setUser(updated)
     })
     expect(result.current.user).toEqual(updated)
+  })
+
+  it('starts out loading and online, before the first check has even started', () => {
+    // A server render runs no effects - it's the first frame, which is what a route guard sees
+    // before deciding whether to redirect.
+    function Probe() {
+      const { isLoading, isOffline } = useAuth()
+      return <span>{`${isLoading}/${isOffline}`}</span>
+    }
+    expect(
+      renderToString(
+        <AuthProvider>
+          <Probe />
+        </AuthProvider>
+      )
+    ).toBe('<span>true/false</span>')
+  })
+
+  it('logs an API error that is not a 401', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = new ApiError('Server error', 500)
+    vi.mocked(endpoints.fetchCurrentUser).mockRejectedValue(error)
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.isLoading).toBe(false))
+    expect(spy).toHaveBeenCalledWith(error)
   })
 })

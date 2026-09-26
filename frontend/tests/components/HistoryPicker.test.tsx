@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -134,6 +134,21 @@ describe('HistoryPicker', () => {
     expect(endpoints.fetchHistoryGroups).toHaveBeenCalledWith('')
     expect(await screen.findByText('Nutella')).toBeInTheDocument()
     expect(screen.getByText('Breakfast')).toBeInTheDocument()
+  })
+
+  it('labels a saved meal and only shows a logged count once it has been logged', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([
+      { ...breakfast, name: 'Unlogged', saved_meal_id: 'meal-1', times_logged: 0, last_logged_at: null },
+      { ...breakfast, name: 'Logged', saved_meal_id: 'meal-2', times_logged: 2 },
+    ])
+    renderPicker()
+    await user.click(screen.getByRole('button', { name: 'Browse past foods' }))
+
+    const metaOf = (name: string) => screen.getByText(name).closest('li')!.querySelector('.entry-row__meta')
+    await screen.findByText('Unlogged')
+    expect(metaOf('Unlogged')).toHaveTextContent(/kcal · saved$/)
+    expect(metaOf('Logged')).toHaveTextContent(/kcal · saved · logged 2×$/)
   })
 
   it('shows an empty state when history is empty', async () => {
@@ -568,5 +583,318 @@ describe('HistoryPicker', () => {
     await user.type(screen.getByPlaceholderText(/Search everything/), 'xyz')
 
     expect(await screen.findByText('Nothing in your history matches.')).toBeInTheDocument()
+  })
+
+  describe('states the tests above leave unpinned', () => {
+    function deferred<T>() {
+      let resolve!: (value: T) => void
+      let reject!: (reason?: unknown) => void
+      const promise = new Promise<T>((res, rej) => {
+        resolve = res
+        reject = rej
+      })
+      return { promise, resolve, reject }
+    }
+
+    // Logged in grams but carrying a count conversion - the gram amount must be used as-is, never
+    // scaled by unit_to_grams.
+    const eggsInGrams: HistoryFood = {
+      ...bananaFood,
+      name: 'Eggs',
+      barcode: '6000',
+      suggested_unit: 'g',
+      unit_to_grams: 50,
+      last_input_amount: 120,
+    }
+
+    async function open(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole('button', { name: 'Browse past foods' }))
+    }
+
+    it('fetches nothing while closed, even after its timers could have run', async () => {
+      renderPicker()
+      await act(() => new Promise((resolve) => setTimeout(resolve, 20)))
+      expect(endpoints.fetchHistoryFoods).not.toHaveBeenCalled()
+      expect(endpoints.fetchHistoryGroups).not.toHaveBeenCalled()
+    })
+
+    it('shows only a loader while history loads', async () => {
+      const user = userEvent.setup()
+      const foods = deferred<HistoryFood[]>()
+      vi.mocked(endpoints.fetchHistoryFoods).mockReturnValue(foods.promise)
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      const { container } = renderPicker()
+      await open(user)
+
+      expect(await screen.findByText('Loading…')).toBeInTheDocument()
+      expect(screen.queryByText(/Nothing logged yet/)).not.toBeInTheDocument()
+      expect(screen.queryByText('Past foods')).not.toBeInTheDocument()
+      expect(screen.queryByText('Past meals')).not.toBeInTheDocument()
+      expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
+
+      await act(async () => foods.resolve([nutella]))
+      expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+      expect(screen.getByText('Past foods')).toBeInTheDocument()
+    })
+
+    it('shows the empty state only when there are neither foods nor meals', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      const { unmount } = renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      expect(screen.queryByText(/Nothing logged yet/)).not.toBeInTheDocument()
+      expect(screen.queryByText('Past foods')).not.toBeInTheDocument()
+      unmount()
+
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([])
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([nutella])
+      renderPicker()
+      await open(user)
+      await screen.findByText('Nutella')
+      expect(screen.queryByText(/Nothing logged yet/)).not.toBeInTheDocument()
+      expect(screen.queryByText('Past meals')).not.toBeInTheDocument()
+    })
+
+    it('trims the query and only fetches once typing settles', async () => {
+      const user = userEvent.setup()
+      renderPicker()
+      await open(user)
+      await waitFor(() => expect(endpoints.fetchHistoryFoods).toHaveBeenCalledWith(''))
+      vi.mocked(endpoints.fetchHistoryFoods).mockClear()
+      vi.mocked(endpoints.fetchHistoryGroups).mockClear()
+
+      await user.type(screen.getByPlaceholderText(/Search everything/), ' nut ')
+      await waitFor(() => expect(endpoints.fetchHistoryFoods).toHaveBeenCalled(), { timeout: 1000 })
+      expect(vi.mocked(endpoints.fetchHistoryFoods).mock.calls).toEqual([['nut']])
+      expect(vi.mocked(endpoints.fetchHistoryGroups).mock.calls).toEqual([['nut']])
+    })
+
+    it('describes each past food, brand or not', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([nutella, bananaFood])
+      const { container } = renderPicker()
+      await open(user)
+      await screen.findByText('Nutella')
+      const metas = [...container.querySelectorAll('.entry-row__meta')].map((meta) => meta.textContent)
+      expect(metas).toEqual(['Ferrero · 539 kcal/100g · last had 45g', 'Unbranded · 89 kcal/100g · last had 2count'])
+    })
+
+    it('describes each past meal with an exact, pluralized summary', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast, soloSnack])
+      const { container } = renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      const metas = [...container.querySelectorAll('.entry-row__meta')].map((meta) => meta.textContent)
+      expect(metas).toEqual(['2 items · 500 kcal · logged 2×', '1 item · 187 kcal · logged 1×'])
+    })
+
+    it('quick-adds a gram-logged food by its gram amount, whatever its unit conversion', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([eggsInGrams])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      renderPicker()
+      await open(user)
+      await screen.findByText('Eggs')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+      await waitFor(() =>
+        expect(endpoints.createEntry).toHaveBeenCalledWith(expect.objectContaining({ grams: 120, input_amount: 120 }))
+      )
+    })
+
+    it('custom-adds a gram-logged food by its gram amount too', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([eggsInGrams])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      renderPicker()
+      await open(user)
+      await screen.findByText('Eggs')
+      await user.click(screen.getByRole('button', { name: 'Custom amount' }))
+      fireEvent.change(screen.getByLabelText('Amount (grams)'), { target: { value: '30' } })
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+      await waitFor(() =>
+        expect(endpoints.createEntry).toHaveBeenCalledWith(expect.objectContaining({ grams: 30, input_amount: 30 }))
+      )
+    })
+
+    it('marks a food as busy while it is quick-added', async () => {
+      const user = userEvent.setup()
+      const add = deferred<never>()
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([nutella, bananaFood])
+      vi.mocked(endpoints.createEntry).mockReturnValue(add.promise)
+      renderPicker()
+      await open(user)
+      await screen.findByText('Nutella')
+      const [nutellaAdd, bananaAdd] = screen.getAllByRole('button', { name: 'Add' })
+      await user.click(nutellaAdd)
+
+      expect(nutellaAdd).toBeDisabled()
+      expect(nutellaAdd.querySelector('.btn__spinner')).toBeInTheDocument()
+      expect(bananaAdd).toBeEnabled()
+      await act(async () => add.reject(new Error('x')))
+      expect(nutellaAdd).toBeEnabled()
+    })
+
+    it.each([
+      ['0007', '7'],
+      ['100', '100'],
+      ['0.5', '0.5'],
+    ])('shows a custom amount entered as %s as %s', async (entered, shown) => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([nutella])
+      renderPicker()
+      await open(user)
+      await screen.findByText('Nutella')
+      await user.click(screen.getByRole('button', { name: 'Custom amount' }))
+      const amount = screen.getByLabelText('Amount (grams)')
+      fireEvent.change(amount, { target: { value: entered } })
+      expect(amount).toHaveDisplayValue(shown)
+    })
+
+    it('disables a custom add while it runs, shows no stray banner, and allows a retry', async () => {
+      const user = userEvent.setup()
+      const add = deferred<never>()
+      vi.mocked(endpoints.fetchHistoryFoods).mockResolvedValue([nutella])
+      vi.mocked(endpoints.createEntry).mockReturnValue(add.promise)
+      const { container } = renderPicker()
+      await open(user)
+      await screen.findByText('Nutella')
+      await user.click(screen.getByRole('button', { name: 'Custom amount' }))
+      expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      const addButton = screen.getByRole('button', { name: 'Add' })
+      expect(addButton).toBeDisabled()
+      expect(addButton.querySelector('.btn__spinner')).toBeInTheDocument()
+      await act(async () => add.reject(new ApiError('Nope', 500)))
+      expect(addButton).toBeEnabled()
+      expect(addButton.querySelector('.btn__spinner')).not.toBeInTheDocument()
+    })
+
+    it('sends each item of a past meal with all of its details', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({ id: 'e' } as never)
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({} as never)
+      renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      await user.click(screen.getByRole('button', { name: 'Add meal' }))
+
+      await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalledTimes(2))
+      const { grams, input_amount, ...details } = breakfast.items[0]
+      expect(endpoints.createEntry).toHaveBeenNthCalledWith(1, {
+        ...details,
+        grams,
+        input_amount,
+        consumed_at: '2026-08-06T12:00:00',
+      })
+    })
+
+    it('marks a past meal as busy while it is added', async () => {
+      const user = userEvent.setup()
+      const add = deferred<never>()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast, soloSnack])
+      vi.mocked(endpoints.createEntry).mockReturnValue(add.promise)
+      renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      const [breakfastAdd, snackAdd] = screen.getAllByRole('button', { name: 'Add meal' })
+      await user.click(breakfastAdd)
+
+      expect(breakfastAdd).toBeDisabled()
+      expect(breakfastAdd.querySelector('.btn__spinner')).toBeInTheDocument()
+      expect(snackAdd).toBeEnabled()
+      await act(async () => add.reject(new Error('x')))
+      expect(breakfastAdd).toBeEnabled()
+    })
+
+    it('labels each ingredient field with its brand when it has one, and focuses the first', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      await user.click(screen.getByRole('button', { name: 'Customize' }))
+
+      const labels = [...document.querySelectorAll('label[for^="history-group-amount-"]')].map((l) => l.textContent)
+      expect(labels).toEqual(['Nutella (Ferrero) · Amount (grams)', 'Banana · Amount (grams)'])
+      expect(screen.getByLabelText(/Nutella/)).toHaveFocus()
+    })
+
+    it.each([
+      ['0007', '7'],
+      ['100', '100'],
+      ['0.5', '0.5'],
+    ])('shows an ingredient amount entered as %s as %s', async (entered, shown) => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      await user.click(screen.getByRole('button', { name: 'Customize' }))
+      const banana = screen.getByLabelText(/Banana/)
+      fireEvent.change(banana, { target: { value: entered } })
+      expect(banana).toHaveDisplayValue(shown)
+      expect(screen.getByLabelText(/Nutella/)).toHaveDisplayValue('30')
+    })
+
+    it('only enables adding a customized meal when every ingredient has an amount above zero', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      await user.click(screen.getByRole('button', { name: 'Customize' }))
+      const add = screen.getByRole('button', { name: 'Add meal' })
+      expect(add).toBeEnabled()
+
+      fireEvent.change(screen.getByLabelText(/Banana/), { target: { value: '0' } })
+      expect(add).toBeDisabled()
+      fireEvent.change(screen.getByLabelText(/Banana/), { target: { value: '' } })
+      expect(add).toBeDisabled()
+    })
+
+    it('customizes a gram-logged ingredient by its gram amount, whatever its unit conversion', async () => {
+      const user = userEvent.setup()
+      const eggsMeal: HistoryGroup = {
+        ...soloSnack,
+        name: 'Eggs',
+        items: [{ ...soloSnack.items[0], input_unit: 'g', unit_to_grams: 50 }],
+      }
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([eggsMeal])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({ id: 'e' } as never)
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({} as never)
+      renderPicker()
+      await open(user)
+      await screen.findByText('Eggs')
+      await user.click(screen.getByRole('button', { name: 'Customize' }))
+      fireEvent.change(screen.getByLabelText(/Banana/), { target: { value: '30' } })
+      await user.click(screen.getByRole('button', { name: 'Add meal' }))
+      await waitFor(() =>
+        expect(endpoints.createEntry).toHaveBeenCalledWith(expect.objectContaining({ grams: 30, input_amount: 30 }))
+      )
+    })
+
+    it('disables a customized meal add while it runs, with no stray banner, and allows a retry', async () => {
+      const user = userEvent.setup()
+      const add = deferred<never>()
+      vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([breakfast])
+      vi.mocked(endpoints.createEntry).mockReturnValue(add.promise)
+      const { container } = renderPicker()
+      await open(user)
+      await screen.findByText('Breakfast')
+      await user.click(screen.getByRole('button', { name: 'Customize' }))
+      expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Add meal' }))
+
+      const addButton = screen.getByRole('button', { name: 'Add meal' })
+      expect(addButton).toBeDisabled()
+      expect(addButton.querySelector('.btn__spinner')).toBeInTheDocument()
+      await act(async () => add.reject(new ApiError('Nope', 500)))
+      expect(addButton).toBeEnabled()
+      expect(addButton.querySelector('.btn__spinner')).not.toBeInTheDocument()
+    })
   })
 })

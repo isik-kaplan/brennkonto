@@ -318,12 +318,12 @@ async def test_create_tables_backfills_a_group_of_one_for_every_ungrouped_entry(
         meal_groups = Base.metadata.tables["meal_groups"]
         rows = (await connection.execute(select(food_entries.c.id, food_entries.c.meal_group_id))).all()
         group_ids_by_entry = {row.id: row.meal_group_id for row in rows}
-        all_groups = (await connection.execute(select(meal_groups.c.id))).all()
+        all_groups = (await connection.execute(select(meal_groups.c.id, meal_groups.c.name))).all()
 
-    assert group_ids_by_entry[live_entry_id] is not None
-    assert group_ids_by_entry[deleted_entry_id] is not None
     assert group_ids_by_entry[live_entry_id] != group_ids_by_entry[deleted_entry_id]
-    assert len(all_groups) == 2
+    # Each entry points at a group that really exists - an unnamed group of one.
+    assert {row.id for row in all_groups} == set(group_ids_by_entry.values())
+    assert [row.name for row in all_groups] == [None, None]
 
 
 async def test_create_tables_adds_unit_columns_to_a_pre_existing_product_cache_table() -> None:
@@ -656,3 +656,54 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
     assert not {"daily_calorie_goal", "daily_protein_goal_g", "daily_carbs_goal_g", "daily_fat_goal_g"} & (
         remaining_user_columns
     )
+
+
+def test_make_engine_creates_missing_parent_directories_and_points_at_the_file(monkeypatch, tmp_path) -> None:
+    # Only ever runs at import in the app itself - called here so its behavior is actually observed.
+    from app.config import settings
+    from app.db import _make_engine
+
+    path = tmp_path / "nested" / "deeper" / "app.sqlite3"
+    monkeypatch.setattr(settings, "DATABASE_PATH", str(path))
+    engine = _make_engine()
+    assert path.parent.is_dir()
+    assert engine.url.drivername == "sqlite+aiosqlite"
+    assert engine.url.database == str(path)
+    # Again, with the directories already there.
+    assert _make_engine().url.database == str(path)
+
+
+async def test_migrate_leaves_an_already_uuid_keyed_meal_groups_table_alone() -> None:
+    # users still int-keyed, but meal_groups already on the new (UUID) schema - it must be kept as
+    # it is rather than rebuilt from a user-id mapping it isn't keyed by.
+    owner = "2" * 32
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        users_ddl, _, entries_ddl = _old_schema_ddl()
+        await connection.execute(text(users_ddl))
+        await connection.execute(text(entries_ddl))
+        await connection.execute(
+            text(
+                "CREATE TABLE meal_groups (id CHAR(32) PRIMARY KEY, user_id CHAR(32), name VARCHAR(120), "
+                "created_at DATETIME, updated_at DATETIME)"
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO users (id, email, username, password_hash, display_name, daily_calorie_goal, "
+                "daily_protein_goal_g, daily_carbs_goal_g, daily_fat_goal_g, created_at) VALUES "
+                "(1, 'a@b.com', 'ada', 'hash', 'Ada', 2000, 150, 200, 65, '2026-07-01 09:00:00')"
+            )
+        )
+        await connection.execute(
+            text(
+                "INSERT INTO meal_groups (id, user_id, name, created_at) "
+                f"VALUES ('{'1' * 32}', '{owner}', 'Breakfast', '2026-07-01 09:00:00')"
+            )
+        )
+
+    await create_tables()
+
+    async with engine.begin() as connection:
+        rows = (await connection.execute(text("SELECT user_id, name FROM meal_groups"))).all()
+    assert [(row.user_id, row.name) for row in rows] == [(owner, "Breakfast")]

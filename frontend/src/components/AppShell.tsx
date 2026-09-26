@@ -5,21 +5,17 @@ import { NavLink, Outlet } from 'react-router'
 import { useAuth } from '../hooks/useAuth'
 import { useOnlineStatus } from '../hooks/useOnlineStatus'
 
+// No `end` needed anywhere: react-router never treats "/" as a prefix of other paths, and every
+// other tab should stay active on the pages nested under it.
 const NAV_ITEMS = [
-  { to: '/', label: 'Today', end: true },
-  { to: '/log', label: 'Log food', end: false },
-  { to: '/history', label: 'History', end: false },
-  { to: '/trends', label: 'Trends', end: false },
-  { to: '/settings', label: 'Settings', end: false },
+  // Stryker disable next-line StringLiteral: AppShell is the root layout route, where an empty path resolves to "/" too
+  { to: '/', label: 'Today' },
+  { to: '/log', label: 'Log food' },
+  { to: '/meals', label: 'Meals' },
+  { to: '/history', label: 'History' },
+  { to: '/trends', label: 'Trends' },
+  { to: '/settings', label: 'Settings' },
 ]
-
-function floatingLinkClass({ isActive }: { isActive: boolean }) {
-  return isActive ? 'app-floating-nav__link is-active' : 'app-floating-nav__link'
-}
-
-function tabLinkClass({ isActive }: { isActive: boolean }) {
-  return isActive ? 'app-tabbar__link is-active' : 'app-tabbar__link'
-}
 
 function Brand({ className }: { className: string }): ReactNode {
   return (
@@ -50,13 +46,20 @@ export default function AppShell() {
         <Brand className="app-floating-nav__brand" />
         <div className="app-floating-nav__links">
           {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} end={item.end} className={floatingLinkClass}>
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => (isActive ? 'app-floating-nav__link is-active' : 'app-floating-nav__link')}
+            >
               {item.label}
             </NavLink>
           ))}
         </div>
         <div className="app-floating-nav__user">
-          <span className="app-floating-nav__user-name">{user?.display_name}</span>
+          <span className="app-floating-nav__user-name">
+            {/* Only ever rendered inside RequireAuth, so there's always a user. */}
+            {user!.display_name}
+          </span>
           <button
             type="button"
             className="btn btn--ghost btn--small btn--icon"
@@ -95,7 +98,11 @@ export default function AppShell() {
 
       <nav className="app-tabbar" aria-label="Primary">
         {NAV_ITEMS.map((item) => (
-          <NavLink key={item.to} to={item.to} end={item.end} className={tabLinkClass}>
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) => (isActive ? 'app-tabbar__link is-active' : 'app-tabbar__link')}
+          >
             {item.label}
           </NavLink>
         ))}

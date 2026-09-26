@@ -23,31 +23,28 @@ export const DEFAULT_HISTORY_PREFERENCES: HistoryPreferences = {
 }
 
 function isMetricKey(value: unknown): value is MetricKey {
-  return typeof value === 'string' && METRICS.some((metric) => metric.key === value)
+  return METRICS.some((metric) => metric.key === value)
 }
 
 // Reads localStorage defensively - a hand-edited or stale-shaped value (an older app version, a
 // tampered devtools edit) should fall back to the built-in defaults instead of crashing the page.
 function readStoredPreferences(): HistoryPreferences {
-  const raw = localStorage.getItem(STORAGE_KEY)
-  if (!raw) return DEFAULT_HISTORY_PREFERENCES
-
-  let parsed: unknown
+  // null (nothing stored), a primitive, an array or an unparseable string all just leave every
+  // field below to fall back to its default.
+  let candidate: Partial<Record<keyof HistoryPreferences, unknown>> | null | undefined
   try {
-    parsed = JSON.parse(raw)
+    candidate = JSON.parse(localStorage.getItem(STORAGE_KEY) as string)
   } catch {
-    return DEFAULT_HISTORY_PREFERENCES
+    // Unreadable - handled the same as nothing stored.
   }
-  if (typeof parsed !== 'object' || parsed === null) return DEFAULT_HISTORY_PREFERENCES
-  const candidate = parsed as Partial<Record<keyof HistoryPreferences, unknown>>
 
   return {
-    activeMetrics: Array.isArray(candidate.activeMetrics)
+    activeMetrics: Array.isArray(candidate?.activeMetrics)
       ? candidate.activeMetrics.filter(isMetricKey)
       : DEFAULT_HISTORY_PREFERENCES.activeMetrics,
     showAmounts:
-      typeof candidate.showAmounts === 'boolean' ? candidate.showAmounts : DEFAULT_HISTORY_PREFERENCES.showAmounts,
-    aggregateRangePreset: isRangePresetKey(candidate.aggregateRangePreset)
+      typeof candidate?.showAmounts === 'boolean' ? candidate.showAmounts : DEFAULT_HISTORY_PREFERENCES.showAmounts,
+    aggregateRangePreset: isRangePresetKey(candidate?.aggregateRangePreset)
       ? candidate.aggregateRangePreset
       : DEFAULT_HISTORY_PREFERENCES.aggregateRangePreset,
   }

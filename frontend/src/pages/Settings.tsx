@@ -28,7 +28,6 @@ export default function Settings() {
       <div className="grid grid--2">
         <ProfileCard displayName={user.display_name} onSaved={setUser} />
         <GoalsCard />
-        <MealsCard />
         <HistoryDefaultsCard />
         <PasswordCard />
         <div className="card">
@@ -50,7 +49,7 @@ export default function Settings() {
 function ProfileCard({ displayName, onSaved }: { displayName: string; onSaved: (user: User) => void }) {
   const { formState, handleFormStateEvent } = useFormState({ display_name: displayName })
   const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -59,9 +58,9 @@ function ProfileCard({ displayName, onSaved }: { displayName: string; onSaved: (
     try {
       const user = await updateProfile(formState.display_name)
       onSaved(user)
-      setMessage({ kind: 'success', text: 'Saved.' })
+      setMessage({ ok: true, text: 'Saved.' })
     } catch (error) {
-      setMessage({ kind: 'error', text: error instanceof ApiError ? error.message : 'Could not save.' })
+      setMessage({ ok: false, text: error instanceof ApiError ? error.message : 'Could not save.' })
     } finally {
       setIsSaving(false)
     }
@@ -71,9 +70,7 @@ function ProfileCard({ displayName, onSaved }: { displayName: string; onSaved: (
     <div className="card">
       <h2 className="card__title">Profile</h2>
       {message && (
-        <div className={message.kind === 'success' ? 'form__banner form__banner--success' : 'form__banner'}>
-          {message.text}
-        </div>
+        <div className={message.ok ? 'form__banner form__banner--success' : 'form__banner'}>{message.text}</div>
       )}
       <form className="form" onSubmit={handleSubmit}>
         <div className="field">
@@ -132,22 +129,6 @@ function GoalsCard() {
       )}
       <Link to="/settings/goals" className="btn btn--ghost">
         Manage goals →
-      </Link>
-    </div>
-  )
-}
-
-// Same "summary card, management page one click away" shape as GoalsCard above - renaming or
-// un-grouping a meal is rare enough that it doesn't need to live inline in day-to-day Settings.
-function MealsCard() {
-  return (
-    <div className="card">
-      <h2 className="card__title">Meals</h2>
-      <p className="entry-row__meta" style={{ marginBottom: 'var(--space-md)' }}>
-        Rename or ungroup the named combos you've logged before, like "Breakfast".
-      </p>
-      <Link to="/settings/meals" className="btn btn--ghost">
-        Manage meals →
       </Link>
     </div>
   )
@@ -237,7 +218,7 @@ function PasswordCard() {
     new_password: '',
   })
   const [isSaving, setIsSaving] = useState(false)
-  const [message, setMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null)
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null)
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -246,9 +227,9 @@ function PasswordCard() {
     try {
       await changePassword(formState.current_password, formState.new_password)
       resetFormState()
-      setMessage({ kind: 'success', text: 'Password changed.' })
+      setMessage({ ok: true, text: 'Password changed.' })
     } catch (error) {
-      setMessage({ kind: 'error', text: error instanceof ApiError ? error.message : 'Could not change password.' })
+      setMessage({ ok: false, text: error instanceof ApiError ? error.message : 'Could not change password.' })
     } finally {
       setIsSaving(false)
     }
@@ -258,9 +239,7 @@ function PasswordCard() {
     <div className="card">
       <h2 className="card__title">Password</h2>
       {message && (
-        <div className={message.kind === 'success' ? 'form__banner form__banner--success' : 'form__banner'}>
-          {message.text}
-        </div>
+        <div className={message.ok ? 'form__banner form__banner--success' : 'form__banner'}>{message.text}</div>
       )}
       <form className="form" onSubmit={handleSubmit}>
         <div className="field">

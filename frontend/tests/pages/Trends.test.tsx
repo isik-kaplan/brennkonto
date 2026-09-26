@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -89,7 +89,8 @@ describe('Trends', () => {
     render(<Trends />)
 
     await screen.findByText('1800')
-    expect(screen.queryByText(/vs the previous period/)).not.toBeInTheDocument()
+    // Same average as now, so a delta shown by mistake would read "Same as the previous period".
+    expect(document.querySelector('.stat-tile__delta')).not.toBeInTheDocument()
   })
 
   it('marks the chart sparse when few days are logged', async () => {
@@ -198,5 +199,87 @@ describe('Trends', () => {
 
     await waitFor(() => expect(screen.getByText('No entries in this range yet.')).toBeInTheDocument())
     expect(document.querySelector('.chart__bar-goal')).not.toBeInTheDocument()
+  })
+
+  it('marks the chart sparse right up to, not at, three logged days', async () => {
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(makeRangeStats({ days_logged: 3, days_in_range: 7 }))
+    render(<Trends />)
+    await screen.findByText('1800')
+    expect(document.querySelector('.chart__placeholder')).not.toBeInTheDocument()
+  })
+
+  it('labels day and week bars by date, and month bars by month', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({ points: [{ ...makeRangeStats().points[0], period_start: '2026-08-03' }] })
+    )
+    render(<Trends />)
+    const axisLabels = () => [...document.querySelectorAll('.chart__axis-label')].map((label) => label.textContent)
+    await screen.findByText('1800')
+    expect(axisLabels()).toEqual(['Aug 3'])
+
+    await user.click(screen.getByRole('button', { name: 'Week' }))
+    await waitFor(() =>
+      expect(endpoints.fetchRangeStats).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), 'week')
+    )
+    await screen.findByText('1800')
+    expect(axisLabels()).toEqual(['Aug 3'])
+
+    await user.click(screen.getByRole('button', { name: 'Month' }))
+    await waitFor(() => expect(axisLabels()).toEqual(['Aug']))
+  })
+
+  it("draws one bar per period, sized by that period's calories", async () => {
+    const point = makeRangeStats().points[0]
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(
+      makeRangeStats({ points: [point, { ...point, period_start: '2026-08-02', calories: 900 }] })
+    )
+    render(<Trends />)
+    await screen.findByText('1800 kcal')
+    const heights = [...document.querySelectorAll('.chart__bar')].map((bar) => Number(bar.getAttribute('height')))
+    expect(heights).toHaveLength(2)
+    expect(heights[0] / heights[1]).toBeCloseTo(2)
+  })
+
+  it("spells out each period's macros and days logged", async () => {
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(makeRangeStats())
+    const { container } = render(<Trends />)
+    await screen.findByText('1800 kcal')
+    expect(container.querySelector('.entry-row__meta')).toHaveTextContent(/^P140 C190 F60 · 1 day logged$/)
+  })
+
+  it('marks the chosen preset and grouping active, and shows date inputs only for a custom range', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchRangeStats).mockResolvedValue(makeRangeStats())
+    render(<Trends />)
+    await screen.findByText('1800')
+    expect(screen.getByRole('button', { name: '7d' })).toHaveClass('is-active')
+    expect(screen.getByRole('button', { name: '30d' })).not.toHaveClass('is-active')
+    expect(screen.getByRole('button', { name: 'Day' })).toHaveClass('is-active')
+    expect(screen.getByRole('button', { name: 'Week' })).not.toHaveClass('is-active')
+    expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Custom' }))
+    // The custom range opens on the last seven days.
+    await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledWith(addDays(today, -6), today, 'day'))
+    expect(screen.getByLabelText('Start date')).toHaveValue(addDays(today, -6))
+  })
+
+  it('swaps the page for the loader while a new range loads', async () => {
+    const user = userEvent.setup()
+    let finish!: (stats: RangeStats) => void
+    vi.mocked(endpoints.fetchRangeStats)
+      .mockResolvedValueOnce(makeRangeStats())
+      .mockResolvedValueOnce(makeRangeStats())
+      .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+      .mockResolvedValue(makeRangeStats())
+    render(<Trends />)
+    await screen.findByText('1800')
+
+    await user.click(screen.getByRole('button', { name: '30d' }))
+    expect(await screen.findByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('1800')).not.toBeInTheDocument()
+    await act(async () => finish(makeRangeStats({ average_calories: 2100 })))
+    expect(await screen.findByText('2100')).toBeInTheDocument()
   })
 })

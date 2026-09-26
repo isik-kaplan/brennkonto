@@ -54,6 +54,18 @@ describe('api.get', () => {
     expect(error.message).toBe('Request failed (500).')
   })
 
+  it('falls back to a generic message when the detail is not a string', async () => {
+    // Litestar's validation errors carry structured detail; only a plain string is a message.
+    mockFetchOnce({ ok: false, status: 400, jsonBody: { detail: [{ loc: ['name'] }] } })
+    const error = (await api.get('/broken').catch((e: unknown) => e)) as ApiError
+    expect(error.message).toBe('Request failed (400).')
+  })
+
+  it('resolves to null when a successful response is not valid JSON', async () => {
+    mockFetchOnce({ ok: true, status: 200, json: vi.fn().mockRejectedValue(new Error('bad json')) })
+    await expect(api.get('/odd')).resolves.toBeNull()
+  })
+
   it('falls back to a generic message when the body is not valid JSON', async () => {
     mockFetchOnce({ ok: false, status: 502, json: vi.fn().mockRejectedValue(new Error('bad json')) })
     const error = (await api.get('/broken').catch((e: unknown) => e)) as ApiError

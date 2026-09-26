@@ -30,6 +30,7 @@ export function useFoodSearch(): FoodSearchState {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<FoodSearchResult[]>([])
   const [page, setPage] = useState(1)
+  // Stryker disable next-line BooleanLiteral: only read once there are results, and every search sets it first
   const [hasMore, setHasMore] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -92,9 +93,11 @@ export function useFoodSearch(): FoodSearchState {
     // page/viewport, so the observer's root has to be that container - its immediate parent,
     // since the sentinel renders as the list's last child - rather than the default (viewport).
     const observer = new IntersectionObserver(
+      // One observed node, so always exactly one entry.
       (entries) => {
-        if (entries[0]?.isIntersecting) loadMore()
+        if (entries[0].isIntersecting) loadMore()
       },
+      // Stryker disable next-line ObjectLiteral: which element scrolls is layout - jsdom lays nothing out to observe
       { root: node.parentElement }
     )
     observer.observe(node)

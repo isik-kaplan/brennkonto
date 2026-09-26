@@ -247,12 +247,14 @@ describe('AddEntryPanel', () => {
     )
   })
 
-  it('re-syncs its date field when the viewed History date changes', () => {
+  it('re-syncs its date field when the viewed History date changes', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.lookupBarcode).mockResolvedValue(nutella)
     const { rerender } = render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
     rerender(<AddEntryPanel date="2026-08-05" onAdded={vi.fn()} />)
-    // Nothing observable while collapsed - opening after the date prop changes proves the sync;
-    // covered indirectly via the save test's date assertion above for the common path.
-    expect(screen.getByRole('button', { name: '+ Add entry' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    await user.type(screen.getByLabelText('Barcode'), '301{Enter}')
+    expect(await screen.findByLabelText('Date')).toHaveValue('2026-08-05')
   })
 
   it('quick-adds a favorite with a saved default amount without opening the amount form', async () => {
@@ -707,5 +709,272 @@ describe('AddEntryPanel', () => {
     // The date comes from the panel's own `date` prop (whichever day History is viewing), not
     // "today" - unlike Log Food's history picker, which always logs against right now.
     expect(payload.consumed_at).toMatch(/^2026-08-01T\d{2}:\d{2}:00$/)
+  })
+
+  describe('what the tests above leave unpinned', () => {
+    async function open(user: ReturnType<typeof userEvent.setup>) {
+      await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+    }
+
+    async function select(user: ReturnType<typeof userEvent.setup>, product: FoodSearchResult) {
+      vi.mocked(endpoints.lookupBarcode).mockResolvedValue(product)
+      await open(user)
+      await user.type(screen.getByLabelText('Barcode'), 'x{Enter}')
+      await screen.findByLabelText('Date')
+    }
+
+    it('opens without the scanner, stray results, favorites or banners', async () => {
+      const user = userEvent.setup()
+      const favorites = deferred<Favorite[]>()
+      vi.mocked(endpoints.fetchFavorites).mockReturnValue(favorites.promise)
+      const { container } = render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      expect(screen.queryByText('Mock scanner')).not.toBeInTheDocument()
+      expect(screen.queryByText('Favorites')).not.toBeInTheDocument()
+      expect(container.querySelector('.search-results')).not.toBeInTheDocument()
+      expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
+      expect(screen.queryByText('Searching…')).not.toBeInTheDocument()
+      await act(async () => favorites.resolve([]))
+      expect(screen.queryByText('Favorites')).not.toBeInTheDocument()
+    })
+
+    it('trims a typed barcode, ignores a blank one, and disables Look up while it runs', async () => {
+      const user = userEvent.setup()
+      const lookup = deferred<FoodSearchResult>()
+      vi.mocked(endpoints.lookupBarcode).mockReturnValue(lookup.promise)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.type(screen.getByLabelText('Barcode'), '   {Enter}')
+      expect(endpoints.lookupBarcode).not.toHaveBeenCalled()
+
+      await user.type(screen.getByLabelText('Barcode'), ' 301 {Enter}')
+      expect(endpoints.lookupBarcode).toHaveBeenCalledWith('301')
+      const lookUp = screen.getByRole('button', { name: 'Look up' })
+      expect(lookUp).toBeDisabled()
+      expect(lookUp.querySelector('.btn__spinner')).toBeInTheDocument()
+      await act(async () => lookup.resolve(nutella))
+      await user.click(screen.getByRole('button', { name: 'Back' }))
+      expect(screen.getByRole('button', { name: 'Look up' })).toBeEnabled()
+    })
+
+    it('closes the scanner on a detection, and disables Look up while that lookup runs', async () => {
+      const user = userEvent.setup()
+      const lookup = deferred<FoodSearchResult>()
+      vi.mocked(endpoints.lookupBarcode).mockReturnValue(lookup.promise)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(screen.getByRole('button', { name: 'Scan' }))
+      await user.click(await screen.findByRole('button', { name: 'Simulate detection' }))
+      expect(screen.queryByText('Mock scanner')).not.toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Look up' })).toBeDisabled()
+      await act(async () => lookup.resolve(nutella))
+      await user.click(screen.getByRole('button', { name: 'Back' }))
+      expect(screen.getByRole('button', { name: 'Look up' })).toBeEnabled()
+    })
+
+    it('shows Searching… while a search runs, then each result with its brand or Unbranded', async () => {
+      const user = userEvent.setup()
+      const search = deferred<FoodSearchResult[]>()
+      vi.mocked(endpoints.searchFoods).mockReturnValue(search.promise)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.type(screen.getByLabelText('Product name'), 'eg')
+      expect(await screen.findByText('Searching…')).toBeInTheDocument()
+      await waitFor(() => expect(endpoints.searchFoods).toHaveBeenCalled())
+      await act(async () => search.resolve([eggs, nutella]))
+      expect(screen.getByRole('button', { name: /Eggs Unbranded/ })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /Nutella Ferrero/ })).toBeInTheDocument()
+    })
+
+    it('describes the selected product, and previews macros for the portion', async () => {
+      const user = userEvent.setup()
+      const { container } = render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await select(user, { ...nutella, brand: null })
+      expect(container.querySelector('p.page-header__meta')).toHaveTextContent(
+        /^Nutella · Unbranded · 539 kcal \/ 100g$/
+      )
+      fireEvent.change(screen.getByLabelText('Amount (grams)'), { target: { value: '200' } })
+      const values = [...container.querySelectorAll('.stat-tile__value')].map((tile) => tile.textContent)
+      expect(values).toEqual(['1078', '13g', '115g', '62g'])
+      expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /instead/ })).not.toBeInTheDocument()
+    })
+
+    it('saves a count product switched to grams by its gram amount, recording no conversion', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await select(user, eggs)
+      await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+      fireEvent.change(screen.getByLabelText('Amount (grams)'), { target: { value: '60' } })
+      await user.click(screen.getByRole('button', { name: 'Save entry' }))
+      await waitFor(() =>
+        expect(endpoints.createEntry).toHaveBeenCalledWith(
+          expect.objectContaining({ grams: 60, input_unit: 'g', input_amount: 60, unit_to_grams: 1 })
+        )
+      )
+    })
+
+    it('disables saving while it runs, clears the barcode after, and re-enables after a failure', async () => {
+      const user = userEvent.setup()
+      let fail!: (error: Error) => void
+      vi.mocked(endpoints.createEntry)
+        .mockReturnValueOnce(new Promise((_, reject) => (fail = reject)))
+        .mockResolvedValueOnce({} as never)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await select(user, nutella)
+      const save = screen.getByRole('button', { name: 'Save entry' })
+      await user.click(save)
+      expect(save).toBeDisabled()
+      expect(save.querySelector('.btn__spinner')).toBeInTheDocument()
+      await act(async () => fail(new ApiError('Nope', 400)))
+      expect(save).toBeEnabled()
+      expect(save.querySelector('.btn__spinner')).not.toBeInTheDocument()
+
+      await user.click(save)
+      await screen.findByText('Added Nutella.')
+      expect(screen.getByLabelText('Barcode')).toHaveValue('')
+    })
+
+    it('clears the barcode when closed', async () => {
+      const user = userEvent.setup()
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.type(screen.getByLabelText('Barcode'), '123')
+      await user.click(screen.getByRole('button', { name: 'Close' }))
+      await open(user)
+      expect(screen.getByLabelText('Barcode')).toHaveValue('')
+    })
+
+    it("uses a favorite's unit and conversion even without a default amount", async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        makeFavorite({ default_input_unit: 'count', default_input_amount: null, default_unit_to_grams: 50 }),
+      ])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(await screen.findByRole('button', { name: 'Add' }))
+      // No default amount, so it asks - in the favorite's own unit.
+      expect(screen.getByLabelText('How many?')).toHaveValue(1)
+      await user.click(screen.getByRole('button', { name: 'Save entry' }))
+      await waitFor(() => expect(endpoints.createEntry).toHaveBeenCalledWith(expect.objectContaining({ grams: 50 })))
+    })
+
+    it('asks for an amount when a favorite has a default amount but no unit', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        makeFavorite({ default_input_unit: null, default_input_amount: 15 }),
+      ])
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(await screen.findByRole('button', { name: 'Add' }))
+      expect(await screen.findByLabelText('Amount (grams)')).toBeInTheDocument()
+      expect(endpoints.createEntry).not.toHaveBeenCalled()
+    })
+
+    it.each([
+      ['g', 15, 15, 1],
+      ['count', 2, 100, 50],
+    ])('quick-adds a %s favorite as %i of it = %ig, conversion %i', async (unit, amount, grams, unitToGrams) => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        makeFavorite({ default_input_unit: unit, default_input_amount: amount, default_unit_to_grams: 50 }),
+      ])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(await screen.findByRole('button', { name: 'Add' }))
+      await waitFor(() =>
+        expect(endpoints.createEntry).toHaveBeenCalledWith(
+          expect.objectContaining({ grams, input_amount: amount, unit_to_grams: unitToGrams })
+        )
+      )
+    })
+
+    it("describes a favorite's default, with no stray text when there's none", async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        makeFavorite({ default_input_unit: 'g', default_input_amount: 15, default_unit_to_grams: 1 }),
+        makeFavorite({ id: 'f2', name: 'Oats', brand: null }),
+      ])
+      const { container } = render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await screen.findByText('Oats')
+      const metas = [...container.querySelectorAll('.entry-row__meta')].map((meta) => meta.textContent)
+      expect(metas).toEqual(['Ferrero · 539 kcal/100g · 15g default', 'Unbranded · 539 kcal/100g'])
+    })
+
+    it('custom-adds a grams amount of a count favorite as grams, and offers the unit toggle only for such favorites', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        makeFavorite({ default_input_unit: 'count', default_input_amount: 2, default_unit_to_grams: 50 }),
+        makeFavorite({
+          id: 'f2',
+          name: 'Oats',
+          default_input_unit: 'g',
+          default_input_amount: 40,
+          default_unit_to_grams: 1,
+        }),
+      ])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      const [nutellaCustom, oatsCustom] = await screen.findAllByRole('button', { name: 'Custom amount' })
+
+      await user.click(oatsCustom)
+      expect(screen.queryByRole('button', { name: /instead/ })).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      await user.click(nutellaCustom)
+      await user.click(screen.getByRole('button', { name: 'Use grams instead' }))
+      const amount = screen.getByLabelText('Amount (grams)')
+      fireEvent.change(amount, { target: { value: '70' } })
+      fireEvent.submit(amount.closest('form')!)
+      await waitFor(() =>
+        expect(endpoints.createEntry).toHaveBeenCalledWith(
+          expect.objectContaining({ grams: 70, input_unit: 'g', unit_to_grams: 1 })
+        )
+      )
+    })
+
+    it('disables a custom add while it runs, with no stray banner, and re-enables it after a failure', async () => {
+      const user = userEvent.setup()
+      let fail!: (error: Error) => void
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+      vi.mocked(endpoints.createEntry).mockReturnValue(new Promise((_, reject) => (fail = reject)))
+      const { container } = render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+      expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
+      const add = screen.getByRole('button', { name: 'Add' })
+      await user.click(add)
+      expect(add).toBeDisabled()
+      expect(add.querySelector('.btn__spinner')).toBeInTheDocument()
+      await act(async () => fail(new ApiError('Nope', 400)))
+      expect(add).toBeEnabled()
+      expect(add.querySelector('.btn__spinner')).not.toBeInTheDocument()
+    })
+
+    it('reverts the custom-add confirmation after its window', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+      vi.mocked(endpoints.createEntry).mockResolvedValue({} as never)
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+      expect(await screen.findByRole('button', { name: 'Added ✓' })).toBeInTheDocument()
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Add' })).toBeInTheDocument(), { timeout: 3000 })
+    }, 10000)
+
+    it('offers no unit toggle in the custom form for a favorite with no default unit', async () => {
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([makeFavorite()])
+      render(<AddEntryPanel date="2026-08-01" onAdded={vi.fn()} />)
+      await open(user)
+      await user.click(await screen.findByRole('button', { name: 'Custom amount' }))
+      expect(screen.queryByRole('button', { name: /instead/ })).not.toBeInTheDocument()
+    })
   })
 })

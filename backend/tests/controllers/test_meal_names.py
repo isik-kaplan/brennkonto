@@ -1,3 +1,7 @@
+import pytest
+from sqlalchemy import select
+
+
 NUTELLA_PAYLOAD = {
     "name": "Nutella",
     "brand": "Ferrero",
@@ -41,7 +45,8 @@ async def test_list_meal_names_aggregates_across_occurrences(authed_client) -> N
     assert body[0]["name"] == "Breakfast"
     assert body[0]["times_logged"] == 2
     assert body[0]["last_logged_at"].startswith("2026-08-02")
-    assert set(body[0]["items"]) == {"Nutella", "Banana"}
+    assert {item["name"] for item in body[0]["items"]} == {"Nutella", "Banana"}
+    assert body[0]["saved_meal_id"] is None
 
 
 async def test_list_meal_names_excludes_unnamed_groups(authed_client) -> None:
@@ -141,3 +146,119 @@ async def test_list_meal_names_skips_a_name_whose_entries_are_all_deleted(authed
         await authed_client.delete(f"/api/entries/{entry_id}")
 
     assert (await authed_client.get("/api/meal-names/")).json() == []
+
+
+OATS_ITEM = {
+    "name": "Oats",
+    "input_amount": 60,
+    "calories_per_100g": 380,
+    "protein_per_100g": 13,
+    "carbs_per_100g": 60,
+    "fat_per_100g": 7,
+}
+
+
+async def test_list_meal_names_includes_unlogged_saved_meals(authed_client) -> None:
+    meal = (await authed_client.post("/api/saved-meals/", json={"name": "Porridge", "items": [OATS_ITEM]})).json()
+    await _log_breakfast(authed_client)
+
+    body = (await authed_client.get("/api/meal-names/")).json()
+    assert [item["name"] for item in body] == ["Breakfast", "Porridge"]
+    porridge = body[1]
+    assert porridge["saved_meal_id"] == meal["id"]
+    assert porridge["times_logged"] == 0
+    assert porridge["last_logged_at"] is None
+    assert porridge["calories"] == 228
+    assert porridge["protein_g"] == 7.8
+
+
+async def test_list_meal_names_merges_a_saved_meal_with_its_logged_occurrences(authed_client) -> None:
+    await authed_client.post("/api/saved-meals/", json={"name": "breakfast", "items": [OATS_ITEM]})
+    await _log_breakfast(authed_client)
+
+    body = (await authed_client.get("/api/meal-names/")).json()
+    assert len(body) == 1
+    assert body[0]["times_logged"] == 1
+    assert [item["name"] for item in body[0]["items"]] == ["Oats"]
+
+
+async def test_rename_meal_name_renames_the_saved_meal_and_its_logged_occurrences(authed_client) -> None:
+    await authed_client.post("/api/saved-meals/", json={"name": "Breakfast", "items": [OATS_ITEM]})
+    await _log_breakfast(authed_client)
+
+    response = await authed_client.patch("/api/meal-names/?name=Breakfast", json={"new_name": "Brekkie"})
+    assert response.status_code == 200
+    body = (await authed_client.get("/api/meal-names/")).json()
+    assert [(meal["name"], meal["times_logged"]) for meal in body] == [("Brekkie", 1)]
+
+
+async def test_rename_meal_name_rejects_clashing_with_another_saved_meal(authed_client) -> None:
+    await authed_client.post("/api/saved-meals/", json={"name": "Porridge", "items": [OATS_ITEM]})
+    await authed_client.post("/api/saved-meals/", json={"name": "Oatmeal", "items": [OATS_ITEM]})
+
+    response = await authed_client.patch("/api/meal-names/?name=Porridge", json={"new_name": "oatmeal"})
+    assert response.status_code == 400
+
+
+async def test_remove_meal_name_deletes_the_saved_meal_and_ungroups_logged_ones(authed_client) -> None:
+    await authed_client.post("/api/saved-meals/", json={"name": "Breakfast", "items": [OATS_ITEM]})
+    entry_ids = await _log_breakfast(authed_client)
+
+    assert (await authed_client.delete("/api/meal-names/?name=Breakfast")).status_code == 204
+    assert (await authed_client.get("/api/meal-names/")).json() == []
+    assert (await authed_client.get("/api/saved-meals/")).json() == []
+    stats = (await authed_client.get("/api/stats/daily?date=2026-08-01")).json()
+    assert set(entry_ids) <= {entry["id"] for entry in stats["entries"]}
+
+
+async def test_list_meal_names_returns_a_logged_meals_items_and_macros_in_full(authed_client) -> None:
+    await _log_breakfast(authed_client)
+
+    [meal] = (await authed_client.get("/api/meal-names/")).json()
+    nutella, banana = sorted(meal["items"], key=lambda item: item["name"], reverse=True)
+    assert nutella == {
+        "name": "Nutella",
+        "brand": "Ferrero",
+        "barcode": "3017620422003",
+        "grams": 30.0,
+        "input_unit": "g",
+        "input_amount": 30.0,
+        "unit_to_grams": 1.0,
+        "calories_per_100g": 539.0,
+        "protein_per_100g": 6.3,
+        "carbs_per_100g": 57.5,
+        "fat_per_100g": 30.9,
+    }
+    assert banana["brand"] is None
+    assert meal["calories"] == pytest.approx(30 * 5.39 + 120 * 0.89)
+    assert meal["protein_g"] == pytest.approx(30 * 0.063 + 120 * 0.011)
+    assert meal["carbs_g"] == pytest.approx(30 * 0.575 + 120 * 0.228)
+    assert meal["fat_g"] == pytest.approx(30 * 0.309 + 120 * 0.003)
+
+
+async def test_list_meal_names_returns_an_unlogged_saved_meals_macros(authed_client) -> None:
+    await authed_client.post("/api/saved-meals/", json={"name": "Porridge", "items": [OATS_ITEM]})
+    [meal] = (await authed_client.get("/api/meal-names/")).json()
+    assert meal["carbs_g"] == pytest.approx(36)
+    assert meal["fat_g"] == pytest.approx(4.2)
+
+
+async def test_rename_meal_name_stamps_each_group_as_updated(authed_client) -> None:
+    from app.db import session_factory
+    from app.models import MealGroup
+
+    await _log_breakfast(authed_client)
+    await authed_client.patch("/api/meal-names/?name=Breakfast", json={"new_name": "Brekkie"})
+
+    async with session_factory() as session:
+        [group] = (await session.scalars(select(MealGroup).where(MealGroup.name == "Brekkie"))).all()
+    assert group.updated_at is not None
+
+
+async def test_meal_names_match_case_insensitively_even_where_upper_and_lower_case_disagree(authed_client) -> None:
+    # "ß" lowercases to itself but uppercases to "SS" - so only a lowercase key keeps "Straße" and
+    # "Strasse" apart, and only a lowercase key is what the rest of the app (history_groups) uses.
+    await authed_client.post("/api/saved-meals/", json={"name": "Straße", "items": [OATS_ITEM]})
+    await authed_client.post("/api/saved-meals/", json={"name": "Strasse", "items": [OATS_ITEM]})
+    names = [meal["name"] for meal in (await authed_client.get("/api/meal-names/")).json()]
+    assert sorted(names) == ["Strasse", "Straße"]

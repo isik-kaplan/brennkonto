@@ -3,6 +3,25 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.0]
+
+### Added
+
+- Meals is now its own tab, next to Log food, instead of being tucked away in Settings. The old `/settings/meals` link redirects there.
+- You can create meals ahead of time: "+ Add meal" lets you name a meal and add foods by searching, typing a barcode, or scanning one with the camera, then set each food's amount.
+- Meals you create show up first under "Past meals" when you log food, ready to add in one go or customize.
+
+### Changed
+
+- The Meals page shows every meal in one list, whether you created it there or named a group of foods while logging. Each is a card like the meal groups on Today and History, listing its foods with their amounts, calories, and macros, plus how often you've logged it.
+- Any meal can be edited (name, foods, and amounts) or deleted from its card. Renaming a meal also renames the times you've logged it. Deleting a meal never deletes anything you ate: past logs stay in your history as individual foods.
+- The Meals card in Settings is gone, now that Meals has its own tab.
+
+### Development
+
+- Mutation testing, on top of the 100% coverage gates: mutmut for the backend and Stryker for the frontend, where every mutant has to be killed by a test or exempted with a reason nothing the app does can differ. It runs in CI by hand and weekly (`.github/workflows/mutation.yml`); see the README for running it locally.
+- Getting there added several hundred tests and simplified code that no test could tell apart from a simpler version - redundant empty-string checks, a leading-zero cleanup copied into ten amount fields (now one `withoutLeadingZeros` helper), optional callbacks every caller always passes, and values the database defaults already supply.
+
 ## [0.24.1]
 
 ### Fixed

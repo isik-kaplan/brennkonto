@@ -19,7 +19,9 @@ import { displayDateLong, toISODate } from '../lib/dates'
 export default function Dashboard() {
   const today = toISODate(new Date())
   const [stats, setStats] = useState<DailyStats | null>(null)
+  // Stryker disable next-line ArrayDeclaration: only read once the first load has set it, together with stats
   const [groups, setGroups] = useState<MealGroup[]>([])
+  // Stryker disable next-line BooleanLiteral: nothing renders past the loader until stats arrive, whatever this says
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
 

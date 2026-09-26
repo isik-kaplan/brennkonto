@@ -43,6 +43,7 @@ describe('BarcodeScanner', () => {
     expect(screen.getByText(/Camera access needs a secure context/)).toBeInTheDocument()
     expect(screen.getByText('Use manual entry or search instead.')).toBeInTheDocument()
     expect(document.querySelector('.scanner-video')).not.toBeInTheDocument()
+    expect(document.querySelector('.scanner-reticle')).not.toBeInTheDocument()
   })
 
   it('starts the scanner and shows the camera hint once available', async () => {
@@ -53,6 +54,10 @@ describe('BarcodeScanner', () => {
 
     await waitFor(() => expect(decodeFromConstraints).toHaveBeenCalled())
     expect(screen.getByText('Point your camera at a barcode.')).toBeInTheDocument()
+    expect(document.querySelector('.scanner-reticle')).toBeInTheDocument()
+    // Still mounted, so the scanner keeps running.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(stop).not.toHaveBeenCalled()
     expect(decodeFromConstraints).toHaveBeenCalledWith(
       { video: { facingMode: 'environment' } },
       expect.anything(),
@@ -135,8 +140,8 @@ describe('BarcodeScanner', () => {
     const { unmount } = render(<BarcodeScanner onDetected={vi.fn()} onClose={vi.fn()} />)
     unmount()
     rejectDecode(new Error('too late'))
-    // nothing to assert on the (now unmounted) DOM - this exercises the cancelled branch inside
-    // the rejection handler and confirms it doesn't throw an unhandled rejection.
+    // nothing to assert on the (now unmounted) DOM - this confirms a late rejection is handled,
+    // not left as an unhandled one.
     await new Promise((resolve) => setTimeout(resolve, 0))
   })
 
