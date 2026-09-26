@@ -90,4 +90,20 @@ describe('useTheme', () => {
     expect(metaLight.getAttribute('content')).toBe('#f7f0e4')
     expect(metaDark.getAttribute('content')).toBe('#211e1a')
   })
+
+  it('picks up a stored light theme on mount', () => {
+    localStorage.setItem(STORAGE_KEY, 'light')
+    const { result } = renderHook(() => useTheme(), { wrapper })
+    expect(result.current.theme).toBe('light')
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  })
+
+  it('in system mode, points each theme-color tag at its own scheme', () => {
+    // Start both somewhere neither scheme would put them, so each has to be set, not left alone.
+    metaLight.setAttribute('content', 'unset')
+    metaDark.setAttribute('content', 'unset')
+    renderHook(() => useTheme(), { wrapper })
+    expect(metaLight.getAttribute('content')).toBe('#f7f0e4')
+    expect(metaDark.getAttribute('content')).toBe('#211e1a')
+  })
 })

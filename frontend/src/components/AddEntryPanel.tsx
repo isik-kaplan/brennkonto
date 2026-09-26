@@ -6,7 +6,7 @@ import { createEntry, fetchFavorites, lookupBarcode } from '../api/endpoints'
 import type { Favorite, FoodSearchResult } from '../api/types'
 import { useFoodSearch } from '../hooks/useFoodSearch'
 import { combineDateAndTime, toISOTime } from '../lib/dates'
-import { defaultAmountFor, unitLabel } from '../lib/units'
+import { defaultAmountFor, unitLabel, withoutLeadingZeros } from '../lib/units'
 import HistoryPicker from './HistoryPicker'
 
 // Same lazy split as Log Food's scanner - most History visits never open the camera, so it
@@ -50,7 +50,9 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
   const [justAddedId, setJustAddedId] = useState<string | null>(null)
 
   const [selected, setSelected] = useState<FoodSearchResult | null>(null)
+  // Stryker disable next-line StringLiteral: selectResult sets both before the amount form that reads them renders
   const [unit, setUnit] = useState('g')
+  // Stryker disable next-line StringLiteral: selectResult sets both before the amount form that reads them renders
   const [amountInput, setAmountInput] = useState('100')
   const [entryDate, setEntryDate] = useState(date)
   const [entryTime, setEntryTime] = useState(toISOTime(new Date()))
@@ -61,7 +63,9 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
   // A one-off portion for this add only - like Add, but always asks for the amount instead of
   // using (or falling back past) the favorite's saved default, and never touches that default.
   const [customAddFavorite, setCustomAddFavorite] = useState<Favorite | null>(null)
+  // Stryker disable next-line StringLiteral: handleStartCustomAdd sets both before the form that reads them renders
   const [customUnit, setCustomUnit] = useState('g')
+  // Stryker disable next-line StringLiteral: handleStartCustomAdd sets both before the form that reads them renders
   const [customAmountInput, setCustomAmountInput] = useState('')
   const [isAddingCustom, setIsAddingCustom] = useState(false)
   const [customAddError, setCustomAddError] = useState<string | null>(null)
@@ -157,20 +161,16 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
 
   function handleCustomAmountChange(event: ChangeEvent<HTMLInputElement>) {
     const raw = event.target.value
-    if (raw === '') {
-      setCustomAmountInput('')
-      return
-    }
-    setCustomAmountInput(raw.replace(/^0+(?=\d)/, ''))
+    setCustomAmountInput(withoutLeadingZeros(raw))
   }
 
   async function handleConfirmCustomAdd(event: FormEvent) {
     event.preventDefault()
     const favorite = customAddFavorite!
-    const amount = customAmountInput === '' ? 0 : Number(customAmountInput)
+    const amount = Number(customAmountInput)
     if (amount <= 0) return
     const unitToGrams = customUnit === 'g' ? 1 : (favorite.default_unit_to_grams ?? 1)
-    const grams = customUnit === 'g' ? amount : amount * unitToGrams
+    const grams = amount * unitToGrams
     setIsAddingCustom(true)
     setCustomAddError(null)
     try {
@@ -201,11 +201,7 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
 
   function handleAmountChange(event: ChangeEvent<HTMLInputElement>) {
     const raw = event.target.value
-    if (raw === '') {
-      setAmountInput('')
-      return
-    }
-    setAmountInput(raw.replace(/^0+(?=\d)/, ''))
+    setAmountInput(withoutLeadingZeros(raw))
   }
 
   async function handleSave(event: FormEvent) {
@@ -252,7 +248,7 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
     setCustomAddFavorite(null)
   }
 
-  const amount = amountInput === '' ? 0 : Number(amountInput)
+  const amount = Number(amountInput)
   const grams = selected && unit !== 'g' ? amount * selected.unit_to_grams : amount
   const scale = grams / 100
 
@@ -268,7 +264,13 @@ export default function AddEntryPanel({ date, onAdded }: AddEntryPanelProps) {
 
   return (
     <div className="card" style={{ marginBottom: 'var(--space-lg)' }}>
-      <div className="page-header" style={{ marginBottom: selected ? 'var(--space-md)' : 0 }}>
+      <div
+        className="page-header"
+        style={
+          // Stryker disable next-line ObjectLiteral: layout only - jsdom lays nothing out to observe
+          { marginBottom: selected ? 'var(--space-md)' : 0 }
+        }
+      >
         <h2 className="card__title" style={{ margin: 0 }}>
           Add entry
         </h2>

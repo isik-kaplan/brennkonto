@@ -6,8 +6,9 @@ from litestar.params import Parameter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FoodEntry, MealGroup
+from app.models import FoodEntry, MealGroup, SavedMeal
 from app.schemas import HistoryFoodOut, HistoryGroupItemOut, HistoryGroupOut
+from app.serializers import saved_meal_items_out
 from app.services.food_history import SCAN_LIMIT, logged_foods_matching
 
 
@@ -59,7 +60,15 @@ async def history_groups(
             .limit(SCAN_LIMIT)
         )
     )
-    if not entries:
+    query = q.strip().lower()
+    saved_meals = [
+        meal
+        for meal in await db_session.scalars(
+            select(SavedMeal).where(SavedMeal.user_id == request.user.id).order_by(SavedMeal.name)
+        )
+        if not query or query in meal.name.strip().lower()
+    ]
+    if not entries and not saved_meals:
         return []
 
     group_ids = {entry.meal_group_id for entry in entries}
@@ -77,7 +86,6 @@ async def history_groups(
             continue
         members_by_group_id.setdefault(entry.meal_group_id, []).append(entry)
 
-    query = q.strip().lower()
     counts: dict[str, int] = {}
     latest_by_name: OrderedDict[str, tuple[str, list[FoodEntry]]] = OrderedDict()
     for group_id, members in members_by_group_id.items():
@@ -88,8 +96,28 @@ async def history_groups(
         counts[name_key] = counts.get(name_key, 0) + 1
         latest_by_name.setdefault(name_key, (name, members))
 
+    # Saved meals come first - they were set up deliberately to be reused. One that has also been
+    # logged keeps its saved items (the template is the source of truth, not whatever was
+    # customized last time) but picks up the logged history's count and recency, and isn't
+    # listed a second time below.
     results = []
+    for meal in saved_meals:
+        name_key = meal.name.strip().lower()
+        items = saved_meal_items_out(meal)
+        logged = latest_by_name.pop(name_key, None)
+        results.append(
+            HistoryGroupOut(
+                name=meal.name,
+                items=items,
+                calories=sum(item.grams * item.calories_per_100g / 100 for item in items),
+                last_logged_at=max(member.consumed_at for member in logged[1]) if logged else None,
+                times_logged=counts.get(name_key, 0),
+                saved_meal_id=meal.id,
+            )
+        )
     for name_key, (name, members) in latest_by_name.items():
+        if len(results) >= _RESULT_LIMIT:
+            break
         results.append(
             HistoryGroupOut(
                 name=name,
@@ -114,9 +142,7 @@ async def history_groups(
                 times_logged=counts[name_key],
             )
         )
-        if len(results) >= _RESULT_LIMIT:
-            break
-    return results
+    return results[:_RESULT_LIMIT]
 
 
 history_router = Router(path="/api/history", route_handlers=[history_foods, history_groups])

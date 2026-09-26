@@ -437,3 +437,14 @@ async def test_permanently_delete_entry_owned_by_another_user_is_not_found(authe
     )
     response = await authed_client.delete(f"/api/entries/{entry_id}/permanent")
     assert response.status_code == 404
+
+
+async def test_timestamps_the_app_sets_are_in_utc(authed_client) -> None:
+    # created_at/updated_at come from app.models._utcnow - they must carry their zone, or a server
+    # running in any other timezone would hand out local times as if they were UTC.
+    entry = (await authed_client.post("/api/entries/", json=ENTRY_PAYLOAD)).json()
+    assert entry["created_at"].endswith("Z")
+    updated = await authed_client.patch(
+        f"/api/entries/{entry['id']}", json={"grams": 10, "consumed_at": "2026-08-01T08:00:00Z"}
+    )
+    assert updated.json()["updated_at"].endswith("Z")

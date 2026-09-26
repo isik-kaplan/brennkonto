@@ -9,7 +9,7 @@ import type { Favorite, FoodSearchResult } from '../api/types'
 import HistoryPicker from '../components/HistoryPicker'
 import { useFoodSearch } from '../hooks/useFoodSearch'
 import { combineDateAndTime, toISODate, toISOTime } from '../lib/dates'
-import { defaultAmountFor, unitLabel } from '../lib/units'
+import { defaultAmountFor, unitLabel, withoutLeadingZeros } from '../lib/units'
 
 // The zxing barcode-decoding library is ~450kB - lazy-loaded so it only ships to people who
 // actually open the scanner, not on every visit to this page.
@@ -43,7 +43,9 @@ export default function LogFood() {
   const [isScanning, setIsScanning] = useState(false)
 
   const [selected, setSelected] = useState<FoodSearchResult | null>(null)
+  // Stryker disable next-line StringLiteral: selectResult sets both before the amount form that reads them renders
   const [unit, setUnit] = useState('g')
+  // Stryker disable next-line StringLiteral: selectResult sets both before the amount form that reads them renders
   const [amountInput, setAmountInput] = useState('100')
   const [consumedAt, setConsumedAt] = useState(toISODate(new Date()))
   const [consumedTime, setConsumedTime] = useState(toISOTime(new Date()))
@@ -52,18 +54,24 @@ export default function LogFood() {
   const [savedName, setSavedName] = useState<string | null>(null)
 
   const [favorites, setFavorites] = useState<Favorite[]>([])
+  // Stryker disable next-line BooleanLiteral: selectResult sets both before the checkboxes that read them render
   const [saveAsFavorite, setSaveAsFavorite] = useState(false)
+  // Stryker disable next-line BooleanLiteral: selectResult sets both before the checkboxes that read them render
   const [rememberAmount, setRememberAmount] = useState(false)
   const [justAddedId, setJustAddedId] = useState<string | null>(null)
 
   const [editingFavorite, setEditingFavorite] = useState<Favorite | null>(null)
+  // Stryker disable next-line StringLiteral: handleStartEditFavorite sets both before the form that reads them renders
   const [editUnit, setEditUnit] = useState('g')
+  // Stryker disable next-line StringLiteral: handleStartEditFavorite sets both before the form that reads them renders
   const [editAmountInput, setEditAmountInput] = useState('')
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editError, setEditError] = useState<string | null>(null)
 
   const [customAddFavorite, setCustomAddFavorite] = useState<Favorite | null>(null)
+  // Stryker disable next-line StringLiteral: handleStartCustomAdd sets both before the form that reads them renders
   const [customUnit, setCustomUnit] = useState('g')
+  // Stryker disable next-line StringLiteral: handleStartCustomAdd sets both before the form that reads them renders
   const [customAmountInput, setCustomAmountInput] = useState('')
   const [isAddingCustom, setIsAddingCustom] = useState(false)
   const [customAddError, setCustomAddError] = useState<string | null>(null)
@@ -72,9 +80,13 @@ export default function LogFood() {
     setFavorites(await fetchFavorites())
   }, [])
 
-  useEffect(() => {
-    loadFavorites()
-  }, [loadFavorites])
+  useEffect(
+    () => {
+      loadFavorites()
+    },
+    // Stryker disable next-line ArrayDeclaration: `loadFavorites` keeps its identity (no dependencies), so both run once
+    [loadFavorites]
+  )
 
   const favoriteByBarcode = new Map(favorites.map((favorite) => [favorite.barcode, favorite]))
 
@@ -184,20 +196,16 @@ export default function LogFood() {
 
   function handleCustomAmountChange(event: ChangeEvent<HTMLInputElement>) {
     const raw = event.target.value
-    if (raw === '') {
-      setCustomAmountInput('')
-      return
-    }
-    setCustomAmountInput(raw.replace(/^0+(?=\d)/, ''))
+    setCustomAmountInput(withoutLeadingZeros(raw))
   }
 
   async function handleConfirmCustomAdd(event: FormEvent) {
     event.preventDefault()
     const favorite = customAddFavorite!
-    const amount = customAmountInput === '' ? 0 : Number(customAmountInput)
+    const amount = Number(customAmountInput)
     if (amount <= 0) return
     const unitToGrams = customUnit === 'g' ? 1 : (favorite.default_unit_to_grams ?? 1)
-    const grams = customUnit === 'g' ? amount : amount * unitToGrams
+    const grams = amount * unitToGrams
     setIsAddingCustom(true)
     setCustomAddError(null)
     try {
@@ -245,17 +253,13 @@ export default function LogFood() {
 
   function handleEditAmountChange(event: ChangeEvent<HTMLInputElement>) {
     const raw = event.target.value
-    if (raw === '') {
-      setEditAmountInput('')
-      return
-    }
-    setEditAmountInput(raw.replace(/^0+(?=\d)/, ''))
+    setEditAmountInput(withoutLeadingZeros(raw))
   }
 
   async function handleSaveFavoriteEdit(event: FormEvent) {
     event.preventDefault()
     const favorite = editingFavorite!
-    const amount = editAmountInput === '' ? 0 : Number(editAmountInput)
+    const amount = Number(editAmountInput)
     if (amount <= 0) return
     setIsSavingEdit(true)
     setEditError(null)
@@ -283,13 +287,7 @@ export default function LogFood() {
 
   function handleAmountChange(event: ChangeEvent<HTMLInputElement>) {
     const raw = event.target.value
-    if (raw === '') {
-      setAmountInput('')
-      return
-    }
-    // Strip a stuck leading zero (e.g. from clearing down to "0" then typing) without touching
-    // a legitimate "0." while the user is mid-way through typing a decimal.
-    setAmountInput(raw.replace(/^0+(?=\d)/, ''))
+    setAmountInput(withoutLeadingZeros(raw))
   }
 
   async function handleSave(event: FormEvent) {
@@ -346,7 +344,7 @@ export default function LogFood() {
     }
   }
 
-  const amount = amountInput === '' ? 0 : Number(amountInput)
+  const amount = Number(amountInput)
   const grams = selected && unit !== 'g' ? amount * selected.unit_to_grams : amount
   const scale = grams / 100
 
@@ -720,8 +718,8 @@ export default function LogFood() {
                   type="checkbox"
                   checked={saveAsFavorite}
                   onChange={(event) => setSaveAsFavorite(event.target.checked)}
-                />{' '}
-                Save as favorite
+                />
+                &nbsp;Save as favorite
               </label>
               {saveAsFavorite && (
                 <label style={{ display: 'block', marginTop: 'var(--space-2xs)' }}>
@@ -729,8 +727,8 @@ export default function LogFood() {
                     type="checkbox"
                     checked={rememberAmount}
                     onChange={(event) => setRememberAmount(event.target.checked)}
-                  />{' '}
-                  Remember this amount as the default
+                  />
+                  &nbsp;Remember this amount as the default
                 </label>
               )}
             </div>

@@ -12,6 +12,8 @@ import type {
   MealGroup,
   MealName,
   RangeStats,
+  SavedMeal,
+  SavedMealItemPayload,
   User,
 } from './types'
 
@@ -92,14 +94,11 @@ export function createEntry(payload: CreateFoodEntryPayload) {
   return api.post<FoodEntry>('/entries/', payload)
 }
 
-// inputAmount is only sent on a portion edit - a plain time edit omits it, which leaves the
-// entry's previously-logged display amount untouched (see UpdateFoodEntryRequest on the backend).
+// inputAmount is only sent on a portion edit - a plain time edit omits it (JSON drops an undefined
+// field), which leaves the entry's previously-logged display amount untouched (see
+// UpdateFoodEntryRequest on the backend).
 export function updateEntry(id: string, grams: number, consumedAt: string, inputAmount?: number) {
-  return api.patch<FoodEntry>(`/entries/${id}`, {
-    grams,
-    consumed_at: consumedAt,
-    ...(inputAmount != null && { input_amount: inputAmount }),
-  })
+  return api.patch<FoodEntry>(`/entries/${id}`, { grams, consumed_at: consumedAt, input_amount: inputAmount })
 }
 
 export function deleteEntry(id: string) {
@@ -152,18 +151,25 @@ export function fetchMealNames() {
   return api.get<MealName[]>('/meal-names/')
 }
 
-// Renames every past occurrence of `name` at once - a meal grouping isn't its own row, it's
-// whichever MealGroup rows happen to share a name, so a rename has to sweep all of them or the
-// history picker would show old and new names as two different meals. See
-// app/controllers/meal_names.py.
+// Renames the saved meal and every logged occurrence of `name` at once - a meal is identified by
+// its name, not a row, so a rename has to sweep all of them or the history picker would show old
+// and new names as two different meals. See app/controllers/meal_names.py.
 export function renameMealName(name: string, newName: string) {
   return api.patch<void>(`/meal-names/?name=${encodeURIComponent(name)}`, { new_name: newName })
 }
 
-// Ungroups every past occurrence of `name` - each entry keeps existing individually in history,
-// it just stops being clustered under this meal name. Nothing is deleted.
+// Deletes the saved meal (if any) and ungroups every logged occurrence of `name` - each entry
+// keeps existing individually in history, it just stops being clustered under this meal name.
 export function removeMealName(name: string) {
   return api.delete<void>(`/meal-names/?name=${encodeURIComponent(name)}`)
+}
+
+export function createSavedMeal(name: string, items: SavedMealItemPayload[]) {
+  return api.post<SavedMeal>('/saved-meals/', { name, items })
+}
+
+export function updateSavedMeal(id: string, name: string, items: SavedMealItemPayload[]) {
+  return api.patch<SavedMeal>(`/saved-meals/${id}`, { name, items })
 }
 
 export function fetchDailyStats(date: string) {

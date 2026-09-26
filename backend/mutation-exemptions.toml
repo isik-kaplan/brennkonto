@@ -1,0 +1,166 @@
+# Every mutant that survives the whole suite has to be killed by a real behavioral test, or
+# explained here - never silently accepted. scripts/check_mutants.py enforces this.
+#
+# The bar for an entry: nothing the app *does* can differ with the mutation in place - not a
+# response, a row written, a query issued, an error raised. "Awkward to test" doesn't qualify, and
+# neither does a test that only asserts what arguments a call received.
+#
+# Keyed by a single mutant - or by a function, covering every mutant of it, including ones added
+# later, so prefer the single mutant. Quoted, because the name is dotted:
+#
+#   ["app.controllers.foods.x_search_foods__mutmut_12"]
+#   fingerprint = "<scripts.mutation_fingerprint.fingerprint(name)>"
+#   reason = """Why nothing the app does can differ with this mutant in place."""
+#
+# `fingerprint` hashes the function's AST. A mutant's number is its position inside its function,
+# so editing the function reshuffles them and the entry would silently start excusing a different
+# mutation - the check fails until the entry is re-read and its fingerprint updated:
+#   uv run python -c "from scripts.mutation_fingerprint import fingerprint; print(fingerprint('<name>'))"
+
+["app.controllers.entries.x__day_range__mutmut_4"]
+fingerprint = "d5ea4eeff7ca"
+reason = """SQLite's DATETIME storage drops the zone, so an aware and a naive timestamp for the same wall-clock time are stored, and compared, identically - no query or row can tell them apart."""
+
+["app.controllers.entries.x__day_range__mutmut_7"]
+fingerprint = "d5ea4eeff7ca"
+reason = """SQLite's DATETIME storage drops the zone, so an aware and a naive timestamp for the same wall-clock time are stored, and compared, identically - no query or row can tell them apart."""
+
+["app.db.x__add_deleted_at_column_if_missing__mutmut_14"]
+fingerprint = "949268c0ea92"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_deleted_at_column_if_missing__mutmut_15"]
+fingerprint = "949268c0ea92"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_deleted_at_column_if_missing__mutmut_7"]
+fingerprint = "949268c0ea92"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_meal_group_id_column_if_missing__mutmut_14"]
+fingerprint = "7d1d861208b3"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_meal_group_id_column_if_missing__mutmut_7"]
+fingerprint = "7d1d861208b3"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_product_cache_unit_columns_if_missing__mutmut_14"]
+fingerprint = "b7fb0cc5752c"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_product_cache_unit_columns_if_missing__mutmut_19"]
+fingerprint = "b7fb0cc5752c"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_product_cache_unit_columns_if_missing__mutmut_7"]
+fingerprint = "b7fb0cc5752c"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_14"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_15"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_19"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_24"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_25"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_29"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_30"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_unit_input_columns_if_missing__mutmut_7"]
+fingerprint = "d496698285fd"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_username_column_if_missing__mutmut_14"]
+fingerprint = "be5ac531b8eb"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_username_column_if_missing__mutmut_15"]
+fingerprint = "be5ac531b8eb"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_username_column_if_missing__mutmut_19"]
+fingerprint = "be5ac531b8eb"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_username_column_if_missing__mutmut_20"]
+fingerprint = "be5ac531b8eb"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__add_username_column_if_missing__mutmut_7"]
+fingerprint = "be5ac531b8eb"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__backfill_goal_versions_from_user_columns__mutmut_7"]
+fingerprint = "b142e5e57742"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__drop_legacy_goal_columns_from_users__mutmut_7"]
+fingerprint = "f9a0729040eb"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_153"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite's DATETIME storage drops the zone, so an aware and a naive timestamp for the same wall-clock time are stored, and compared, identically - no query or row can tell them apart."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_156"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite's DATETIME storage drops the zone, so an aware and a naive timestamp for the same wall-clock time are stored, and compared, identically - no query or row can tell them apart."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_20"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_52"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_53"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_57"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_58"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_62"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__migrate_users_and_entries_to_uuid_ids__mutmut_63"]
+fingerprint = "e34cbcbac477"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.db.x__users_table_needs_uuid_migration__mutmut_16"]
+fingerprint = "c7fd68ec79f4"
+reason = """SQLite treats SQL keywords and unquoted table/column names case-insensitively, so the mutated statement (or name lookup) resolves to exactly the same schema objects as the original."""
+
+["app.services.off_client.xǁOpenFoodFactsClientǁ__init____mutmut_3"]
+fingerprint = "23cb02abc24a"
+reason = """HTTP header names are case-insensitive by specification (RFC 9110), so Open Food Facts receives the same User-Agent header either way."""
+
+["app.services.off_client.xǁOpenFoodFactsClientǁ__init____mutmut_4"]
+fingerprint = "23cb02abc24a"
+reason = """HTTP header names are case-insensitive by specification (RFC 9110), so Open Food Facts receives the same User-Agent header either way."""

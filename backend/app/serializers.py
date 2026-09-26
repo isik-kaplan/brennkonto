@@ -1,8 +1,16 @@
 from datetime import date
 from uuid import UUID
 
-from app.models import Favorite, FoodEntry, GoalVersion, MealGroup, User
-from app.schemas import FavoriteOut, FoodEntryOut, GoalVersionOut, MealGroupOut, UserOut
+from app.models import Favorite, FoodEntry, GoalVersion, MealGroup, SavedMeal, User
+from app.schemas import (
+    FavoriteOut,
+    FoodEntryOut,
+    GoalVersionOut,
+    HistoryGroupItemOut,
+    MealGroupOut,
+    SavedMealOut,
+    UserOut,
+)
 
 
 def user_out(user: User) -> UserOut:
@@ -71,3 +79,20 @@ def entry_out(entry: FoodEntry) -> FoodEntryOut:
 
 def meal_group_out(group: MealGroup, entry_ids: list[UUID]) -> MealGroupOut:
     return MealGroupOut(id=group.id, name=group.name, entry_ids=entry_ids)
+
+
+def saved_meal_items_out(meal: SavedMeal) -> list[HistoryGroupItemOut]:
+    return [HistoryGroupItemOut(**item) for item in meal.items]
+
+
+def saved_meal_out(meal: SavedMeal) -> SavedMealOut:
+    items = saved_meal_items_out(meal)
+    return SavedMealOut(
+        id=meal.id,
+        name=meal.name,
+        items=items,
+        calories=sum(item.grams * item.calories_per_100g / 100 for item in items),
+        protein_g=sum(item.grams * item.protein_per_100g / 100 for item in items),
+        carbs_g=sum(item.grams * item.carbs_per_100g / 100 for item in items),
+        fat_g=sum(item.grams * item.fat_per_100g / 100 for item in items),
+    )

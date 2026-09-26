@@ -141,6 +141,30 @@ async def test_resolve_goal_for_date_picks_the_latest_version_not_after_the_date
     assert after_latest.calorie_goal == 2500
 
 
+async def test_resolve_goal_for_date_returns_every_goal_of_the_version(authed_client) -> None:
+    user_id = UUID((await authed_client.get("/api/auth/me")).json()["id"])
+    await authed_client.post("/api/goals", json=GOAL_PAYLOAD)
+    async with session_factory() as db_session:
+        goal = await resolve_goal_for_date(db_session, user_id, date(2026, 8, 1))
+    assert (goal.calorie_goal, goal.protein_goal_g, goal.carbs_goal_g, goal.fat_goal_g) == (2000, 150, 200, 65)
+
+
+async def test_resolve_goal_for_date_only_reads_that_users_versions(authed_client) -> None:
+    me = UUID((await authed_client.get("/api/auth/me")).json()["id"])
+    await authed_client.post("/api/goals", json=GOAL_PAYLOAD)
+    # A second user's newer version must not leak into the first user's goal.
+    await authed_client.post(
+        "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
+    )
+    await authed_client.post(
+        "/api/goals", json={**GOAL_PAYLOAD, "effective_date": "2026-08-05", "daily_calorie_goal": 1}
+    )
+
+    async with session_factory() as db_session:
+        goal = await resolve_goal_for_date(db_session, me, date(2026, 8, 10))
+    assert goal.calorie_goal == 2000
+
+
 async def test_daily_stats_reflects_the_goal_in_effect_on_the_queried_date(authed_client) -> None:
     await authed_client.post("/api/goals", json={**GOAL_PAYLOAD, "effective_date": "2026-08-01"})
     await authed_client.post(

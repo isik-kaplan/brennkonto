@@ -24,6 +24,7 @@ function renderShell(initialPath = '/') {
         <Route element={<AppShell />}>
           <Route path="/" element={<div>Today page</div>} />
           <Route path="/log" element={<div>Log page</div>} />
+          <Route path="*" element={<div>Other page</div>} />
         </Route>
       </Routes>
     </MemoryRouter>
@@ -52,6 +53,7 @@ describe('AppShell', () => {
     expect(screen.getByText('Demo User')).toBeInTheDocument()
     expect(screen.getByText('Today page')).toBeInTheDocument()
     expect(screen.getAllByRole('link', { name: 'Log food' }).length).toBe(2)
+    expect(screen.getAllByRole('link', { name: 'Meals' })[0]).toHaveAttribute('href', '/meals')
   })
 
   it('marks the current route active in both the floating nav and the tab bar', () => {
@@ -132,5 +134,66 @@ describe('AppShell', () => {
     renderShell('/')
 
     expect(screen.queryByRole('status')).not.toBeInTheDocument()
+  })
+
+  describe('navigation', () => {
+    const NAV = [
+      ['Today', '/'],
+      ['Log food', '/log'],
+      ['Meals', '/meals'],
+      ['History', '/history'],
+      ['Trends', '/trends'],
+      ['Settings', '/settings'],
+    ]
+
+    function signedIn() {
+      vi.mocked(useAuth).mockReturnValue({
+        user,
+        isLoading: false,
+        isOffline: false,
+        retryConnection: vi.fn(),
+        login: vi.fn(),
+        register: vi.fn(),
+        logout: vi.fn(),
+        setUser: vi.fn(),
+      })
+    }
+
+    it('lists the same six destinations, in order, in both the floating nav and the tab bar', () => {
+      signedIn()
+      renderShell('/')
+      for (const nav of screen.getAllByRole('navigation', { name: 'Primary' })) {
+        const links = [...nav.querySelectorAll('a')].map((link) => [link.textContent, link.getAttribute('href')])
+        expect(links).toEqual(NAV)
+      }
+    })
+
+    it.each(NAV.slice(1).map(([label, path]) => [label, `${path}/nested`]))(
+      'keeps %s active on a page nested under it',
+      (label, path) => {
+        signedIn()
+        renderShell(path)
+        for (const link of screen.getAllByRole('link', { name: label })) expect(link).toHaveClass('is-active')
+        for (const link of screen.getAllByRole('link', { name: 'Today' })) {
+          expect(link).not.toHaveClass('is-active')
+          // Absolute, not relative to wherever the page happens to be.
+          expect(link).toHaveAttribute('href', '/')
+        }
+      }
+    )
+
+    it('marks Today active on the home page only', () => {
+      signedIn()
+      renderShell('/')
+      for (const link of screen.getAllByRole('link', { name: 'Today' })) expect(link).toHaveClass('is-active')
+    })
+
+    it('shows the logout icon on both logout buttons', () => {
+      signedIn()
+      renderShell('/')
+      for (const button of screen.getAllByRole('button', { name: 'Log out' })) {
+        expect(button.querySelector('svg path')).toBeInTheDocument()
+      }
+    })
   })
 })

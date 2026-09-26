@@ -15,7 +15,7 @@ import {
   toISODate,
   toISOTime,
 } from '../lib/dates'
-import { unitLabel } from '../lib/units'
+import { unitLabel, withoutLeadingZeros } from '../lib/units'
 import ConfirmDialog from './ConfirmDialog'
 
 export interface EntryEditValues {
@@ -24,19 +24,38 @@ export interface EntryEditValues {
   inputAmount: number
 }
 
+// Applies a finished drag: moves the dragged entry into the group it was dropped on - or does nothing,
+// when it was dropped outside every row or back onto its own group. Kept apart from the drag
+// handler so it can be checked directly; inside dnd-kit's pointer handling, a mistake here would
+// only ever surface as an uncaught error.
+export function applyDrop(
+  entries: FoodEntry[],
+  active: Pick<DragEndEvent['active'], 'id'>,
+  over: Pick<NonNullable<DragEndEvent['over']>, 'id'> | null,
+  onMoveEntry: (entry: FoodEntry, targetGroupId: string) => void
+): void {
+  if (!over) return
+  // dnd-kit only ever reports an active/over pair for a currently-mounted, registered
+  // draggable, which is always rendered 1:1 from the current entries prop (and dnd-kit cancels
+  // the drag outright if the dragged node unmounts mid-drag) - so this is always found.
+  const entry = entries.find((candidate) => candidate.id === active.id)!
+  const groupId = String(over.id)
+  if (entry.meal_group_id !== groupId) onMoveEntry(entry, groupId)
+}
+
 interface EntryListProps {
   entries: FoodEntry[]
   onDelete: (entry: FoodEntry) => void
   deletingId?: string | null
   emptyMessage?: string
-  groups?: MealGroup[]
-  onMoveEntry?: (entry: FoodEntry, targetGroupId: string) => void
-  onRenameGroup?: (groupId: string, name: string) => void
-  onUngroup?: (groupId: string) => void
+  groups: MealGroup[]
+  onMoveEntry: (entry: FoodEntry, targetGroupId: string) => void
+  onRenameGroup: (groupId: string, name: string) => void
+  onUngroup: (groupId: string) => void
   // Covers both a retroactive time correction and a retroactive portion correction - whichever
   // fields the edit row actually changed, `grams` is always recomputed from `inputAmount` in the
   // entry's original unit so the two never drift apart.
-  onUpdateEntry?: (entry: FoodEntry, updates: EntryEditValues) => void
+  onUpdateEntry: (entry: FoodEntry, updates: EntryEditValues) => void
   // Called after a past entry (or a whole meal group) is successfully re-logged for today - via
   // "Repeat today", "Repeat with changes", or a meal group's "Repeat meal today". Lets the page
   // refresh its own data when that affects what's currently on screen (i.e. it's already viewing
@@ -139,7 +158,6 @@ interface EntryRowProps {
   onCancelEdit: () => void
   onDelete: () => void
   deletingId?: string | null
-  showEdit: boolean
   showRepeat: boolean
   // Which entry (if any) currently has its "Repeat with changes" form open - null/undefined for
   // every row except the one being adjusted.
@@ -174,7 +192,6 @@ function EntryRow({
   onCancelEdit,
   onDelete,
   deletingId,
-  showEdit,
   showRepeat,
   customRepeatId,
   repeatAmount,
@@ -189,7 +206,8 @@ function EntryRow({
   const isCustomRepeating = customRepeatId === entry.id
   const isRepeatBusy = repeatingId === entry.id
   const isJustRepeated = justRepeatedId === entry.id
-  const draggable = useDraggable({ id: entry.id, disabled: isEditing || isCustomRepeating })
+  // No need to disable it while editing - the editing row renders no drag handle to grab.
+  const draggable = useDraggable({ id: entry.id })
   const droppable = useDroppable({ id: entry.meal_group_id ?? entry.id })
 
   function setRefs(node: HTMLLIElement | null) {
@@ -198,11 +216,12 @@ function EntryRow({
   }
 
   const style = draggable.transform
-    ? { transform: `translate3d(${draggable.transform.x}px, ${draggable.transform.y}px, 0)` }
+    ? // Stryker disable next-line ObjectLiteral,StringLiteral: where the row is drawn mid-drag is layout - jsdom lays nothing out to observe
+      { transform: `translate3d(${draggable.transform.x}px, ${draggable.transform.y}px, 0)` }
     : undefined
 
   if (isEditing) {
-    const canSave = editAmount !== '' && Number(editAmount) > 0
+    const canSave = Number(editAmount) > 0
     return (
       <li key={entry.id} className="entry-row entry-row--editing" ref={setRefs} style={style}>
         {nameAndMeta(entry)}
@@ -262,7 +281,7 @@ function EntryRow({
   }
 
   if (isCustomRepeating) {
-    const canSave = repeatAmount !== '' && Number(repeatAmount) > 0
+    const canSave = Number(repeatAmount) > 0
     return (
       <li key={entry.id} className="entry-row entry-row--editing" ref={setRefs} style={style}>
         {nameAndMeta(entry)}
@@ -356,16 +375,14 @@ function EntryRow({
             </button>
           </>
         )}
-        {showEdit && (
-          <button
-            type="button"
-            className="btn btn--ghost btn--small"
-            onClick={onStartEdit}
-            aria-label={`Edit when ${entry.name} was logged`}
-          >
-            Edit
-          </button>
-        )}
+        <button
+          type="button"
+          className="btn btn--ghost btn--small"
+          onClick={onStartEdit}
+          aria-label={`Edit when ${entry.name} was logged`}
+        >
+          Edit
+        </button>
         <button
           type="button"
           className="btn btn--ghost btn--small"
@@ -393,9 +410,12 @@ export default function EntryList({
   onEntryRepeated,
 }: EntryListProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
+  // Stryker disable next-line StringLiteral: startEditing sets it before the edit row that reads it renders
   const [editDatetime, setEditDatetime] = useState('')
+  // Stryker disable next-line StringLiteral: startEditing sets it before the edit row that reads it renders
   const [editAmount, setEditAmount] = useState('')
   const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null)
+  // Stryker disable next-line StringLiteral: startRenaming sets it before the input that reads it renders
   const [renameValue, setRenameValue] = useState('')
   const [pendingDelete, setPendingDelete] = useState<FoodEntry | null>(null)
 
@@ -404,6 +424,7 @@ export default function EntryList({
   // error from the most recent failed attempt - all scoped to the repeat actions specifically, the
   // same way editingId/editAmount above are scoped to the retroactive-edit action.
   const [customRepeatId, setCustomRepeatId] = useState<string | null>(null)
+  // Stryker disable next-line StringLiteral: startCustomRepeat sets it before the form that reads it renders
   const [repeatAmount, setRepeatAmount] = useState('')
   const [repeatingId, setRepeatingId] = useState<string | null>(null)
   const [justRepeatedId, setJustRepeatedId] = useState<string | null>(null)
@@ -414,6 +435,7 @@ export default function EntryList({
   const [repeatingGroupId, setRepeatingGroupId] = useState<string | null>(null)
   const [justRepeatedGroupId, setJustRepeatedGroupId] = useState<string | null>(null)
 
+  // Stryker disable next-line ObjectLiteral: the distance only tells a tap from a drag, and a tap ends on its own row - a no-op either way
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
 
   if (entries.length === 0) {
@@ -431,19 +453,14 @@ export default function EntryList({
   }
 
   function handleEditAmountChange(raw: string) {
-    if (raw === '') {
-      setEditAmount('')
-      return
-    }
-    // Strip a stuck leading zero, same as the amount field on the Log Food form.
-    setEditAmount(raw.replace(/^0+(?=\d)/, ''))
+    setEditAmount(withoutLeadingZeros(raw))
   }
 
   function saveEdit(entry: FoodEntry) {
-    const amount = editAmount === '' ? 0 : Number(editAmount)
+    const amount = Number(editAmount)
     if (amount <= 0) return
     const grams = entry.input_unit === 'g' ? amount : amount * entry.unit_to_grams
-    onUpdateEntry?.(entry, { consumedAt: fromDatetimeLocalValue(editDatetime), grams, inputAmount: amount })
+    onUpdateEntry(entry, { consumedAt: fromDatetimeLocalValue(editDatetime), grams, inputAmount: amount })
     setEditingId(null)
   }
 
@@ -456,11 +473,7 @@ export default function EntryList({
   }
 
   function handleRepeatAmountChange(raw: string) {
-    if (raw === '') {
-      setRepeatAmount('')
-      return
-    }
-    setRepeatAmount(raw.replace(/^0+(?=\d)/, ''))
+    setRepeatAmount(withoutLeadingZeros(raw))
   }
 
   // Builds the payload for a brand new entry carrying over everything about `entry`'s food except
@@ -492,7 +505,8 @@ export default function EntryList({
       setCustomRepeatId(null)
       setJustRepeatedId(entry.id)
       setTimeout(() => setJustRepeatedId(null), 1500)
-      await onEntryRepeated?.()
+      // Only reachable through the repeat actions, which only render when it's given.
+      await onEntryRepeated!()
     } catch (error) {
       setRepeatError(error instanceof ApiError ? error.message : `Could not repeat "${entry.name}".`)
     } finally {
@@ -501,7 +515,7 @@ export default function EntryList({
   }
 
   function saveCustomRepeat(entry: FoodEntry) {
-    const amount = repeatAmount === '' ? 0 : Number(repeatAmount)
+    const amount = Number(repeatAmount)
     if (amount <= 0) return
     repeatEntry(entry, amount)
   }
@@ -519,14 +533,15 @@ export default function EntryList({
       const created = await Promise.all(
         cluster.entries.map((entry) => createEntry(repeatPayload(entry, entry.input_amount)))
       )
-      const groupName = groups?.find((candidate) => candidate.id === groupId)?.name ?? null
+      const groupName = groups.find((candidate) => candidate.id === groupId)?.name ?? null
       await createMealGroup(
         created.map((entry) => entry.id),
         groupName
       )
       setJustRepeatedGroupId(groupId)
       setTimeout(() => setJustRepeatedGroupId(null), 1500)
-      await onEntryRepeated?.()
+      // Only reachable through the repeat actions, which only render when it's given.
+      await onEntryRepeated!()
     } catch (error) {
       setRepeatError(error instanceof ApiError ? error.message : 'Could not repeat this meal.')
     } finally {
@@ -540,20 +555,12 @@ export default function EntryList({
   }
 
   function saveRename(groupId: string) {
-    onRenameGroup?.(groupId, renameValue.trim())
+    onRenameGroup(groupId, renameValue.trim())
     setRenamingGroupId(null)
   }
 
   function handleDragEnd(event: DragEndEvent) {
-    const { active, over } = event
-    if (!over) return
-    // dnd-kit only ever reports an active/over pair for a currently-mounted, registered
-    // draggable, which is always rendered 1:1 from the current entries prop (and dnd-kit cancels
-    // the drag outright if the dragged node unmounts mid-drag) - so this is always found.
-    const draggedEntry = entries.find((entry) => entry.id === active.id)!
-    const targetGroupId = String(over.id)
-    if (draggedEntry.meal_group_id === targetGroupId) return
-    onMoveEntry?.(draggedEntry, targetGroupId)
+    applyDrop(entries, event.active, event.over, onMoveEntry)
   }
 
   return (
@@ -562,9 +569,6 @@ export default function EntryList({
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <ul className="entry-list">
           {clusterEntries(entries).map((cluster) => {
-            const group = groups?.find((candidate) => candidate.id === cluster.groupId)
-            const isRenaming = cluster.groupId !== null && renamingGroupId === cluster.groupId
-
             const rows = cluster.entries.map((entry) => (
               <EntryRow
                 key={entry.id}
@@ -579,7 +583,6 @@ export default function EntryList({
                 onCancelEdit={() => setEditingId(null)}
                 onDelete={() => setPendingDelete(entry)}
                 deletingId={deletingId}
-                showEdit={Boolean(onUpdateEntry)}
                 showRepeat={Boolean(onEntryRepeated)}
                 customRepeatId={customRepeatId}
                 repeatAmount={repeatAmount}
@@ -601,6 +604,8 @@ export default function EntryList({
               return rows
             }
             const groupId = cluster.groupId
+            const group = groups.find((candidate) => candidate.id === groupId)
+            const isRenaming = renamingGroupId === groupId
 
             return (
               <li key={groupId} className="meal-group">
@@ -618,7 +623,7 @@ export default function EntryList({
                         if (event.key === 'Escape') setRenamingGroupId(null)
                       }}
                     />
-                  ) : onRenameGroup ? (
+                  ) : (
                     <span
                       role="button"
                       tabIndex={0}
@@ -627,8 +632,6 @@ export default function EntryList({
                     >
                       {group?.name || 'Name this meal'}
                     </span>
-                  ) : (
-                    <span>{group?.name}</span>
                   )}
                   <div className="meal-group__header-actions">
                     {/* A lone boxed entry already has its own row-level repeat actions - this one's
@@ -650,7 +653,7 @@ export default function EntryList({
                         )}
                       </button>
                     )}
-                    <button type="button" className="btn btn--ghost btn--small" onClick={() => onUngroup?.(groupId)}>
+                    <button type="button" className="btn btn--ghost btn--small" onClick={() => onUngroup(groupId)}>
                       Ungroup
                     </button>
                   </div>

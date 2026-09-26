@@ -38,7 +38,7 @@ Backend (pytest + hypothesis property-based tests, 100% branch coverage enforced
 
 ```sh
 cd backend
-uv run pytest --cov=app --cov-report=term-missing
+uv run pytest --cov --cov-report=term-missing
 ```
 
 Frontend (vitest + fast-check property-based tests, 100% coverage enforced):
@@ -47,6 +47,40 @@ Frontend (vitest + fast-check property-based tests, 100% coverage enforced):
 cd frontend
 npm run test:coverage
 ```
+
+### Mutation testing
+
+Coverage only proves a line ran; mutation testing proves a test would notice if it were wrong. Every
+mutant has to be killed by a test, or exempted with a reason why nothing the app does can differ.
+
+Backend (mutmut). `mutmut run` itself exits 0 whatever survives - `check_mutants.py` re-runs each
+survivor against the whole suite and fails on anything still alive:
+
+```sh
+cd backend
+rm -rf mutants && uv run mutmut run && uv run python scripts/check_mutants.py
+```
+
+Exemptions live in `backend/mutation-exemptions.toml`, keyed by function and pinned to a hash of
+it, so editing the function forces the entry to be re-read. Inspect a survivor with
+`uv run mutmut show <name>`.
+
+Frontend (Stryker, fails below a 100% score). Incremental, so a re-run only re-tests what changed -
+but a mutant cached as "survived" is never re-tested when only a test changed, so finish with a
+`--force` run before trusting a 100%:
+
+```sh
+cd frontend
+npm run test:mutation              # report: reports/mutation/index.html
+npx stryker run --force            # every mutant, ignoring the cache
+```
+
+A frontend exemption is a `// Stryker disable next-line <mutator>: <reason>` comment directly above
+the code it covers - it binds to the next node, so a comment in JSX (`{/* */}`) binds to nothing.
+Two whole classes are ignored by `stryker-plugins/ignore-equivalent.mjs`: fixed `className`/`style`
+values (jsdom lays nothing out) and empty hook dependency lists (any constant list runs once).
+
+Both also run in CI - by hand, and weekly - via `.github/workflows/mutation.yml`.
 
 A `backend/scripts/seed_demo_data.py` script is available for seeding a couple of years of
 realistic daily food logs into a fresh account, useful for exercising the aggregate views:
@@ -79,6 +113,11 @@ On Coolify: point it at this repo, it'll detect the Dockerfile. Set `SECRET_KEY`
 overrides from `example.env`) as environment variables, and mount a persistent volume at
 `/app/data` so the SQLite database survives redeploys. The image exposes port 8000 and ships a
 `/health` endpoint the platform's healthcheck can use.
+
+Deploys go through CI, not Coolify's push webhook: the `deploy` job in `.github/workflows/test.yml`
+runs only on master, only once the backend and frontend suites are green, and triggers Coolify's
+deploy API. It needs a `COOLIFY_TOKEN` repository secret (a Coolify API token with deploy
+permission) and a `COOLIFY_APP_UUID` repository variable, with Coolify's API access enabled.
 
 ## Layout
 

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -255,6 +255,55 @@ describe('Settings', () => {
       await clickUser.click(screen.getByRole('button', { name: 'Change password' }))
 
       expect(await screen.findByText('Could not change password.')).toBeInTheDocument()
+    })
+  })
+
+  describe.each([
+    {
+      form: 'ProfileCard',
+      button: 'Save',
+      mock: () => vi.mocked(endpoints.updateProfile),
+      success: 'Saved.',
+      fill: () => {},
+    },
+    {
+      form: 'PasswordCard',
+      button: 'Change password',
+      mock: () => vi.mocked(endpoints.changePassword),
+      success: 'Password changed.',
+      fill: () => {
+        fireEvent.change(screen.getByLabelText('Current password'), { target: { value: 'old-password' } })
+        fireEvent.change(screen.getByLabelText('New password'), { target: { value: 'new-password-123' } })
+      },
+    },
+  ])('$form save states', ({ button, mock, success, fill }) => {
+    it('styles success as a success and failure as an error', async () => {
+      mockAuth()
+      mock().mockResolvedValueOnce(user).mockRejectedValueOnce(new ApiError('Nope', 400))
+      renderSettings()
+
+      fill()
+      fireEvent.submit(screen.getByRole('button', { name: button }).closest('form')!)
+      expect(await screen.findByText(success)).toHaveClass('form__banner--success')
+      fill()
+      fireEvent.submit(screen.getByRole('button', { name: button }).closest('form')!)
+      expect(await screen.findByText('Nope')).not.toHaveClass('form__banner--success')
+    })
+
+    it('disables saving while it runs, and re-enables it after a failure', async () => {
+      mockAuth()
+      let fail!: (error: Error) => void
+      mock().mockReturnValue(new Promise((_, reject) => (fail = reject)))
+      renderSettings()
+      const saveButton = screen.getByRole('button', { name: button })
+
+      fill()
+      fireEvent.submit(saveButton.closest('form')!)
+      await waitFor(() => expect(saveButton).toBeDisabled())
+      expect(saveButton.querySelector('.btn__spinner')).toBeInTheDocument()
+      await act(async () => fail(new ApiError('Nope', 400)))
+      expect(saveButton).toBeEnabled()
+      expect(saveButton.querySelector('.btn__spinner')).not.toBeInTheDocument()
     })
   })
 })

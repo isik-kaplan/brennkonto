@@ -223,3 +223,19 @@ async def test_range_stats_points_include_the_per_macro_goals(authed_client) -> 
     assert point["protein_goal_g"] == 150
     assert point["carbs_goal_g"] == 200
     assert point["fat_goal_g"] == 65
+
+
+@pytest.mark.parametrize(
+    ("key", "group_by", "expected"),
+    [
+        (date(2026, 8, 1), "day", ("Sat 01 Aug", date(2026, 8, 1), date(2026, 8, 1))),
+        (date(2026, 8, 3), "week", ("03 Aug – 09 Aug", date(2026, 8, 3), date(2026, 8, 9))),
+        (date(2026, 12, 28), "week", ("28 Dec – 03 Jan", date(2026, 12, 28), date(2027, 1, 3))),
+        (date(2026, 8, 1), "month", ("August 2026", date(2026, 8, 1), date(2026, 8, 31))),
+        (date(2026, 9, 1), "month", ("September 2026", date(2026, 9, 1), date(2026, 9, 30))),
+        (date(2026, 2, 1), "month", ("February 2026", date(2026, 2, 1), date(2026, 2, 28))),
+        (date(2028, 2, 1), "month", ("February 2028", date(2028, 2, 1), date(2028, 2, 29))),
+    ],
+)
+def test_bucket_label(key, group_by, expected) -> None:
+    assert _bucket_label(key, group_by) == expected

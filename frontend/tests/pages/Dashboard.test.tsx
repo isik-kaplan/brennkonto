@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -179,5 +179,47 @@ describe('Dashboard', () => {
 
     expect(endpoints.moveEntryToGroup).toHaveBeenCalledWith('1', 'g2')
     await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledTimes(2))
+  })
+
+  it('swaps the day for the loader while it reloads, then clears the delete in progress', async () => {
+    const user = userEvent.setup()
+    let finishReload!: (value: DailyStats) => void
+    vi.mocked(endpoints.fetchDailyStats)
+      .mockResolvedValueOnce(stats)
+      .mockReturnValueOnce(new Promise((resolve) => (finishReload = resolve)))
+    vi.mocked(endpoints.deleteEntry).mockResolvedValue(undefined)
+    renderDashboard()
+
+    await screen.findByText('Banana')
+    await user.click(screen.getByRole('button', { name: 'Delete Banana' }))
+    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(await screen.findByText('Loading…')).toBeInTheDocument()
+    expect(screen.queryByText('Banana')).not.toBeInTheDocument()
+
+    // The reload still has the entry (say, a slow delete) - its row must be usable again.
+    await act(async () => finishReload(stats))
+    expect(screen.getByRole('button', { name: 'Delete Banana' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Delete Banana' })).toHaveTextContent('Remove')
+  })
+
+  it('moves on to the new day when left open past midnight', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      vi.setSystemTime(new Date(2026, 7, 1, 23, 59))
+      const user = userEvent.setup()
+      vi.mocked(endpoints.fetchDailyStats).mockResolvedValue({ ...stats, date: '2026-08-01' })
+      vi.mocked(endpoints.deleteEntry).mockResolvedValue(undefined)
+      renderDashboard()
+      await screen.findByText('Banana')
+      expect(endpoints.fetchDailyStats).toHaveBeenLastCalledWith('2026-08-01')
+
+      vi.setSystemTime(new Date(2026, 7, 2, 0, 1))
+      // Any re-render of the page picks the new date up - deleting an entry is one.
+      await user.click(screen.getByRole('button', { name: 'Delete Banana' }))
+      await user.click(screen.getByRole('button', { name: 'Remove' }))
+      await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledWith('2026-08-02'))
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

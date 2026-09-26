@@ -1,6 +1,6 @@
 [project]
 name = "brennkonto"
-version = "0.24.1"
+version = "0.25.0"
 description = "Calorie and macro tracker backed by Open Food Facts."
 authors = [
   { name = "Işık Kaplan", email = "isik.kaplan@outlook.com" }
@@ -27,6 +27,7 @@ dev-dependencies = [
   "hypothesis>=6.130.0",
   "respx>=0.22.0",
   "ruff>=0.9.0",
+  "mutmut==3.7.0",
 ]
 
 [build-system]
@@ -60,9 +61,19 @@ known-first-party = ["app"]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
+[tool.mutmut]
+source_paths = ["app"]
+# Not under source_paths, so mutmut wouldn't otherwise copy them into the mutants/ tree it runs the
+# suite in - conftest.py holds the per-test database reset, scripts/ the fingerprint helper the
+# exemption tests import.
+also_copy = ["scripts"]
+
 [tool.coverage.run]
-source = ["app"]
+source = ["app", "scripts"]
 branch = true
+# A manual dev tool for filling a local database with fake history - it never ships and nothing
+# depends on its output, so it's left unmeasured rather than tested.
+omit = ["scripts/seed_demo_data.py"]
 # SQLAlchemy's async engine bridges to its sync DBAPI drivers via greenlet_spawn - without this,
 # coverage.py's tracer loses the thread the instant a controller awaits any db_session call,
 # under-reporting every line after the first query in every handler that touches the database.
@@ -75,4 +86,5 @@ exclude_lines = [
   "pragma: no cover",
   "raise NotImplementedError",
   "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
 ]

@@ -207,4 +207,56 @@ describe('BarChart', () => {
     const [small, large] = Array.from(document.querySelectorAll('.chart__bar'))
     expect(Number(large.getAttribute('height'))).toBeGreaterThan(Number(small.getAttribute('height')))
   })
+
+  // The chart's geometry is its output - every bar's position and height, the label anchors, the
+  // viewBox, the squiggle. Pinned whole, per representative configuration, so a change to any of
+  // it has to be looked at (and the snapshot updated) rather than slipping through.
+  describe('geometry', () => {
+    const svgOf = (container: HTMLElement) => container.querySelector('svg')!.outerHTML
+
+    it('lays out single bars with a goal, flat amount labels and headroom for them', () => {
+      const { container } = render(
+        <BarChart
+          goal={100}
+          goalLabel="100% of goal"
+          points={[
+            { label: 'Aug 1', bars: [{ key: 'kcal', value: 40, colorVar: '--color-ink', amountLabel: '800 kcal' }] },
+            { label: 'Aug 2', bars: [{ key: 'kcal', value: 130, colorVar: '--color-ink', amountLabel: '75g' }] },
+            { label: 'Aug 3', value: 0 },
+          ]}
+        />
+      )
+      expect(svgOf(container)).toMatchSnapshot()
+    })
+
+    it('lays out grouped bars with rotated amount labels', () => {
+      const { container } = render(
+        <BarChart
+          goal={100}
+          points={[
+            {
+              label: 'Aug 1',
+              bars: [
+                { key: 'a', value: 90, colorVar: '--color-ink', amountLabel: '1800 kcal' },
+                { key: 'b', value: 60, colorVar: '--color-accent', amountLabel: '90g' },
+                { key: 'c', value: 5, colorVar: '--color-warning', amountLabel: '10g' },
+              ],
+            },
+            { label: 'Aug 2', bars: [{ key: 'a', value: 100, colorVar: '--color-ink' }] },
+          ]}
+        />
+      )
+      expect(svgOf(container)).toMatchSnapshot()
+    })
+
+    it('widens a sparse chart to the minimum slots and draws the squiggle', () => {
+      const { container } = render(<BarChart sparse goal={2000} points={[{ label: 'Mon', value: 1500 }]} />)
+      expect(svgOf(container)).toMatchSnapshot()
+    })
+
+    it('draws an empty chart as placeholder slots', () => {
+      const { container } = render(<BarChart points={[]} />)
+      expect(svgOf(container)).toMatchSnapshot()
+    })
+  })
 })

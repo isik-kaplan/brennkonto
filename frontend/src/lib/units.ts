@@ -13,3 +13,10 @@ export function unitLabel(unit: string): string {
   if (unit === 'count') return 'How many?'
   return `Amount (${unit})`
 }
+
+// Strips a stuck leading zero ("07" -> "7", e.g. from clearing a field down to "0" and typing on)
+// without touching a legitimate "0." mid-way through typing a decimal. Shared by every amount field
+// so they all clean up input the same way.
+export function withoutLeadingZeros(raw: string): string {
+  return raw.replace(/^0+(?=\d)/, '')
+}

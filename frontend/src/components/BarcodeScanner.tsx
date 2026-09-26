@@ -51,11 +51,8 @@ export default function BarcodeScanner({ onDetected, onClose }: BarcodeScannerPr
         }
         controls = scannerControls
       })
-      .catch((err: unknown) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : 'Could not access the camera.')
-        }
-      })
+      // Once unmounted, the state update is simply dropped - no need to check `cancelled`.
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : 'Could not access the camera.'))
 
     return () => {
       cancelled = true

@@ -44,9 +44,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false))
   }, [])
 
-  useEffect(() => {
-    checkAuth()
-  }, [checkAuth])
+  useEffect(
+    () => {
+      checkAuth()
+    },
+    // Stryker disable next-line ArrayDeclaration: `checkAuth` keeps its identity (no dependencies), so both run once
+    [checkAuth]
+  )
 
   const login = useCallback(async (identifier: string, password: string) => {
     setUser(await endpoints.login(identifier, password))

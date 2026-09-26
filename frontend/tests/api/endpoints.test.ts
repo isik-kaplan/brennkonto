@@ -93,9 +93,13 @@ describe('entry endpoints', () => {
     expect(api.post).toHaveBeenCalledWith('/entries/', payload)
   })
 
-  it('updateEntry patches grams and consumed_at by id, omitting input_amount', () => {
+  it('updateEntry patches grams and consumed_at by id, leaving input_amount out of the JSON', () => {
     endpoints.updateEntry('5', 150, '2026-08-02')
     expect(api.patch).toHaveBeenCalledWith('/entries/5', { grams: 150, consumed_at: '2026-08-02' })
+    expect(JSON.parse(JSON.stringify(vi.mocked(api.patch).mock.calls[0][1]))).toStrictEqual({
+      grams: 150,
+      consumed_at: '2026-08-02',
+    })
   })
 
   it('updateEntry includes input_amount when a portion edit provides one', () => {
@@ -236,6 +240,31 @@ describe('meal name endpoints', () => {
   it('removeMealName URL-encodes the name and deletes', () => {
     endpoints.removeMealName('Breakfast & Co')
     expect(api.delete).toHaveBeenCalledWith('/meal-names/?name=Breakfast%20%26%20Co')
+  })
+})
+
+describe('saved meal endpoints', () => {
+  const item = {
+    name: 'Oats',
+    brand: null,
+    barcode: '5000',
+    input_unit: 'g',
+    input_amount: 60,
+    unit_to_grams: 1,
+    calories_per_100g: 380,
+    protein_per_100g: 13,
+    carbs_per_100g: 60,
+    fat_per_100g: 7,
+  }
+
+  it('createSavedMeal posts the name and items', () => {
+    endpoints.createSavedMeal('Porridge', [item])
+    expect(api.post).toHaveBeenCalledWith('/saved-meals/', { name: 'Porridge', items: [item] })
+  })
+
+  it('updateSavedMeal patches the meal by id', () => {
+    endpoints.updateSavedMeal('meal-1', 'Porridge', [item])
+    expect(api.patch).toHaveBeenCalledWith('/saved-meals/meal-1', { name: 'Porridge', items: [item] })
   })
 })
 

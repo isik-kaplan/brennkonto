@@ -15,7 +15,7 @@ import Register from './pages/Register'
 import Settings from './pages/Settings'
 import Trends from './pages/Trends'
 
-function RequireAuth({ children }: { children: ReactNode }) {
+export function RequireAuth({ children }: { children: ReactNode }) {
   const { user, isLoading, isOffline, retryConnection } = useAuth()
 
   if (isOffline) {
@@ -30,7 +30,7 @@ function RequireAuth({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 
-function RequireGuest({ children }: { children: ReactNode }) {
+export function RequireGuest({ children }: { children: ReactNode }) {
   const { user, isLoading, isOffline, retryConnection } = useAuth()
 
   if (isOffline) {
@@ -78,7 +78,9 @@ export default function App() {
         <Route path="/trends" element={<Trends />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/settings/goals" element={<GoalHistory />} />
-        <Route path="/settings/meals" element={<Meals />} />
+        <Route path="/meals" element={<Meals />} />
+        {/* Meals used to live under Settings - keeps old links/bookmarks working. */}
+        <Route path="/settings/meals" element={<Navigate to="/meals" replace />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

@@ -1,4 +1,7 @@
+import { createElement } from 'react'
+
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { renderToString } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
@@ -207,5 +210,66 @@ describe('useFoodSearch', () => {
     act(() => resolveSecondPage(fullPage(PAGE_SIZE)))
     await waitFor(() => expect(result.current.isLoadingMore).toBe(false))
     expect(endpoints.searchFoods).toHaveBeenCalledTimes(2)
+  })
+
+  it('starts with no results, before its first search has even been considered', () => {
+    // A server render runs no effects - it's the first frame.
+    function Probe() {
+      return createElement('span', null, useFoodSearch().results.length)
+    }
+    expect(renderToString(createElement(Probe))).toBe('<span>0</span>')
+  })
+
+  it('searches for the trimmed query, and measures the minimum length after trimming', async () => {
+    vi.mocked(endpoints.searchFoods).mockResolvedValue([])
+    const { result } = renderHook(() => useFoodSearch())
+    act(() => result.current.setQuery('  a  '))
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(endpoints.searchFoods).not.toHaveBeenCalled()
+
+    act(() => result.current.setQuery('  nu  '))
+    await waitFor(() => expect(endpoints.searchFoods).toHaveBeenCalledWith('nu', 1))
+  })
+
+  it('stops loading more once a later page comes back short', async () => {
+    vi.mocked(endpoints.searchFoods)
+      .mockResolvedValueOnce(fullPage(0))
+      .mockResolvedValueOnce([fakeResult(999)])
+    const { result } = renderWithSentinel()
+    act(() => result.current.setQuery('product'))
+    await waitFor(() => expect(result.current.results).toHaveLength(PAGE_SIZE))
+
+    act(() => triggerIntersection())
+    await waitFor(() => expect(result.current.results).toHaveLength(PAGE_SIZE + 1))
+    // The short page disconnected the observer and built no new one.
+    expect(() => triggerIntersection()).toThrow('No IntersectionObserver has been constructed yet.')
+    expect(endpoints.searchFoods).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps loading after a later page comes back full', async () => {
+    vi.mocked(endpoints.searchFoods)
+      .mockResolvedValueOnce(fullPage(0))
+      .mockResolvedValueOnce(fullPage(PAGE_SIZE))
+      .mockResolvedValueOnce([])
+    const { result } = renderWithSentinel()
+    act(() => result.current.setQuery('product'))
+    await waitFor(() => expect(result.current.results).toHaveLength(PAGE_SIZE))
+
+    act(() => triggerIntersection())
+    await waitFor(() => expect(result.current.results).toHaveLength(PAGE_SIZE * 2))
+    act(() => triggerIntersection())
+    await waitFor(() => expect(endpoints.searchFoods).toHaveBeenCalledWith('product', 3))
+  })
+
+  it('stops loading more once the query drops below the minimum, even with the sentinel still mounted', async () => {
+    vi.mocked(endpoints.searchFoods).mockResolvedValueOnce(fullPage(0))
+    const { result } = renderWithSentinel()
+    act(() => result.current.setQuery('product'))
+    await waitFor(() => expect(result.current.results).toHaveLength(PAGE_SIZE))
+
+    act(() => result.current.setQuery('p'))
+    await waitFor(() => expect(result.current.results).toHaveLength(0))
+    expect(() => triggerIntersection()).toThrow('No IntersectionObserver has been constructed yet.')
+    expect(endpoints.searchFoods).toHaveBeenCalledTimes(1)
   })
 })

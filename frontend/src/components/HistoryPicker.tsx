@@ -4,7 +4,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 import { ApiError } from '../api/client'
 import { createEntry, createMealGroup, fetchHistoryFoods, fetchHistoryGroups } from '../api/endpoints'
 import type { HistoryFood, HistoryGroup } from '../api/types'
-import { unitLabel } from '../lib/units'
+import { unitLabel, withoutLeadingZeros } from '../lib/units'
 
 interface HistoryPickerProps {
   // Resolves the ISO consumed_at timestamp at the moment an item is actually added - a function
@@ -24,11 +24,14 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   const [query, setQuery] = useState('')
   const [foods, setFoods] = useState<HistoryFood[]>([])
   const [groups, setGroups] = useState<HistoryGroup[]>([])
+  // Stryker disable next-line BooleanLiteral: only shown once open, and opening's effect sets it before a click's paint
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
 
   const [customAddFood, setCustomAddFood] = useState<HistoryFood | null>(null)
+  // Stryker disable next-line StringLiteral: startCustomAdd sets both before the form that reads them renders
   const [customUnit, setCustomUnit] = useState('g')
+  // Stryker disable next-line StringLiteral: startCustomAdd sets both before the form that reads them renders
   const [customAmountInput, setCustomAmountInput] = useState('')
   const [isAddingCustom, setIsAddingCustom] = useState(false)
   const [customAddError, setCustomAddError] = useState<string | null>(null)
@@ -37,6 +40,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   // typed into each of its ingredient amount fields - indexed the same as customGroup.items so a
   // field's edit stays paired to its ingredient even as the user types.
   const [customGroup, setCustomGroup] = useState<HistoryGroup | null>(null)
+  // Stryker disable next-line ArrayDeclaration: startCustomGroup sets it before the form that reads it renders
   const [customGroupAmounts, setCustomGroupAmounts] = useState<string[]>([])
   const [isAddingCustomGroup, setIsAddingCustomGroup] = useState(false)
   const [customGroupError, setCustomGroupError] = useState<string | null>(null)
@@ -112,18 +116,14 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   }
 
   function handleCustomAmountChange(event: ChangeEvent<HTMLInputElement>) {
-    const raw = event.target.value
-    if (raw === '') {
-      setCustomAmountInput('')
-      return
-    }
-    setCustomAmountInput(raw.replace(/^0+(?=\d)/, ''))
+    setCustomAmountInput(withoutLeadingZeros(event.target.value))
   }
 
   async function confirmCustomAdd(event: FormEvent) {
     event.preventDefault()
     const food = customAddFood!
-    const amount = customAmountInput === '' ? 0 : Number(customAmountInput)
+    // Number('') is 0, so a cleared field counts as nothing.
+    const amount = Number(customAmountInput)
     if (amount <= 0) return
     const grams = customUnit === 'g' ? amount : amount * food.unit_to_grams
     setIsAddingCustom(true)
@@ -204,9 +204,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   }
 
   function handleCustomGroupAmountChange(index: number, raw: string) {
-    setCustomGroupAmounts((current) =>
-      current.map((value, i) => (i === index ? (raw === '' ? '' : raw.replace(/^0+(?=\d)/, '')) : value))
-    )
+    setCustomGroupAmounts((current) => current.map((value, i) => (i === index ? withoutLeadingZeros(raw) : value)))
   }
 
   // Same "recreate every item, then re-group under the same name" shape as addGroup, but each
@@ -214,7 +212,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   async function confirmCustomGroup(event: FormEvent) {
     event.preventDefault()
     const group = customGroup!
-    const amounts = customGroupAmounts.map((value) => (value === '' ? 0 : Number(value)))
+    const amounts = customGroupAmounts.map(Number)
     if (amounts.some((amount) => amount <= 0)) return
     const key = `group:${group.name}`
     setIsAddingCustomGroup(true)
@@ -324,13 +322,13 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
               const isCustomizing = customGroup?.name === group.name
 
               if (isCustomizing) {
-                const canSave = customGroupAmounts.every((value) => value !== '' && Number(value) > 0)
+                const canSave = customGroupAmounts.every((value) => Number(value) > 0)
                 return (
                   <li key={key} className="entry-row entry-row--editing" style={{ flexDirection: 'column' }}>
                     <div className="entry-row__name">{group.name}</div>
                     <form className="form" onSubmit={confirmCustomGroup} style={{ width: '100%' }}>
                       {group.items.map((item, index) => (
-                        <div className="field" key={`${item.barcode ?? item.name}-${index}`}>
+                        <div className="field" key={index}>
                           <label htmlFor={`history-group-amount-${index}`}>
                             {item.name}
                             {item.brand ? ` (${item.brand})` : ''} · {unitLabel(item.input_unit)}
@@ -362,6 +360,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
                       )}
                       <div
                         className="entry-row__actions"
+                        // Stryker disable next-line ObjectLiteral: layout only - jsdom lays nothing out to observe
                         style={{ marginTop: customGroupError ? 0 : 'var(--space-md)' }}
                       >
                         <button
@@ -391,7 +390,9 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
                     <div className="entry-row__name">{group.name}</div>
                     <div className="entry-row__meta">
                       {group.items.length} item{group.items.length === 1 ? '' : 's'} ·{' '}
-                      <span className="numeral">{Math.round(group.calories)}</span> kcal · logged {group.times_logged}×
+                      <span className="numeral">{Math.round(group.calories)}</span> kcal
+                      {group.saved_meal_id && ' · saved'}
+                      {group.times_logged > 0 && ` · logged ${group.times_logged}×`}
                     </div>
                   </div>
                   <div className="entry-row__actions">

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
@@ -84,5 +84,33 @@ describe('Register', () => {
   it('links to the login page', () => {
     renderRegister()
     expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
+  })
+
+  it('starts every field as an empty string', async () => {
+    const action = vi.fn().mockResolvedValue(undefined)
+    renderRegister(action)
+    // The password alone - the other fields are still their initial empty strings, not undefined.
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'hunter222' } })
+    fireEvent.submit(screen.getByRole('button', { name: 'Create account' }).closest('form')!)
+    expect(action).toHaveBeenCalledWith('', 'hunter222', '')
+    await screen.findByText('Landed on dashboard')
+  })
+
+  it('shows no error banner until something fails', () => {
+    renderRegister()
+    expect(document.querySelector('.form__banner')).not.toBeInTheDocument()
+  })
+
+  it('disables submitting while the request runs, and re-enables it after a failure', async () => {
+    let fail!: (error: Error) => void
+    renderRegister(vi.fn().mockReturnValue(new Promise((_, reject) => (fail = reject))))
+    const button = screen.getByRole('button', { name: 'Create account' })
+    fireEvent.submit(button.closest('form')!)
+
+    await waitFor(() => expect(button).toBeDisabled())
+    expect(button.querySelector('.btn__spinner')).toBeInTheDocument()
+    await act(async () => fail(new ApiError('Nope', 400)))
+    expect(button).toBeEnabled()
+    expect(button.querySelector('.btn__spinner')).not.toBeInTheDocument()
   })
 })

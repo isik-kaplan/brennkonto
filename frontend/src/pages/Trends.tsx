@@ -25,9 +25,7 @@ function shortLabel(periodStart: string, groupBy: GroupBy): string {
   if (groupBy === 'month') {
     return date.toLocaleDateString(undefined, { month: 'short' })
   }
-  if (groupBy === 'week') {
-    return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-  }
+  // A week is labeled by the day it starts on, the same as a day.
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
@@ -40,6 +38,7 @@ function previousPeriod(start: string, end: string): { start: string; end: strin
 function formatDelta(current: number, previous: number): string {
   const delta = Math.round(current - previous)
   if (delta === 0) return 'Same as the previous period'
+  // Stryker disable next-line EqualityOperator: zero already returned above, so > and >= agree
   return `${delta > 0 ? '+' : ''}${delta} vs the previous period`
 }
 
@@ -50,6 +49,7 @@ export default function Trends() {
   const [customEnd, setCustomEnd] = useState(toISODate(new Date()))
   const [stats, setStats] = useState<RangeStats | null>(null)
   const [previousStats, setPreviousStats] = useState<RangeStats | null>(null)
+  // Stryker disable next-line BooleanLiteral: nothing renders past the loader until stats arrive, whatever this says
   const [isLoading, setIsLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -151,9 +151,10 @@ export default function Trends() {
             <div className="stat-tile">
               <div className="stat-tile__label">Avg calories / logged day</div>
               <div className="stat-tile__value">{Math.round(stats.average_calories)}</div>
-              {previousStats && previousStats.days_logged > 0 && (
+              {/* Loaded together with stats, so it's set whenever stats is. */}
+              {previousStats!.days_logged > 0 && (
                 <div className="stat-tile__delta">
-                  {formatDelta(stats.average_calories, previousStats.average_calories)}
+                  {formatDelta(stats.average_calories, previousStats!.average_calories)}
                 </div>
               )}
             </div>

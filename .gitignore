@@ -12,11 +12,14 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .coverage
+backend/mutants/
 
 # node
 node_modules/
 frontend/dist/
 frontend/coverage/
+frontend/reports/
+frontend/.stryker-tmp/
 
 # runtime data
 backend/data/

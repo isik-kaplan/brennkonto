@@ -20,6 +20,7 @@ export default function RangeSummary({ defaultPreset }: RangeSummaryProps) {
   const [customStart, setCustomStart] = useState(() => presetDateRange(defaultPreset).start)
   const [customEnd, setCustomEnd] = useState(() => toISODate(new Date()))
   const [stats, setStats] = useState<RangeStats | null>(null)
+  // Stryker disable next-line BooleanLiteral: nothing renders past the loader until stats arrive, whatever this says
   const [isLoading, setIsLoading] = useState(true)
 
   const { start, end } = preset === 'custom' ? { start: customStart, end: customEnd } : presetDateRange(preset)

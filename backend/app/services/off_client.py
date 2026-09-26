@@ -49,11 +49,12 @@ _MULTIPACK_PATTERN = re.compile(r"(\d+)\s*x\s*(\d+(?:[.,]\d+)?)\s*(g|kg|ml|l)\b"
 
 
 def _infer_unit(product: dict) -> tuple[str, float]:
-    quantity_unit = str(product.get("product_quantity_unit") or "").strip().lower()
+    # A missing value becomes "none", which is no unit either - no separate fallback needed.
+    quantity_unit = str(product.get("product_quantity_unit")).strip().lower()
     if quantity_unit in _UNIT_TO_GRAMS:
         return quantity_unit, _UNIT_TO_GRAMS[quantity_unit]
 
-    match = _MULTIPACK_PATTERN.search(str(product.get("quantity") or ""))
+    match = _MULTIPACK_PATTERN.search(str(product.get("quantity")))
     if match is not None:
         per_item_amount = float(match.group(2).replace(",", "."))
         per_item_unit = match.group(3).lower()
@@ -91,7 +92,7 @@ class OpenFoodFactsClient:
     def __init__(self) -> None:
         self._headers = {"User-Agent": settings.OFF_USER_AGENT}
 
-    async def search(self, query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+    async def search(self, query: str, page_size: int) -> list[FoodSearchResultOut]:
         async with httpx.AsyncClient(
             base_url=settings.OFF_SEARCH_BASE_URL, headers=self._headers, timeout=10
         ) as client:
