@@ -203,7 +203,7 @@ function HistoryDefaultsCard() {
               className={preferences.aggregateRangePreset === option.key ? 'is-active' : ''}
               onClick={() => setPreferences({ ...preferences, aggregateRangePreset: option.key })}
             >
-              {option.label}
+              {option.shortLabel}
             </button>
           ))}
         </div>

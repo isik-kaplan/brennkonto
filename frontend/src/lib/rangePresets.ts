@@ -6,6 +6,9 @@ export type RangePresetKey = 'week' | '2weeks' | 'month' | '6months'
 export interface RangePreset {
   key: RangePresetKey
   label: string
+  // Settings' picker sits under a "Range summary default" heading, so the "Last" is implied there -
+  // and dropping it is what lets all four fit one row in a half-width card.
+  shortLabel: string
   days: number
 }
 
@@ -13,10 +16,10 @@ export interface RangePreset {
 // four presets wide enough apart to be genuinely different views (a week, a fortnight, a month,
 // half a year) without crowding a .segmented control on mobile.
 export const RANGE_PRESETS: RangePreset[] = [
-  { key: 'week', label: 'Last week', days: 7 },
-  { key: '2weeks', label: 'Last 2 weeks', days: 14 },
-  { key: 'month', label: 'Last month', days: 30 },
-  { key: '6months', label: 'Last 6 months', days: 182 },
+  { key: 'week', label: 'Last week', shortLabel: '1 week', days: 7 },
+  { key: '2weeks', label: 'Last 2 weeks', shortLabel: '2 weeks', days: 14 },
+  { key: 'month', label: 'Last month', shortLabel: '1 month', days: 30 },
+  { key: '6months', label: 'Last 6 months', shortLabel: '6 months', days: 182 },
 ]
 
 export const RANGE_PRESET_KEYS: RangePresetKey[] = RANGE_PRESETS.map((preset) => preset.key)

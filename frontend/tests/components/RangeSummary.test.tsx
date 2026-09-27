@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -43,6 +43,14 @@ describe('RangeSummary', () => {
 
     await waitFor(() => expect(endpoints.fetchRangeStats).toHaveBeenCalledWith(addDays(today, -6), today, 'day'))
     expect(screen.getByRole('button', { name: 'Last week' })).toHaveClass('is-active')
+    const presets = within(screen.getByRole('group', { name: 'Summary range' })).getAllByRole('button')
+    expect(presets.map((button) => button.textContent)).toEqual([
+      'Last week',
+      'Last 2 weeks',
+      'Last month',
+      'Last 6 months',
+      'Custom',
+    ])
     expect(screen.getByText('1800')).toBeInTheDocument()
     expect(screen.getByText('140g')).toBeInTheDocument()
     expect(screen.getByText('190g')).toBeInTheDocument()

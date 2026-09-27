@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -156,7 +156,9 @@ describe('Settings', () => {
         expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true')
       }
       expect(screen.getByRole('button', { name: 'Hidden by default' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Last month' })).toHaveClass('is-active')
+      const presets = within(screen.getByRole('group', { name: 'Default range summary preset' })).getAllByRole('button')
+      expect(presets.map((button) => button.textContent)).toEqual(['1 week', '2 weeks', '1 month', '6 months'])
+      expect(screen.getByRole('button', { name: '1 month' })).toHaveClass('is-active')
     })
 
     it('picks up previously stored preferences on mount', () => {
@@ -170,7 +172,7 @@ describe('Settings', () => {
       expect(screen.getByRole('button', { name: 'Protein' })).toHaveAttribute('aria-pressed', 'true')
       expect(screen.getByRole('button', { name: 'Calories' })).toHaveAttribute('aria-pressed', 'false')
       expect(screen.getByRole('button', { name: 'Shown by default' })).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Last 6 months' })).toHaveClass('is-active')
+      expect(screen.getByRole('button', { name: '6 months' })).toHaveClass('is-active')
     })
 
     it('toggling a metric flips its pressed state and persists the change', async () => {
@@ -204,10 +206,10 @@ describe('Settings', () => {
       mockAuth()
       renderSettings()
 
-      await clickUser.click(screen.getByRole('button', { name: 'Last 2 weeks' }))
+      await clickUser.click(screen.getByRole('button', { name: '2 weeks' }))
 
-      expect(screen.getByRole('button', { name: 'Last 2 weeks' })).toHaveClass('is-active')
-      expect(screen.getByRole('button', { name: 'Last month' })).not.toHaveClass('is-active')
+      expect(screen.getByRole('button', { name: '2 weeks' })).toHaveClass('is-active')
+      expect(screen.getByRole('button', { name: '1 month' })).not.toHaveClass('is-active')
       expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).aggregateRangePreset).toBe('2weeks')
     })
   })

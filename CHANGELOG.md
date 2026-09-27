@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.1]
+
+### Fixed
+
+- The desktop nav no longer wraps "Log food" onto two lines: the tabs now stay on one line, with their spacing tightening on narrower windows, and your name hides below 1024px wide (the log out button stays).
+- Settings' History defaults fit on one row each: the metric chips are a little tighter in a half-width card, and the range picker reads "1 week / 2 weeks / 1 month / 6 months", since its heading already says what they are.
+
 ## [0.25.0]
 
 ### Added
