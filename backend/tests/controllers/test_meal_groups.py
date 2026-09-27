@@ -198,3 +198,109 @@ async def test_delete_group_if_empty_is_a_no_op_when_the_group_is_already_gone()
 async def test_meal_groups_require_authentication(client) -> None:
     response = await client.post("/api/meal-groups/", json={"entry_ids": []})
     assert response.status_code == 401
+
+
+async def _meals(client) -> list[dict]:
+    return (await client.get("/api/meals/")).json()
+
+
+async def test_naming_a_group_a_new_name_makes_a_meal_of_its_foods(authed_client) -> None:
+    first = await _create_entry(authed_client, name="Oats", grams=60, consumed_at="2026-08-01T08:00:00Z")
+    second = await _create_entry(authed_client, name="Milk", grams=200, consumed_at="2026-08-01T08:05:00Z")
+    group = (
+        await authed_client.post("/api/meal-groups/", json={"entry_ids": [first, second], "name": " Porridge "})
+    ).json()
+
+    [meal] = await _meals(authed_client)
+    assert (group["meal_id"], group["name"]) == (meal["id"], "Porridge")
+    assert meal["name"] == "Porridge"
+    assert [(item["name"], item["grams"]) for item in meal["items"]] == [("Oats", 60), ("Milk", 200)]
+    assert meal["times_logged"] == 1
+
+
+async def test_naming_a_group_an_existing_name_links_it_without_touching_the_meal(authed_client) -> None:
+    await authed_client.post(
+        "/api/meals/",
+        json={
+            "name": "Porridge",
+            "items": [
+                {
+                    "name": "Oats",
+                    "input_amount": 60,
+                    "calories_per_100g": 380,
+                    "protein_per_100g": 13,
+                    "carbs_per_100g": 60,
+                    "fat_per_100g": 7,
+                }
+            ],
+        },
+    )
+    entry = await _create_entry(authed_client, name="Something else")
+    group = (await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry], "name": "porridge"})).json()
+
+    [meal] = await _meals(authed_client)
+    assert (group["meal_id"], group["name"]) == (meal["id"], "Porridge")
+    assert [item["name"] for item in meal["items"]] == ["Oats"]
+    assert meal["times_logged"] == 1
+
+
+async def test_a_group_without_a_name_is_no_meal(authed_client) -> None:
+    entry = await _create_entry(authed_client)
+    for name in (None, "  "):
+        group = (await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry], "name": name})).json()
+        assert (group["meal_id"], group["name"]) == (None, None)
+    assert await _meals(authed_client) == []
+
+
+async def test_renaming_a_group_relinks_it_and_a_blank_name_unlinks_it(authed_client) -> None:
+    entry = await _create_entry(authed_client, name="Oats")
+    group = (await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry], "name": "Porridge"})).json()
+
+    renamed = (await authed_client.patch(f"/api/meal-groups/{group['id']}", json={"name": "Brunch"})).json()
+    meals = {meal["name"]: meal for meal in await _meals(authed_client)}
+    assert renamed["name"] == "Brunch"
+    assert renamed["meal_id"] == meals["Brunch"]["id"]
+    # Renaming one time you ate it moves that time to another meal - the first one stays.
+    assert (meals["Porridge"]["times_logged"], meals["Brunch"]["times_logged"]) == (0, 1)
+
+    cleared = (await authed_client.patch(f"/api/meal-groups/{group['id']}", json={"name": ""})).json()
+    assert (cleared["meal_id"], cleared["name"]) == (None, None)
+
+
+async def test_a_meal_made_while_regrouping_takes_the_new_members(authed_client) -> None:
+    first = await _create_entry(authed_client, name="Oats", consumed_at="2026-08-01T08:00:00Z")
+    second = await _create_entry(authed_client, name="Milk", consumed_at="2026-08-01T08:05:00Z")
+    group = (await authed_client.post("/api/meal-groups/", json={"entry_ids": [first]})).json()
+
+    await authed_client.patch(
+        f"/api/meal-groups/{group['id']}", json={"entry_ids": [first, second], "name": "Porridge"}
+    )
+    [meal] = await _meals(authed_client)
+    assert [item["name"] for item in meal["items"]] == ["Oats", "Milk"]
+
+
+async def test_a_meal_is_made_only_from_the_groups_live_entries(authed_client) -> None:
+    kept = await _create_entry(authed_client, name="Oats", consumed_at="2026-08-01T08:00:00Z")
+    removed = await _create_entry(authed_client, name="Milk", consumed_at="2026-08-01T08:05:00Z")
+    group = (await authed_client.post("/api/meal-groups/", json={"entry_ids": [kept, removed]})).json()
+    await authed_client.delete(f"/api/entries/{removed}")
+
+    await authed_client.patch(f"/api/meal-groups/{group['id']}", json={"name": "Porridge"})
+    [meal] = await _meals(authed_client)
+    assert [item["name"] for item in meal["items"]] == ["Oats"]
+
+
+async def test_leaving_the_name_out_of_an_update_keeps_the_meal(authed_client) -> None:
+    first = await _create_entry(authed_client)
+    second = await _create_entry(authed_client)
+    group = (await authed_client.post("/api/meal-groups/", json={"entry_ids": [first], "name": "Porridge"})).json()
+    updated = (await authed_client.patch(f"/api/meal-groups/{group['id']}", json={"entry_ids": [first, second]})).json()
+    assert (updated["meal_id"], updated["name"]) == (group["meal_id"], "Porridge")
+
+
+async def test_list_meal_groups_names_each_group_by_its_meal(authed_client) -> None:
+    named = await _create_entry(authed_client)
+    unnamed = await _create_entry(authed_client)
+    await authed_client.post("/api/meal-groups/", json={"entry_ids": [named], "name": "Porridge"})
+    names = {tuple(g["entry_ids"]): g["name"] for g in (await authed_client.get("/api/meal-groups/")).json()}
+    assert names == {(named,): "Porridge", (unnamed,): None}

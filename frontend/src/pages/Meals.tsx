@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import { ApiError } from '../api/client'
-import { fetchMealNames, removeMealName } from '../api/endpoints'
-import type { HistoryGroupItem, MealName } from '../api/types'
+import { deleteMeal, fetchMeals } from '../api/endpoints'
+import type { Meal, MealItem } from '../api/types'
 import ConfirmDialog from '../components/ConfirmDialog'
-import SavedMealEditor from '../components/SavedMealEditor'
+import MealEditor from '../components/MealEditor'
 import { displayDate } from '../lib/dates'
 
-function ItemRow({ item }: { item: HistoryGroupItem }) {
+function ItemRow({ item }: { item: MealItem }) {
   const per = (per100g: number) => Math.round((item.grams * per100g) / 100)
   return (
     <li className="entry-row">
@@ -33,20 +33,20 @@ function ItemRow({ item }: { item: HistoryGroupItem }) {
 }
 
 export default function Meals() {
-  const [meals, setMeals] = useState<MealName[]>([])
+  const [meals, setMeals] = useState<Meal[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // 'new' while building a new meal, the meal's name while editing one, null otherwise.
+  // 'new' while building a new meal, the meal's id while editing one, null otherwise.
   const [editing, setEditing] = useState<string | null>(null)
-  const [pendingRemove, setPendingRemove] = useState<MealName | null>(null)
+  const [pendingRemove, setPendingRemove] = useState<Meal | null>(null)
 
   const load = useCallback(async () => {
     setIsLoading(true)
     setLoadError(null)
     try {
-      setMeals(await fetchMealNames())
+      setMeals(await fetchMeals())
     } catch (error) {
       setLoadError(error instanceof ApiError ? error.message : 'Could not load your meals.')
     } finally {
@@ -72,7 +72,7 @@ export default function Meals() {
     setPendingRemove(null)
     setActionError(null)
     try {
-      await removeMealName(meal.name)
+      await deleteMeal(meal.id)
       await load()
     } catch (error) {
       setActionError(error instanceof ApiError ? error.message : `Could not delete "${meal.name}".`)
@@ -99,7 +99,7 @@ export default function Meals() {
       {editing === 'new' && (
         <div className="card">
           <h2 className="card__title">New meal</h2>
-          <SavedMealEditor onSaved={handleSaved} onCancel={() => setEditing(null)} />
+          <MealEditor onSaved={handleSaved} onCancel={() => setEditing(null)} />
         </div>
       )}
 
@@ -120,12 +120,12 @@ export default function Meals() {
         {!isLoading && meals.length > 0 && (
           <ul className="entry-list">
             {meals.map((meal) =>
-              editing === meal.name ? (
-                <li key={meal.name} className="meal-group" style={{ padding: 'var(--space-md)' }}>
-                  <SavedMealEditor meal={meal} onSaved={handleSaved} onCancel={() => setEditing(null)} />
+              editing === meal.id ? (
+                <li key={meal.id} className="meal-group" style={{ padding: 'var(--space-md)' }}>
+                  <MealEditor meal={meal} onSaved={handleSaved} onCancel={() => setEditing(null)} />
                 </li>
               ) : (
-                <li key={meal.name} className="meal-group">
+                <li key={meal.id} className="meal-group">
                   <div className="meal-group__header">
                     <span>
                       {meal.name}
@@ -142,7 +142,7 @@ export default function Meals() {
                       <button
                         type="button"
                         className="btn btn--ghost btn--small"
-                        onClick={() => setEditing(meal.name)}
+                        onClick={() => setEditing(meal.id)}
                         aria-label={`Edit ${meal.name}`}
                       >
                         Edit
@@ -172,7 +172,7 @@ export default function Meals() {
       {pendingRemove && (
         <ConfirmDialog
           title="Delete this meal?"
-          message={`"${pendingRemove.name}" will no longer be offered when you log food. Nothing you've logged is deleted - any time you've had it stays in your history, just as individual foods.`}
+          message={`"${pendingRemove.name}" will no longer be offered when you log food. Nothing you've logged is deleted - any time you've had it stays in your history, still grouped, just unnamed.`}
           confirmLabel="Delete"
           isDestructive
           onConfirm={confirmRemove}

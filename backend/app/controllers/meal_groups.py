@@ -5,9 +5,10 @@ from litestar.exceptions import NotFoundException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FoodEntry, MealGroup, _utcnow
+from app.models import FoodEntry, Meal, MealGroup, _utcnow
 from app.schemas import CreateMealGroupRequest, MealGroupOut, UpdateMealGroupRequest
 from app.serializers import meal_group_out
+from app.services.meals import link_group_by_name
 
 
 async def _get_owned_group(db_session: AsyncSession, request: Request, group_id: UUID) -> MealGroup:
@@ -28,6 +29,11 @@ async def _get_owned_entries(db_session: AsyncSession, request: Request, entry_i
     if len(entries) != len(set(entry_ids)):
         raise NotFoundException("One or more entries were not found.")
     return entries
+
+
+async def _meal_name(db_session: AsyncSession, group: MealGroup) -> str | None:
+    meal = await db_session.get(Meal, group.meal_id) if group.meal_id else None
+    return meal.name if meal else None
 
 
 async def _member_entry_ids(db_session: AsyncSession, group_id: UUID) -> list[UUID]:
@@ -55,8 +61,12 @@ async def delete_group_if_empty(db_session: AsyncSession, group_id: UUID) -> Non
 
 @get("/")
 async def list_meal_groups(db_session: AsyncSession, request: Request) -> list[MealGroupOut]:
-    groups = list(await db_session.scalars(select(MealGroup).where(MealGroup.user_id == request.user.id)))
-    return [meal_group_out(group, await _member_entry_ids(db_session, group.id)) for group in groups]
+    rows = await db_session.execute(
+        select(MealGroup, Meal.name)
+        .outerjoin(Meal, Meal.id == MealGroup.meal_id)
+        .where(MealGroup.user_id == request.user.id)
+    )
+    return [meal_group_out(group, name, await _member_entry_ids(db_session, group.id)) for group, name in rows]
 
 
 @post("/")
@@ -65,15 +75,17 @@ async def create_meal_group(data: CreateMealGroupRequest, db_session: AsyncSessi
     # Every entry already had its own group before this call - capture those so the ones that end
     # up empty (nothing else left in them) get cleaned up rather than lingering forever.
     old_group_ids = {entry.meal_group_id for entry in entries if entry.meal_group_id is not None}
-    group = MealGroup(user_id=request.user.id, name=data.name)
+    group = MealGroup(user_id=request.user.id)
     db_session.add(group)
     await db_session.flush()  # assigns group.id so it can be used as a FK value below
     for entry in entries:
         entry.meal_group_id = group.id
     for old_group_id in old_group_ids:
         await delete_group_if_empty(db_session, old_group_id)
+    await db_session.flush()  # the new membership, so a meal created from it sees these entries
+    await link_group_by_name(db_session, group, data.name)
     await db_session.commit()
-    return meal_group_out(group, [entry.id for entry in entries])
+    return meal_group_out(group, await _meal_name(db_session, group), [entry.id for entry in entries])
 
 
 @patch("/{group_id:uuid}")
@@ -81,8 +93,6 @@ async def update_meal_group(
     group_id: UUID, data: UpdateMealGroupRequest, db_session: AsyncSession, request: Request
 ) -> MealGroupOut:
     group = await _get_owned_group(db_session, request, group_id)
-    if data.name is not None:
-        group.name = data.name
     if data.entry_ids is not None:
         # Replace membership wholesale: whatever isn't in the new set gets its own fresh singleton
         # group (never left groupless), whatever is gets (re)linked - this single endpoint covers
@@ -101,10 +111,14 @@ async def update_meal_group(
             entry.meal_group_id = group.id
         for old_group_id in old_group_ids:
             await delete_group_if_empty(db_session, old_group_id)
+    if data.name is not None:
+        # After any membership change, so a meal created from this group snapshots its new foods.
+        await db_session.flush()
+        await link_group_by_name(db_session, group, data.name)
     group.updated_at = _utcnow()
     await db_session.commit()
     entry_ids = await _member_entry_ids(db_session, group.id)
-    return meal_group_out(group, entry_ids)
+    return meal_group_out(group, await _meal_name(db_session, group), entry_ids)
 
 
 @delete("/{group_id:uuid}")

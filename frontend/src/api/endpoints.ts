@@ -8,12 +8,10 @@ import type {
   GoalVersion,
   GroupBy,
   HistoryFood,
-  HistoryGroup,
+  Meal,
   MealGroup,
-  MealName,
+  MealItemPayload,
   RangeStats,
-  SavedMeal,
-  SavedMealItemPayload,
   User,
 } from './types'
 
@@ -144,32 +142,25 @@ export function fetchHistoryFoods(query = '') {
 }
 
 export function fetchHistoryGroups(query = '') {
-  return api.get<HistoryGroup[]>(`/history/groups?q=${encodeURIComponent(query)}`)
+  return api.get<Meal[]>(`/history/groups?q=${encodeURIComponent(query)}`)
 }
 
-export function fetchMealNames() {
-  return api.get<MealName[]>('/meal-names/')
+export function fetchMeals() {
+  return api.get<Meal[]>('/meals/')
 }
 
-// Renames the saved meal and every logged occurrence of `name` at once - a meal is identified by
-// its name, not a row, so a rename has to sweep all of them or the history picker would show old
-// and new names as two different meals. See app/controllers/meal_names.py.
-export function renameMealName(name: string, newName: string) {
-  return api.patch<void>(`/meal-names/?name=${encodeURIComponent(name)}`, { new_name: newName })
+export function createMeal(name: string, items: MealItemPayload[]) {
+  return api.post<Meal>('/meals/', { name, items })
 }
 
-// Deletes the saved meal (if any) and ungroups every logged occurrence of `name` - each entry
-// keeps existing individually in history, it just stops being clustered under this meal name.
-export function removeMealName(name: string) {
-  return api.delete<void>(`/meal-names/?name=${encodeURIComponent(name)}`)
+// A rename is just this - every time the meal was eaten is linked to it, so they follow.
+export function updateMeal(id: string, name: string, items: MealItemPayload[]) {
+  return api.patch<Meal>(`/meals/${id}`, { name, items })
 }
 
-export function createSavedMeal(name: string, items: SavedMealItemPayload[]) {
-  return api.post<SavedMeal>('/saved-meals/', { name, items })
-}
-
-export function updateSavedMeal(id: string, name: string, items: SavedMealItemPayload[]) {
-  return api.patch<SavedMeal>(`/saved-meals/${id}`, { name, items })
+// Deletes the meal, never anything eaten: the times it was logged stay grouped, just unnamed.
+export function deleteMeal(id: string) {
+  return api.delete<void>(`/meals/${id}`)
 }
 
 export function fetchDailyStats(date: string) {

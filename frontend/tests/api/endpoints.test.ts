@@ -226,24 +226,7 @@ describe('history endpoints', () => {
   })
 })
 
-describe('meal name endpoints', () => {
-  it('fetchMealNames gets the meal-names list', () => {
-    endpoints.fetchMealNames()
-    expect(api.get).toHaveBeenCalledWith('/meal-names/')
-  })
-
-  it('renameMealName URL-encodes the name and patches new_name', () => {
-    endpoints.renameMealName('Breakfast & Co', 'Morning meal')
-    expect(api.patch).toHaveBeenCalledWith('/meal-names/?name=Breakfast%20%26%20Co', { new_name: 'Morning meal' })
-  })
-
-  it('removeMealName URL-encodes the name and deletes', () => {
-    endpoints.removeMealName('Breakfast & Co')
-    expect(api.delete).toHaveBeenCalledWith('/meal-names/?name=Breakfast%20%26%20Co')
-  })
-})
-
-describe('saved meal endpoints', () => {
+describe('meal endpoints', () => {
   const item = {
     name: 'Oats',
     brand: null,
@@ -257,14 +240,24 @@ describe('saved meal endpoints', () => {
     fat_per_100g: 7,
   }
 
-  it('createSavedMeal posts the name and items', () => {
-    endpoints.createSavedMeal('Porridge', [item])
-    expect(api.post).toHaveBeenCalledWith('/saved-meals/', { name: 'Porridge', items: [item] })
+  it('fetchMeals gets the meals list', () => {
+    endpoints.fetchMeals()
+    expect(api.get).toHaveBeenCalledWith('/meals/')
   })
 
-  it('updateSavedMeal patches the meal by id', () => {
-    endpoints.updateSavedMeal('meal-1', 'Porridge', [item])
-    expect(api.patch).toHaveBeenCalledWith('/saved-meals/meal-1', { name: 'Porridge', items: [item] })
+  it('createMeal posts the name and items', () => {
+    endpoints.createMeal('Porridge', [item])
+    expect(api.post).toHaveBeenCalledWith('/meals/', { name: 'Porridge', items: [item] })
+  })
+
+  it('updateMeal patches the meal by id', () => {
+    endpoints.updateMeal('meal-1', 'Porridge', [item])
+    expect(api.patch).toHaveBeenCalledWith('/meals/meal-1', { name: 'Porridge', items: [item] })
+  })
+
+  it('deleteMeal deletes the meal by id', () => {
+    endpoints.deleteMeal('meal-1')
+    expect(api.delete).toHaveBeenCalledWith('/meals/meal-1')
   })
 })
 

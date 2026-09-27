@@ -6,12 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
-import type { FoodSearchResult, HistoryGroupItem, MealName } from '../../src/api/types'
+import type { FoodSearchResult, Meal, MealItem } from '../../src/api/types'
 import Meals from '../../src/pages/Meals'
 
 vi.mock('../../src/api/endpoints')
 
-const oats: HistoryGroupItem = {
+const oats: MealItem = {
   name: 'Oats',
   brand: 'Kölln',
   barcode: '5000',
@@ -25,7 +25,7 @@ const oats: HistoryGroupItem = {
   fat_per_100g: 7,
 }
 
-const eggs: HistoryGroupItem = {
+const eggs: MealItem = {
   name: 'Egg',
   brand: null,
   barcode: '6000',
@@ -39,7 +39,8 @@ const eggs: HistoryGroupItem = {
   fat_per_100g: 11,
 }
 
-const porridge: MealName = {
+const porridge: Meal = {
+  id: 'meal-1',
   name: 'Porridge',
   items: [oats, eggs],
   calories: 383,
@@ -48,10 +49,10 @@ const porridge: MealName = {
   fat_g: 15.2,
   times_logged: 0,
   last_logged_at: null,
-  saved_meal_id: 'meal-1',
 }
 
-const breakfast: MealName = {
+const breakfast: Meal = {
+  id: 'meal-2',
   name: 'Breakfast',
   items: [oats],
   calories: 228,
@@ -60,7 +61,6 @@ const breakfast: MealName = {
   fat_g: 4.2,
   times_logged: 3,
   last_logged_at: '2026-08-20T08:00:00Z',
-  saved_meal_id: null,
 }
 
 const eggResult: FoodSearchResult = {
@@ -84,13 +84,12 @@ function renderMeals() {
 }
 
 beforeEach(() => {
-  vi.mocked(endpoints.fetchMealNames).mockReset().mockResolvedValue([])
-  vi.mocked(endpoints.removeMealName).mockReset()
-  vi.mocked(endpoints.renameMealName).mockReset()
+  vi.mocked(endpoints.fetchMeals).mockReset().mockResolvedValue([])
+  vi.mocked(endpoints.deleteMeal).mockReset()
   vi.mocked(endpoints.searchFoods).mockReset().mockResolvedValue([])
   vi.mocked(endpoints.lookupBarcode).mockReset()
-  vi.mocked(endpoints.createSavedMeal).mockReset()
-  vi.mocked(endpoints.updateSavedMeal).mockReset()
+  vi.mocked(endpoints.createMeal).mockReset()
+  vi.mocked(endpoints.updateMeal).mockReset()
 })
 
 describe('Meals', () => {
@@ -99,8 +98,8 @@ describe('Meals', () => {
     expect(await screen.findByText(/No meals yet/)).toBeInTheDocument()
   })
 
-  it('shows saved and logged meals the same way, each as a card of its foods', async () => {
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([breakfast, porridge])
+  it('shows each meal as a card of its foods, eaten or not', async () => {
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([breakfast, porridge])
     renderMeals()
 
     const card = (await screen.findByText('Porridge')).closest('.meal-group')!
@@ -113,7 +112,7 @@ describe('Meals', () => {
   })
 
   it('shows a food without a barcode', async () => {
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([
       { ...breakfast, items: [{ ...oats, barcode: null, name: 'Homemade bread' }] },
     ])
     renderMeals()
@@ -121,7 +120,7 @@ describe('Meals', () => {
   })
 
   it('shows a load error', async () => {
-    vi.mocked(endpoints.fetchMealNames).mockRejectedValue(new ApiError('Server down', 500))
+    vi.mocked(endpoints.fetchMeals).mockRejectedValue(new ApiError('Server down', 500))
     renderMeals()
     expect(await screen.findByText('Server down')).toBeInTheDocument()
   })
@@ -129,7 +128,7 @@ describe('Meals', () => {
   it('builds and saves a new meal from searched foods', async () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.searchFoods).mockResolvedValue([eggResult])
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValueOnce([]).mockResolvedValueOnce([porridge])
+    vi.mocked(endpoints.fetchMeals).mockResolvedValueOnce([]).mockResolvedValueOnce([porridge])
     renderMeals()
 
     await user.click(await screen.findByRole('button', { name: '+ Add meal' }))
@@ -147,7 +146,7 @@ describe('Meals', () => {
     expect(screen.getAllByText('233')).toHaveLength(2)
 
     await user.click(save)
-    expect(endpoints.createSavedMeal).toHaveBeenCalledWith('Eggs', [
+    expect(endpoints.createMeal).toHaveBeenCalledWith('Eggs', [
       expect.objectContaining({ name: 'Egg', input_unit: 'count', input_amount: 3, unit_to_grams: 50 }),
     ])
     expect(await screen.findByText('Porridge')).toBeInTheDocument()
@@ -166,7 +165,7 @@ describe('Meals', () => {
     expect(endpoints.lookupBarcode).toHaveBeenCalledWith('6000')
     expect(await screen.findByLabelText('How many?')).toHaveValue(1)
     expect(screen.getByLabelText('Or add by barcode')).toHaveValue('')
-    expect(endpoints.createSavedMeal).not.toHaveBeenCalled()
+    expect(endpoints.createMeal).not.toHaveBeenCalled()
   })
 
   it('shows a barcode lookup error', async () => {
@@ -187,9 +186,9 @@ describe('Meals', () => {
     expect(screen.getByRole('button', { name: 'Scan with camera' })).toBeInTheDocument()
   })
 
-  it('edits a saved meal in place', async () => {
+  it('edits a meal in place', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
     renderMeals()
 
     await user.click(await screen.findByRole('button', { name: 'Edit Porridge' }))
@@ -200,43 +199,16 @@ describe('Meals', () => {
     await user.click(screen.getByRole('button', { name: 'Remove Egg from this meal' }))
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(endpoints.updateSavedMeal).toHaveBeenCalledWith('meal-1', 'Porridge', [
+    expect(endpoints.updateMeal).toHaveBeenCalledWith('meal-1', 'Porridge', [
       expect.objectContaining({ name: 'Oats', input_unit: 'g', input_amount: 80 }),
     ])
-    expect(endpoints.createSavedMeal).not.toHaveBeenCalled()
-  })
-
-  it('saves a logged-only meal when edited, bringing its logged occurrences along on a rename', async () => {
-    const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([breakfast])
-    renderMeals()
-
-    await user.click(await screen.findByRole('button', { name: 'Edit Breakfast' }))
-    const name = screen.getByLabelText('Meal name')
-    await user.clear(name)
-    await user.type(name, 'Brekkie')
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(endpoints.createSavedMeal).toHaveBeenCalledWith('Brekkie', [expect.objectContaining({ name: 'Oats' })])
-    expect(endpoints.renameMealName).toHaveBeenCalledWith('Breakfast', 'Brekkie')
-  })
-
-  it('does not rename when a logged-only meal keeps its name', async () => {
-    const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([breakfast])
-    renderMeals()
-
-    await user.click(await screen.findByRole('button', { name: 'Edit Breakfast' }))
-    await user.click(screen.getByRole('button', { name: 'Save changes' }))
-
-    expect(endpoints.createSavedMeal).toHaveBeenCalled()
-    expect(endpoints.renameMealName).not.toHaveBeenCalled()
+    expect(endpoints.createMeal).not.toHaveBeenCalled()
   })
 
   it('shows the error when saving fails and keeps the editor open', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
-    vi.mocked(endpoints.updateSavedMeal).mockRejectedValue(new ApiError('Name taken', 400))
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
+    vi.mocked(endpoints.updateMeal).mockRejectedValue(new ApiError('Name taken', 400))
     renderMeals()
 
     await user.click(await screen.findByRole('button', { name: 'Edit Porridge' }))
@@ -247,7 +219,7 @@ describe('Meals', () => {
 
   it('cancels editing', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
     renderMeals()
 
     await user.click(await screen.findByRole('button', { name: 'Edit Porridge' }))
@@ -257,14 +229,14 @@ describe('Meals', () => {
 
   it('deletes a meal after confirming', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValueOnce([porridge]).mockResolvedValueOnce([])
-    vi.mocked(endpoints.removeMealName).mockResolvedValue(undefined)
+    vi.mocked(endpoints.fetchMeals).mockResolvedValueOnce([porridge]).mockResolvedValueOnce([])
+    vi.mocked(endpoints.deleteMeal).mockResolvedValue(undefined)
     renderMeals()
 
     await user.click(await screen.findByRole('button', { name: 'Delete Porridge' }))
     await user.click(screen.getByRole('button', { name: 'Delete' }))
 
-    expect(endpoints.removeMealName).toHaveBeenCalledWith('Porridge')
+    expect(endpoints.deleteMeal).toHaveBeenCalledWith('meal-1')
     await waitFor(() => expect(screen.queryByText('Porridge')).not.toBeInTheDocument())
   })
 
@@ -279,28 +251,28 @@ describe('Meals', () => {
 
   it('keeps a meal when deleting is cancelled', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
     renderMeals()
     await user.click(await screen.findByRole('button', { name: 'Delete Porridge' }))
     expect(screen.getByRole('dialog')).toHaveTextContent(
-      `"Porridge" will no longer be offered when you log food. Nothing you've logged is deleted - any time you've had it stays in your history, just as individual foods.`
+      `"Porridge" will no longer be offered when you log food. Nothing you've logged is deleted - any time you've had it stays in your history, still grouped, just unnamed.`
     )
     await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(endpoints.removeMealName).not.toHaveBeenCalled()
+    expect(endpoints.deleteMeal).not.toHaveBeenCalled()
     expect(screen.getByText('Porridge')).toBeInTheDocument()
   })
 
   it('falls back to a generic message when loading fails unexpectedly', async () => {
-    vi.mocked(endpoints.fetchMealNames).mockRejectedValue(new Error('network'))
+    vi.mocked(endpoints.fetchMeals).mockRejectedValue(new Error('network'))
     renderMeals()
     expect(await screen.findByText('Could not load your meals.')).toBeInTheDocument()
   })
 
   it('shows an API error from deleting', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
-    vi.mocked(endpoints.removeMealName).mockRejectedValue(new ApiError('Gone', 404))
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
+    vi.mocked(endpoints.deleteMeal).mockRejectedValue(new ApiError('Gone', 404))
     renderMeals()
     await user.click(await screen.findByRole('button', { name: 'Delete Porridge' }))
     await user.click(screen.getByRole('button', { name: 'Delete' }))
@@ -309,8 +281,8 @@ describe('Meals', () => {
 
   it('shows the error when deleting fails', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
-    vi.mocked(endpoints.removeMealName).mockRejectedValue(new Error('boom'))
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
+    vi.mocked(endpoints.deleteMeal).mockRejectedValue(new Error('boom'))
     renderMeals()
 
     await user.click(await screen.findByRole('button', { name: 'Delete Porridge' }))
@@ -326,8 +298,8 @@ describe('Meals', () => {
     }
 
     it('shows only a loader until the meals arrive', async () => {
-      const load = deferred<MealName[]>()
-      vi.mocked(endpoints.fetchMealNames).mockReturnValue(load.promise)
+      const load = deferred<Meal[]>()
+      vi.mocked(endpoints.fetchMeals).mockReturnValue(load.promise)
       const { container } = renderMeals()
 
       expect(screen.getByText('Loading…')).toBeInTheDocument()
@@ -341,11 +313,9 @@ describe('Meals', () => {
 
     it('swaps the list for the loader while reloading', async () => {
       const user = userEvent.setup()
-      const reload = deferred<MealName[]>()
-      vi.mocked(endpoints.fetchMealNames)
-        .mockResolvedValueOnce([porridge, breakfast])
-        .mockReturnValueOnce(reload.promise)
-      vi.mocked(endpoints.removeMealName).mockResolvedValue(undefined)
+      const reload = deferred<Meal[]>()
+      vi.mocked(endpoints.fetchMeals).mockResolvedValueOnce([porridge, breakfast]).mockReturnValueOnce(reload.promise)
+      vi.mocked(endpoints.deleteMeal).mockResolvedValue(undefined)
       renderMeals()
 
       await user.click(await screen.findByRole('button', { name: 'Delete Porridge' }))
@@ -365,7 +335,7 @@ describe('Meals', () => {
     })
 
     it('shows neither banners nor the empty state alongside a normal list', async () => {
-      vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
+      vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
       const { container } = renderMeals()
       await screen.findByText('Porridge')
       expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
@@ -384,7 +354,7 @@ describe('Meals', () => {
     })
 
     it('titles each card with the name and a summary', async () => {
-      vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
+      vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
       const { container } = renderMeals()
       await screen.findByText('Porridge')
       expect(container.querySelector('.meal-group__header > span')).toHaveTextContent(
@@ -393,14 +363,14 @@ describe('Meals', () => {
     })
 
     it('shows the load error instead of the empty state', async () => {
-      vi.mocked(endpoints.fetchMealNames).mockRejectedValue(new ApiError('Server down', 500))
+      vi.mocked(endpoints.fetchMeals).mockRejectedValue(new ApiError('Server down', 500))
       renderMeals()
       await screen.findByText('Server down')
       expect(screen.queryByText(/No meals yet/)).not.toBeInTheDocument()
     })
 
     it("spells out each food's amount and macros, with no brand prefix when there's none", async () => {
-      vi.mocked(endpoints.fetchMealNames).mockResolvedValue([porridge])
+      vi.mocked(endpoints.fetchMeals).mockResolvedValue([porridge])
       const { container } = renderMeals()
       await screen.findByText('Porridge')
       const metas = [...container.querySelectorAll('.entry-row__meta')].map((meta) => meta.textContent)

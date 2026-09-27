@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
-import type { HistoryFood, HistoryGroup } from '../../src/api/types'
+import type { HistoryFood, Meal } from '../../src/api/types'
 import HistoryPicker from '../../src/components/HistoryPicker'
 
 vi.mock('../../src/api/endpoints')
@@ -41,9 +41,13 @@ const bananaFood: HistoryFood = {
   times_logged: 1,
 }
 
-const breakfast: HistoryGroup = {
+const breakfast: Meal = {
+  id: 'meal-1',
   name: 'Breakfast',
   calories: 500,
+  protein_g: 10,
+  carbs_g: 50,
+  fat_g: 20,
   last_logged_at: '2026-08-05T08:00:00Z',
   times_logged: 2,
   items: [
@@ -79,9 +83,13 @@ const breakfast: HistoryGroup = {
 // A single-item group (singular "1 item" copy) whose item is non-gram and barcode-less, to
 // exercise both the unit_to_grams scaling and the barcode-less `?? item.name` React key fallback
 // inside the Customize form.
-const soloSnack: HistoryGroup = {
+const soloSnack: Meal = {
+  id: 'meal-2',
   name: 'Snack',
   calories: 187,
+  protein_g: 1,
+  carbs_g: 40,
+  fat_g: 1,
   last_logged_at: '2026-08-05T08:00:00Z',
   times_logged: 1,
   items: [
@@ -136,19 +144,19 @@ describe('HistoryPicker', () => {
     expect(screen.getByText('Breakfast')).toBeInTheDocument()
   })
 
-  it('labels a saved meal and only shows a logged count once it has been logged', async () => {
+  it('only shows a logged count once a meal has been eaten', async () => {
     const user = userEvent.setup()
     vi.mocked(endpoints.fetchHistoryGroups).mockResolvedValue([
-      { ...breakfast, name: 'Unlogged', saved_meal_id: 'meal-1', times_logged: 0, last_logged_at: null },
-      { ...breakfast, name: 'Logged', saved_meal_id: 'meal-2', times_logged: 2 },
+      { ...breakfast, id: 'a', name: 'Unlogged', times_logged: 0, last_logged_at: null },
+      { ...breakfast, id: 'b', name: 'Logged', times_logged: 2 },
     ])
     renderPicker()
     await user.click(screen.getByRole('button', { name: 'Browse past foods' }))
 
     const metaOf = (name: string) => screen.getByText(name).closest('li')!.querySelector('.entry-row__meta')
     await screen.findByText('Unlogged')
-    expect(metaOf('Unlogged')).toHaveTextContent(/kcal · saved$/)
-    expect(metaOf('Logged')).toHaveTextContent(/kcal · saved · logged 2×$/)
+    expect(metaOf('Unlogged')).toHaveTextContent(/^2 items · 500 kcal$/)
+    expect(metaOf('Logged')).toHaveTextContent(/^2 items · 500 kcal · logged 2×$/)
   })
 
   it('shows an empty state when history is empty', async () => {
@@ -858,7 +866,7 @@ describe('HistoryPicker', () => {
 
     it('customizes a gram-logged ingredient by its gram amount, whatever its unit conversion', async () => {
       const user = userEvent.setup()
-      const eggsMeal: HistoryGroup = {
+      const eggsMeal: Meal = {
         ...soloSnack,
         name: 'Eggs',
         items: [{ ...soloSnack.items[0], input_unit: 'g', unit_to_grams: 50 }],

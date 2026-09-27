@@ -9,12 +9,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - Meals is now its own tab, next to Log food, instead of being tucked away in Settings. The old `/settings/meals` link redirects there.
 - You can create meals ahead of time: "+ Add meal" lets you name a meal and add foods by searching, typing a barcode, or scanning one with the camera, then set each food's amount.
-- Meals you create show up first under "Past meals" when you log food, ready to add in one go or customize.
+- Meals you haven't eaten yet show up first under "Past meals" when you log food, ready to add in one go or customize.
 
 ### Changed
 
-- The Meals page shows every meal in one list, whether you created it there or named a group of foods while logging. Each is a card like the meal groups on Today and History, listing its foods with their amounts, calories, and macros, plus how often you've logged it.
-- Any meal can be edited (name, foods, and amounts) or deleted from its card. Renaming a meal also renames the times you've logged it. Deleting a meal never deletes anything you ate: past logs stay in your history as individual foods.
+- A meal is now one thing: a name and its foods. Every time you eat it is linked to it, rather than matched to it by sharing the same name. Naming a group of foods you logged (or dragged together) links it to the meal of that name - or, if there's no meal called that yet, creates one from that group's foods and amounts.
+- The Meals page lists every meal as a card like the meal groups on Today and History: its foods with their amounts, calories and macros, plus how often you've eaten it. Any meal can be edited (name, foods and amounts) or deleted from its card.
+- Renaming a meal is a single change that every time you've eaten it follows. Renaming one day's group moves just that day to another meal, and clearing its name leaves it an unnamed group.
+- Deleting a meal never deletes anything you ate: the times you had it stay grouped together in your log, just unnamed.
+- On upgrade, every name you'd given a group of logged foods becomes a meal, using the foods from the most recent time you had it, with all of those times linked to it. Nothing you logged changes.
 - The Meals card in Settings is gone, now that Meals has its own tab.
 
 ### Development

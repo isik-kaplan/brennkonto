@@ -3,25 +3,9 @@ from datetime import UTC, date, datetime
 
 import pytest
 
-from app.models import Favorite, FoodEntry, GoalVersion, MealGroup, SavedMeal, User
-from app.schemas import (
-    FavoriteOut,
-    FoodEntryOut,
-    GoalVersionOut,
-    HistoryGroupItemOut,
-    MealGroupOut,
-    SavedMealOut,
-    UserOut,
-)
-from app.serializers import (
-    entry_out,
-    favorite_out,
-    goal_version_out,
-    meal_group_out,
-    saved_meal_items_out,
-    saved_meal_out,
-    user_out,
-)
+from app.models import Favorite, FoodEntry, GoalVersion, MealGroup, User
+from app.schemas import FavoriteOut, FoodEntryOut, GoalVersionOut, MealGroupOut, UserOut
+from app.serializers import entry_out, favorite_out, goal_version_out, meal_group_out, user_out
 
 
 # Every serializer is compared against a whole expected struct, so a field that's dropped, swapped
@@ -138,48 +122,8 @@ def test_entry_out_maps_fields_and_computed_macros() -> None:
 
 def test_meal_group_out_maps_all_fields() -> None:
     entry_ids = [uuid.UUID(int=1), uuid.UUID(int=2)]
-    group = MealGroup(id=ID, user_id=ID, name="Breakfast")
-    assert meal_group_out(group, entry_ids) == MealGroupOut(id=ID, name="Breakfast", entry_ids=entry_ids)
-
-
-OATS_ITEM = {
-    "name": "Oats",
-    "brand": "Kölln",
-    "barcode": "5000",
-    "grams": 60,
-    "input_unit": "g",
-    "input_amount": 60,
-    "unit_to_grams": 1,
-    "calories_per_100g": 380,
-    "protein_per_100g": 13,
-    "carbs_per_100g": 60,
-    "fat_per_100g": 7,
-}
-EGG_ITEM = {
-    **OATS_ITEM,
-    "name": "Egg",
-    "brand": None,
-    "barcode": None,
-    "grams": 100,
-    "input_unit": "count",
-    "input_amount": 2,
-    "unit_to_grams": 50,
-    "calories_per_100g": 155,
-    "protein_per_100g": 13,
-    "carbs_per_100g": 1,
-    "fat_per_100g": 11,
-}
-
-
-def test_saved_meal_out_maps_items_and_sums_macros_across_them() -> None:
-    meal = SavedMeal(id=ID, user_id=ID, name="Porridge", items=[OATS_ITEM, EGG_ITEM])
-    assert saved_meal_items_out(meal) == [HistoryGroupItemOut(**OATS_ITEM), HistoryGroupItemOut(**EGG_ITEM)]
-    assert saved_meal_out(meal) == SavedMealOut(
-        id=ID,
-        name="Porridge",
-        items=[HistoryGroupItemOut(**OATS_ITEM), HistoryGroupItemOut(**EGG_ITEM)],
-        calories=pytest.approx(60 * 3.8 + 100 * 1.55),
-        protein_g=pytest.approx(60 * 0.13 + 100 * 0.13),
-        carbs_g=pytest.approx(60 * 0.6 + 100 * 0.01),
-        fat_g=pytest.approx(60 * 0.07 + 100 * 0.11),
+    meal_id = uuid.UUID(int=8)
+    group = MealGroup(id=ID, user_id=ID, meal_id=meal_id)
+    assert meal_group_out(group, "Breakfast", entry_ids) == MealGroupOut(
+        id=ID, meal_id=meal_id, name="Breakfast", entry_ids=entry_ids
     )

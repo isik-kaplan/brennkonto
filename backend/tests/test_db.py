@@ -1,3 +1,5 @@
+import json
+import uuid as uuid_module
 from datetime import UTC, date, datetime
 
 from sqlalchemy import inspect, select, text
@@ -318,12 +320,12 @@ async def test_create_tables_backfills_a_group_of_one_for_every_ungrouped_entry(
         meal_groups = Base.metadata.tables["meal_groups"]
         rows = (await connection.execute(select(food_entries.c.id, food_entries.c.meal_group_id))).all()
         group_ids_by_entry = {row.id: row.meal_group_id for row in rows}
-        all_groups = (await connection.execute(select(meal_groups.c.id, meal_groups.c.name))).all()
+        all_groups = (await connection.execute(select(meal_groups.c.id, meal_groups.c.meal_id))).all()
 
     assert group_ids_by_entry[live_entry_id] != group_ids_by_entry[deleted_entry_id]
     # Each entry points at a group that really exists - an unnamed group of one.
     assert {row.id for row in all_groups} == set(group_ids_by_entry.values())
-    assert [row.name for row in all_groups] == [None, None]
+    assert [row.meal_id for row in all_groups] == [None, None]
 
 
 async def test_create_tables_adds_unit_columns_to_a_pre_existing_product_cache_table() -> None:
@@ -563,6 +565,15 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
             ),
             {"id": group_id_hex},
         )
+        # and one unnamed group, owned by user 2, over its first entry
+        unnamed_group_id_hex = "2" * 32
+        await connection.execute(
+            text(
+                "INSERT INTO meal_groups (id, user_id, name, created_at, updated_at) VALUES "
+                "(:id, 2, NULL, '2026-07-01 08:00:00', NULL)"
+            ),
+            {"id": unnamed_group_id_hex},
+        )
 
         entry_id = 1
         entry_ids_by_user: dict[int, list[int]] = {user_id: [] for user_id in range(1, num_users + 1)}
@@ -571,6 +582,7 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
                 consumed_at = f"2026-07-{day_offset + 1:02d}"
                 for meal_index in range(entries_per_day):
                     in_first_group = user_id == 1 and day_offset == 0 and meal_index < entries_per_day
+                    in_unnamed_group = user_id == 2 and day_offset == 0 and meal_index == 0
                     await connection.execute(
                         text(
                             "INSERT INTO food_entries "
@@ -585,7 +597,9 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
                             "user_id": user_id,
                             "name": f"Food {entry_id}",
                             "consumed_at": consumed_at,
-                            "meal_group_id": group_id_hex if in_first_group else None,
+                            "meal_group_id": group_id_hex
+                            if in_first_group
+                            else (unnamed_group_id_hex if in_unnamed_group else None),
                         },
                     )
                     entry_ids_by_user[user_id].append(entry_id)
@@ -602,7 +616,14 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
         entry_rows = (
             await connection.execute(text("SELECT id, user_id, name, consumed_at, meal_group_id FROM food_entries"))
         ).all()
-        group_rows = (await connection.execute(text("SELECT id, user_id, name FROM meal_groups"))).all()
+        group_rows = (
+            await connection.execute(
+                text(
+                    "SELECT meal_groups.id, meal_groups.user_id, meals.name, meals.items FROM meal_groups "
+                    "LEFT JOIN meals ON meals.id = meal_groups.meal_id"
+                )
+            )
+        ).all()
 
     # every row survived the rebuild
     assert len(user_rows) == num_users
@@ -632,8 +653,12 @@ async def test_migrate_users_and_entries_to_uuid_ids_end_to_end() -> None:
         assert "13:00:00" in row.consumed_at
 
     # the meal group's owner was remapped to the same migrated user id its entries now point to
+    # The unnamed group stays a group, of no meal.
+    assert next(row for row in group_rows if row.id == unnamed_group_id_hex).name is None
     breakfast_group = next(row for row in group_rows if row.name == "Breakfast")
     assert breakfast_group.user_id == user_id_by_username["user1"]
+    # The group's name became a meal of that name, with the group's own foods.
+    assert [item["name"] for item in json.loads(breakfast_group.items)] == ["Food 1"]
 
     # every entry points at a real group, and none of the backfilled singletons collide
     entry_group_ids = [row.meal_group_id for row in entry_rows]
@@ -705,5 +730,186 @@ async def test_migrate_leaves_an_already_uuid_keyed_meal_groups_table_alone() ->
     await create_tables()
 
     async with engine.begin() as connection:
-        rows = (await connection.execute(text("SELECT user_id, name FROM meal_groups"))).all()
+        rows = (
+            await connection.execute(
+                text(
+                    "SELECT meal_groups.user_id, meals.name FROM meal_groups "
+                    "JOIN meals ON meals.id = meal_groups.meal_id"
+                )
+            )
+        ).all()
     assert [(row.user_id, row.name) for row in rows] == [(owner, "Breakfast")]
+
+
+async def _as_0_24(rows: dict) -> None:
+    """Builds the 0.24 schema - no meals, and groups named by a `name` column of their own - holding
+    `rows` (table name -> list of rows)."""
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+        await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(text("DROP TABLE meals"))
+        await connection.execute(text("DROP TABLE meal_groups"))
+        await connection.execute(
+            text(
+                "CREATE TABLE meal_groups (id CHAR(32) PRIMARY KEY, user_id CHAR(32), name VARCHAR(120), "
+                "created_at DATETIME, updated_at DATETIME)"
+            )
+        )
+        for table, table_rows in rows.items():
+            for row in table_rows:
+                columns = ", ".join(row)
+                values = ", ".join(f":{column}" for column in row)
+                await connection.execute(text(f"INSERT INTO {table} ({columns}) VALUES ({values})"), row)
+
+
+def _hex(n: int) -> str:
+    return uuid_module.UUID(int=n).hex
+
+
+def _entry(n: int, user: int, group: int, name: str, deleted: bool = False, at: str = "2026-08-01 08:00:00") -> dict:
+    return {
+        "id": _hex(n),
+        "user_id": _hex(user),
+        "meal_group_id": _hex(group),
+        "name": name,
+        "grams": 100,
+        "input_unit": "g",
+        "input_amount": 100,
+        "unit_to_grams": 1.0,
+        "calories_per_100g": 100,
+        "protein_per_100g": 1,
+        "carbs_per_100g": 1,
+        "fat_per_100g": 1,
+        "consumed_at": at,
+        "created_at": at,
+        "deleted_at": "2026-08-02 08:00:00" if deleted else None,
+    }
+
+
+def _group(n: int, user: int, name: str | None, created_at: str | None) -> dict:
+    return {"id": _hex(n), "user_id": _hex(user), "name": name, "created_at": created_at}
+
+
+async def test_migrating_from_0_24_turns_group_names_into_meals() -> None:
+    ada, bob = 1, 2
+    users = [
+        {
+            "id": _hex(user),
+            "email": f"{user}@b.com",
+            "password_hash": "x",
+            "display_name": "U",
+            "created_at": "2026-07-01",
+        }
+        for user in (ada, bob)
+    ]
+    await _as_0_24(
+        {
+            "users": users,
+            "meal_groups": [
+                _group(10, ada, "Breakfast", "2026-08-01 08:00:00"),
+                # Lunch, three times: its foods come from the newest time that still has live entries.
+                _group(11, ada, "Lunch", "2026-08-01 12:00:00"),
+                _group(12, ada, " lunch", "2026-08-05 12:00:00"),
+                _group(13, ada, "LUNCH", "2026-08-09 12:00:00"),
+                # Only ever logged, then deleted - still a meal, from the entries in the archive.
+                _group(14, ada, "Snack", "2026-08-01 15:00:00"),
+                # Unnamed, or named nothing - no meal.
+                _group(15, ada, None, "2026-08-01 16:00:00"),
+                _group(16, ada, "   ", "2026-08-01 17:00:00"),
+                # Another user's Lunch is another meal.
+                _group(17, bob, "Lunch", "2026-08-01 12:00:00"),
+            ],
+            "food_entries": [
+                _entry(30, ada, 10, "Toast"),
+                _entry(31, ada, 11, "Soup"),
+                _entry(32, ada, 12, "Salad"),
+                _entry(33, ada, 12, "Bread"),
+                _entry(34, ada, 13, "Pizza", deleted=True),
+                _entry(35, ada, 14, "Crisps", deleted=True),
+                _entry(36, ada, 15, "Apple"),
+                _entry(37, ada, 16, "Pear"),
+                _entry(38, bob, 17, "Rice"),
+            ],
+        }
+    )
+
+    await create_tables()
+    await create_tables()  # idempotent - a second run changes nothing
+
+    async with engine.begin() as connection:
+        tables = await connection.run_sync(lambda conn: inspect(conn).get_table_names())
+        group_columns = await connection.run_sync(
+            lambda conn: {c["name"] for c in inspect(conn).get_columns("meal_groups")}
+        )
+        meals = (await connection.execute(text("SELECT id, user_id, name, items FROM meals"))).all()
+        links = dict((await connection.execute(text("SELECT id, meal_id FROM meal_groups"))).all())
+
+    assert "meals" in tables
+    assert "name" not in group_columns
+    meal_by = {(row.user_id, row.name): row for row in meals}
+    assert sorted(meal_by) == sorted(
+        [(_hex(ada), "Breakfast"), (_hex(ada), "LUNCH"), (_hex(ada), "Snack"), (_hex(bob), "Lunch")]
+    )
+
+    breakfast = meal_by[(_hex(ada), "Breakfast")]
+    assert [item["name"] for item in json.loads(breakfast.items)] == ["Toast"]
+    lunch = meal_by[(_hex(ada), "LUNCH")]
+    assert [item["name"] for item in json.loads(lunch.items)] == ["Salad", "Bread"]
+    snack = meal_by[(_hex(ada), "Snack")]
+    assert [item["name"] for item in json.loads(snack.items)] == ["Crisps"]
+    assert [item["name"] for item in json.loads(meal_by[(_hex(bob), "Lunch")].items)] == ["Rice"]
+
+    assert links == {
+        _hex(10): breakfast.id,
+        _hex(11): lunch.id,
+        _hex(12): lunch.id,
+        _hex(13): lunch.id,
+        _hex(14): snack.id,
+        _hex(15): None,
+        _hex(16): None,
+        _hex(17): meal_by[(_hex(bob), "Lunch")].id,
+    }
+
+
+async def test_a_fresh_database_needs_no_meal_migration() -> None:
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
+    await create_tables()
+    async with engine.begin() as connection:
+        tables = await connection.run_sync(lambda conn: inspect(conn).get_table_names())
+    assert "meals" in tables
+
+
+async def test_migrating_orders_occurrences_by_time_not_id_and_foods_by_time_then_id() -> None:
+    ada = 1
+    user = {"id": _hex(ada), "email": "a@b.com", "password_hash": "x", "display_name": "U", "created_at": "2026-07-01"}
+    await _as_0_24(
+        {
+            "users": [user],
+            "meal_groups": [
+                # The newest time has the smallest id - and one time has no timestamp at all, which
+                # counts as the oldest.
+                _group(20, ada, "Dinner", "2026-08-09 19:00:00"),
+                _group(21, ada, "Dinner", "2026-08-01 19:00:00"),
+                _group(22, ada, "Dinner", None),
+                # Named, but nothing was ever logged in it.
+                _group(23, ada, "Empty", "2026-08-01 20:00:00"),
+            ],
+            "food_entries": [
+                # Eaten later but with a smaller id, then two at the same time in reverse id order.
+                _entry(39, ada, 20, "Dessert", at="2026-08-09 20:00:00"),
+                _entry(41, ada, 20, "Main", at="2026-08-09 19:00:00"),
+                _entry(40, ada, 20, "Starter", at="2026-08-09 19:00:00"),
+                _entry(43, ada, 21, "Old dinner"),
+                _entry(44, ada, 22, "Undated dinner"),
+            ],
+        }
+    )
+    await create_tables()
+
+    async with engine.begin() as connection:
+        meals = {
+            row.name: json.loads(row.items) for row in await connection.execute(text("SELECT name, items FROM meals"))
+        }
+    assert [item["name"] for item in meals["Dinner"]] == ["Starter", "Main", "Dessert"]
+    assert meals["Empty"] == []

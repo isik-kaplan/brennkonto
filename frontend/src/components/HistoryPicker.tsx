@@ -3,7 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react'
 
 import { ApiError } from '../api/client'
 import { createEntry, createMealGroup, fetchHistoryFoods, fetchHistoryGroups } from '../api/endpoints'
-import type { HistoryFood, HistoryGroup } from '../api/types'
+import type { HistoryFood, Meal } from '../api/types'
 import { unitLabel, withoutLeadingZeros } from '../lib/units'
 
 interface HistoryPickerProps {
@@ -23,7 +23,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   const [isOpen, setIsOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [foods, setFoods] = useState<HistoryFood[]>([])
-  const [groups, setGroups] = useState<HistoryGroup[]>([])
+  const [groups, setGroups] = useState<Meal[]>([])
   // Stryker disable next-line BooleanLiteral: only shown once open, and opening's effect sets it before a click's paint
   const [isLoading, setIsLoading] = useState(false)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -39,7 +39,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   // Which past meal (if any) is currently expanded for per-ingredient amount editing, and what's
   // typed into each of its ingredient amount fields - indexed the same as customGroup.items so a
   // field's edit stays paired to its ingredient even as the user types.
-  const [customGroup, setCustomGroup] = useState<HistoryGroup | null>(null)
+  const [customGroup, setCustomGroup] = useState<Meal | null>(null)
   // Stryker disable next-line ArrayDeclaration: startCustomGroup sets it before the form that reads it renders
   const [customGroupAmounts, setCustomGroupAmounts] = useState<string[]>([])
   const [isAddingCustomGroup, setIsAddingCustomGroup] = useState(false)
@@ -157,7 +157,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
   // Re-creates every item in a past named combo at once, then re-groups the new entries under the
   // same name - the same "repeat a whole meal" shape as EntryList's repeatGroup, just sourced from
   // history instead of the currently-viewed day.
-  async function addGroup(group: HistoryGroup) {
+  async function addGroup(group: Meal) {
     const key = `group:${group.name}`
     setAddingKey(key)
     setActionError(null)
@@ -197,7 +197,7 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
 
   // Opens the per-ingredient amount form for a past meal, seeded with each ingredient's
   // last-logged amount - the multi-item counterpart to startCustomAdd above.
-  function startCustomGroup(group: HistoryGroup) {
+  function startCustomGroup(group: Meal) {
     setCustomGroup(group)
     setCustomGroupAmounts(group.items.map((item) => String(item.input_amount)))
     setCustomGroupError(null)
@@ -391,7 +391,6 @@ export default function HistoryPicker({ getConsumedAt, onAdded }: HistoryPickerP
                     <div className="entry-row__meta">
                       {group.items.length} item{group.items.length === 1 ? '' : 's'} ·{' '}
                       <span className="numeral">{Math.round(group.calories)}</span> kcal
-                      {group.saved_meal_id && ' · saved'}
                       {group.times_logged > 0 && ` · logged ${group.times_logged}×`}
                     </div>
                   </div>

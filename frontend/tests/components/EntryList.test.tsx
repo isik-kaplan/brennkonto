@@ -129,7 +129,7 @@ describe('EntryList', () => {
     it('clusters entries sharing a meal_group_id under a named header with an ungroup action', async () => {
       const user = userEvent.setup()
       const onUngroup = vi.fn()
-      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
+      const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
       const entries = [
         makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
         makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
@@ -156,7 +156,7 @@ describe('EntryList', () => {
     })
 
     it('shows the real name instead of the placeholder once a group has one', () => {
-      const groups: MealGroup[] = [{ id: 'g2', name: 'Second breakfast', entry_ids: ['1'] }]
+      const groups: MealGroup[] = [{ id: 'g2', meal_id: 'meal-g2', name: 'Second breakfast', entry_ids: ['1'] }]
       const entries = [makeEntry({ id: '1', meal_group_id: 'g2' })]
       const { container } = render(
         <EntryList {...listHandlers()} entries={entries} onDelete={vi.fn()} groups={groups} />
@@ -168,7 +168,7 @@ describe('EntryList', () => {
     it('renames a boxed group by clicking its name', async () => {
       const user = userEvent.setup()
       const onRenameGroup = vi.fn()
-      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
+      const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
       const entries = [
         makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1' }),
         makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
@@ -228,7 +228,7 @@ describe('EntryList', () => {
     it('cancels a rename with Escape without calling onRenameGroup', async () => {
       const user = userEvent.setup()
       const onRenameGroup = vi.fn()
-      const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+      const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1'] }]
       const entries = [makeEntry({ id: '1', meal_group_id: 'g1' })]
       render(
         <EntryList
@@ -558,7 +558,7 @@ describe('EntryList', () => {
   })
 
   describe('repeating a whole meal group for today', () => {
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
+    const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1', '2'] }]
     const entries = [
       makeEntry({ id: '1', name: 'Eggs', meal_group_id: 'g1', input_amount: 100, grams: 100 }),
       makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1', input_amount: 60, grams: 60 }),
@@ -585,7 +585,12 @@ describe('EntryList', () => {
       const user = userEvent.setup()
       const onEntryRepeated = vi.fn()
       vi.mocked(endpoints.createEntry).mockResolvedValueOnce(entries[0]).mockResolvedValueOnce(entries[1])
-      vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g2', name: 'Breakfast', entry_ids: ['1', '2'] })
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({
+        id: 'g2',
+        meal_id: 'meal-g2',
+        name: 'Breakfast',
+        entry_ids: ['1', '2'],
+      })
       render(
         <EntryList
           {...listHandlers()}
@@ -623,9 +628,14 @@ describe('EntryList', () => {
 
     it('regroups under no name for an unnamed meal', async () => {
       const user = userEvent.setup()
-      const unnamedGroups: MealGroup[] = [{ id: 'g1', name: null, entry_ids: ['1', '2'] }]
+      const unnamedGroups: MealGroup[] = [{ id: 'g1', meal_id: null, name: null, entry_ids: ['1', '2'] }]
       vi.mocked(endpoints.createEntry).mockResolvedValueOnce(entries[0]).mockResolvedValueOnce(entries[1])
-      vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g2', name: null, entry_ids: ['1', '2'] })
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({
+        id: 'g2',
+        meal_id: null,
+        name: null,
+        entry_ids: ['1', '2'],
+      })
       render(
         <EntryList
           {...listHandlers()}
@@ -678,7 +688,12 @@ describe('EntryList', () => {
           resolveCreate = resolve
         })
       )
-      vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'g2', name: 'Breakfast', entry_ids: ['1', '2'] })
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({
+        id: 'g2',
+        meal_id: 'meal-g2',
+        name: 'Breakfast',
+        entry_ids: ['1', '2'],
+      })
       render(
         <EntryList {...listHandlers()} entries={entries} onDelete={vi.fn()} groups={groups} onEntryRepeated={vi.fn()} />
       )
@@ -716,8 +731,8 @@ describe('EntryList', () => {
 
     it('names each group box after its own group', () => {
       const groups: MealGroup[] = [
-        { id: 'g1', name: 'Breakfast', entry_ids: ['1'] },
-        { id: 'g2', name: 'Lunch', entry_ids: ['2'] },
+        { id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1'] },
+        { id: 'g2', meal_id: 'meal-g2', name: 'Lunch', entry_ids: ['2'] },
       ]
       const entries = [makeEntry({ id: '1', meal_group_id: 'g1' }), makeEntry({ id: '2', meal_group_id: 'g2' })]
       const { container } = render(
@@ -734,7 +749,7 @@ describe('EntryList', () => {
         <EntryList
           {...listHandlers()}
           entries={[makeEntry({ meal_group_id: 'g1' })]}
-          groups={[{ id: 'g1', name: null, entry_ids: ['1'] }]}
+          groups={[{ id: 'g1', meal_id: null, name: null, entry_ids: ['1'] }]}
           onRenameGroup={onRenameGroup}
           onDelete={vi.fn()}
         />
@@ -822,7 +837,7 @@ describe('EntryList', () => {
         makeEntry({ id: '2', name: 'Toast', meal_group_id: 'gone' }),
       ]
       vi.mocked(endpoints.createEntry).mockResolvedValueOnce(entries[0]).mockResolvedValueOnce(entries[1])
-      vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'new', name: null, entry_ids: [] })
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'new', meal_id: null, name: null, entry_ids: [] })
       render(
         <EntryList {...listHandlers()} entries={entries} groups={[]} onDelete={vi.fn()} onEntryRepeated={vi.fn()} />
       )
@@ -833,15 +848,20 @@ describe('EntryList', () => {
     it("repeats a meal under its own group's name, not another group's", async () => {
       const user = userEvent.setup()
       const groups: MealGroup[] = [
-        { id: 'other', name: 'Dinner', entry_ids: [] },
-        { id: 'g1', name: 'Breakfast', entry_ids: ['1', '2'] },
+        { id: 'other', meal_id: 'meal-other', name: 'Dinner', entry_ids: [] },
+        { id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1', '2'] },
       ]
       const entries = [
         makeEntry({ id: '1', meal_group_id: 'g1' }),
         makeEntry({ id: '2', name: 'Toast', meal_group_id: 'g1' }),
       ]
       vi.mocked(endpoints.createEntry).mockResolvedValueOnce(entries[0]).mockResolvedValueOnce(entries[1])
-      vi.mocked(endpoints.createMealGroup).mockResolvedValue({ id: 'new', name: 'Breakfast', entry_ids: [] })
+      vi.mocked(endpoints.createMealGroup).mockResolvedValue({
+        id: 'new',
+        meal_id: 'meal-new',
+        name: 'Breakfast',
+        entry_ids: [],
+      })
       render(
         <EntryList {...listHandlers()} entries={entries} groups={groups} onDelete={vi.fn()} onEntryRepeated={vi.fn()} />
       )
