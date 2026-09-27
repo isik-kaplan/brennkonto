@@ -2,8 +2,8 @@ import { Suspense, lazy, useState } from 'react'
 import type { FormEvent } from 'react'
 
 import { ApiError } from '../api/client'
-import { createSavedMeal, lookupBarcode, renameMealName, updateSavedMeal } from '../api/endpoints'
-import type { FoodSearchResult, MealName, SavedMealItemPayload } from '../api/types'
+import { createMeal, lookupBarcode, updateMeal } from '../api/endpoints'
+import type { FoodSearchResult, Meal, MealItemPayload } from '../api/types'
 import { useFoodSearch } from '../hooks/useFoodSearch'
 import { defaultAmountFor, unitLabel, withoutLeadingZeros } from '../lib/units'
 
@@ -11,7 +11,7 @@ import { defaultAmountFor, unitLabel, withoutLeadingZeros } from '../lib/units'
 const BarcodeScanner = lazy(() => import('./BarcodeScanner'))
 
 interface DraftItem {
-  food: Omit<SavedMealItemPayload, 'input_unit' | 'input_amount'>
+  food: Omit<MealItemPayload, 'input_unit' | 'input_amount'>
   // The food's own non-gram unit ("count", "ml", ...), if it has one - what the grams/unit toggle
   // flips to. null when the food is only measured in grams.
   altUnit: string | null
@@ -19,10 +19,9 @@ interface DraftItem {
   amountInput: string
 }
 
-interface SavedMealEditorProps {
-  // Omitted when creating a new meal. A meal that's only ever been logged (no saved_meal_id) gets
-  // saved for the first time when edited here.
-  meal?: MealName
+interface MealEditorProps {
+  // Omitted when creating a new meal.
+  meal?: Meal
   onSaved: () => void | Promise<void>
   onCancel: () => void
 }
@@ -45,7 +44,7 @@ function draftFromSearchResult(result: FoodSearchResult): DraftItem {
   }
 }
 
-function draftsFromMeal(meal: MealName): DraftItem[] {
+function draftsFromMeal(meal: Meal): DraftItem[] {
   return meal.items.map((item) => ({
     food: {
       name: item.name,
@@ -71,7 +70,7 @@ function gramsOf(item: DraftItem): number {
 
 // Builds a meal - search or scan each food, set its amount - without logging anything. Used both
 // to create a new meal and to edit an existing one on the Meals page.
-export default function SavedMealEditor({ meal, onSaved, onCancel }: SavedMealEditorProps) {
+export default function MealEditor({ meal, onSaved, onCancel }: MealEditorProps) {
   const { query, setQuery, results, isSearching, isLoadingMore, searchError, setSearchError, sentinelRef } =
     useFoodSearch()
   const [barcode, setBarcode] = useState('')
@@ -123,17 +122,10 @@ export default function SavedMealEditor({ meal, onSaved, onCancel }: SavedMealEd
     setIsSaving(true)
     setSaveError(null)
     try {
-      const newName = name.trim()
-      if (meal?.saved_meal_id) {
-        // Renames the meal's logged occurrences too, server-side.
-        await updateSavedMeal(meal.saved_meal_id, newName, payload)
+      if (meal) {
+        await updateMeal(meal.id, name.trim(), payload)
       } else {
-        await createSavedMeal(newName, payload)
-        // A logged-only meal being saved under a new name - bring its logged occurrences along,
-        // or they'd stay behind as a second meal under the old name.
-        if (meal && meal.name.toLowerCase() !== newName.toLowerCase()) {
-          await renameMealName(meal.name, newName)
-        }
+        await createMeal(name.trim(), payload)
       }
       await onSaved()
     } catch (error) {
@@ -146,9 +138,9 @@ export default function SavedMealEditor({ meal, onSaved, onCancel }: SavedMealEd
   return (
     <form className="form" onSubmit={handleSubmit}>
       <div className="field">
-        <label htmlFor="saved-meal-name">Meal name</label>
+        <label htmlFor="meal-name">Meal name</label>
         <input
-          id="saved-meal-name"
+          id="meal-name"
           className="input"
           type="text"
           placeholder="e.g. Breakfast"
@@ -173,9 +165,9 @@ export default function SavedMealEditor({ meal, onSaved, onCancel }: SavedMealEd
               </div>
               <div style={{ display: 'flex', gap: 'var(--space-sm)', alignItems: 'flex-end', flexWrap: 'wrap' }}>
                 <div className="field" style={{ marginBottom: 0 }}>
-                  <label htmlFor={`saved-meal-amount-${index}`}>{unitLabel(item.unit)}</label>
+                  <label htmlFor={`meal-amount-${index}`}>{unitLabel(item.unit)}</label>
                   <input
-                    id={`saved-meal-amount-${index}`}
+                    id={`meal-amount-${index}`}
                     className="input"
                     type="number"
                     inputMode="decimal"
@@ -215,9 +207,9 @@ export default function SavedMealEditor({ meal, onSaved, onCancel }: SavedMealEd
       )}
 
       <div className="field" style={{ marginTop: 'var(--space-md)' }}>
-        <label htmlFor="saved-meal-query">Add a food</label>
+        <label htmlFor="meal-query">Add a food</label>
         <input
-          id="saved-meal-query"
+          id="meal-query"
           className="input"
           type="text"
           placeholder="Search for a food…"
@@ -257,10 +249,10 @@ export default function SavedMealEditor({ meal, onSaved, onCancel }: SavedMealEd
       )}
 
       <div className="field" style={{ marginTop: 'var(--space-md)' }}>
-        <label htmlFor="saved-meal-barcode">Or add by barcode</label>
+        <label htmlFor="meal-barcode">Or add by barcode</label>
         <div style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>
           <input
-            id="saved-meal-barcode"
+            id="meal-barcode"
             className="input"
             type="text"
             inputMode="numeric"

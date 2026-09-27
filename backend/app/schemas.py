@@ -154,17 +154,22 @@ class FoodEntryOut(msgspec.Struct):
 
 class MealGroupOut(msgspec.Struct):
     id: uuid.UUID
+    # The meal this group is an occurrence of - both None for an unnamed group.
+    meal_id: uuid.UUID | None
     name: str | None
     entry_ids: list[uuid.UUID]
 
 
 class CreateMealGroupRequest(msgspec.Struct):
     entry_ids: list[uuid.UUID]
+    # Links the group to the meal with this name, creating one from the group's foods if there's
+    # none yet. Omitted (or blank) leaves it unnamed.
     name: str | None = None
 
 
 class UpdateMealGroupRequest(msgspec.Struct):
     entry_ids: list[uuid.UUID] | None = None
+    # As in CreateMealGroupRequest - "" unlinks the group from its meal; omitted leaves it alone.
     name: str | None = None
 
 
@@ -187,11 +192,7 @@ class HistoryFoodOut(msgspec.Struct):
     times_logged: int
 
 
-class RenameMealNameRequest(msgspec.Struct):
-    new_name: str
-
-
-class HistoryGroupItemOut(msgspec.Struct):
+class MealItemOut(msgspec.Struct):
     name: str
     brand: str | None
     barcode: str | None
@@ -205,39 +206,23 @@ class HistoryGroupItemOut(msgspec.Struct):
     fat_per_100g: float
 
 
-class MealNameOut(msgspec.Struct):
-    """A meal, by name: a saved meal and/or every logged occurrence of a meal grouping with that
-    name, merged into one - see app/controllers/meal_names.py."""
+class MealOut(msgspec.Struct):
+    """A meal with its foods, and how often it's been eaten - one per Meal row. See
+    app/controllers/meals.py; history_groups serves the same shape for the log-food picker."""
 
+    id: uuid.UUID
     name: str
-    # The saved meal's foods if there is one, otherwise the most recently logged occurrence's -
-    # occurrences can differ meal to meal.
-    items: list[HistoryGroupItemOut]
+    items: list[MealItemOut]
     calories: float
     protein_g: float
     carbs_g: float
     fat_g: float
+    # Linked groups that still have entries - None (and 0) for a meal not eaten yet.
     times_logged: int
-    # None (and times_logged 0) for a saved meal that hasn't been logged yet.
     last_logged_at: datetime | None
-    saved_meal_id: uuid.UUID | None
 
 
-class HistoryGroupOut(msgspec.Struct):
-    """A previously-logged, named combo of foods (a "meal") - deduplicated by name to its most
-    recently logged occurrence - or a saved meal. See app/controllers/history.py's
-    history_groups."""
-
-    name: str
-    items: list[HistoryGroupItemOut]
-    calories: float
-    # None (and times_logged 0) for a saved meal that hasn't been logged yet.
-    last_logged_at: datetime | None
-    times_logged: int
-    saved_meal_id: uuid.UUID | None = None
-
-
-class SavedMealItemIn(msgspec.Struct):
+class MealItemIn(msgspec.Struct):
     name: str
     input_amount: float
     calories_per_100g: float
@@ -250,19 +235,9 @@ class SavedMealItemIn(msgspec.Struct):
     unit_to_grams: float = 1.0
 
 
-class UpsertSavedMealRequest(msgspec.Struct):
+class UpsertMealRequest(msgspec.Struct):
     name: str
-    items: list[SavedMealItemIn]
-
-
-class SavedMealOut(msgspec.Struct):
-    id: uuid.UUID
-    name: str
-    items: list[HistoryGroupItemOut]
-    calories: float
-    protein_g: float
-    carbs_g: float
-    fat_g: float
+    items: list[MealItemIn]
 
 
 class DailyStatsOut(msgspec.Struct):

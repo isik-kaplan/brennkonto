@@ -71,6 +71,8 @@ export interface FoodEntry {
 
 export interface MealGroup {
   id: string
+  // The meal this group is one time of eating - both null for an unnamed group.
+  meal_id: string | null
   name: string | null
   entry_ids: string[]
 }
@@ -84,7 +86,7 @@ export interface HistoryFood extends FoodSearchResult {
   times_logged: number
 }
 
-export interface HistoryGroupItem {
+export interface MealItem {
   name: string
   brand: string | null
   barcode: string | null
@@ -98,56 +100,22 @@ export interface HistoryGroupItem {
   fat_per_100g: number
 }
 
-// A previously-logged, named combo of foods (a "meal") - deduped by name to its most recent
-// occurrence - or a saved meal, listed whether or not it's been logged yet.
-export interface HistoryGroup {
-  name: string
-  items: HistoryGroupItem[]
-  calories: number
-  // null (and times_logged 0) for a saved meal that hasn't been logged yet.
-  last_logged_at: string | null
-  times_logged: number
-  saved_meal_id?: string | null
-}
-
-export interface SavedMeal {
+// A meal - a name and its foods - and how often it's been eaten: every time is a meal group
+// linked to it (see backend/app/models.py's Meal). Served by /meals and by the log-food picker.
+export interface Meal {
   id: string
   name: string
-  items: HistoryGroupItem[]
-  calories: number
-  protein_g: number
-  carbs_g: number
-  fat_g: number
-}
-
-export interface SavedMealItemPayload {
-  name: string
-  brand: string | null
-  barcode: string | null
-  input_unit: string
-  input_amount: number
-  unit_to_grams: number
-  calories_per_100g: number
-  protein_per_100g: number
-  carbs_per_100g: number
-  fat_per_100g: number
-}
-
-// A meal, by name: a saved meal and/or every logged occurrence of a meal grouping with that name,
-// merged into one - see backend/app/controllers/meal_names.py.
-export interface MealName {
-  name: string
-  // The saved meal's foods if there is one, otherwise the most recently logged occurrence's.
-  items: HistoryGroupItem[]
+  items: MealItem[]
   calories: number
   protein_g: number
   carbs_g: number
   fat_g: number
   times_logged: number
-  // null (and times_logged 0) for a saved meal that hasn't been logged yet.
+  // null (and times_logged 0) for a meal not eaten yet.
   last_logged_at: string | null
-  saved_meal_id: string | null
 }
+
+export type MealItemPayload = Omit<MealItem, 'grams'>
 
 export interface CreateFoodEntryPayload {
   name: string

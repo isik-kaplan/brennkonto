@@ -4,8 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
-import type { FoodSearchResult, MealName } from '../../src/api/types'
-import SavedMealEditor from '../../src/components/SavedMealEditor'
+import type { FoodSearchResult, Meal } from '../../src/api/types'
+import MealEditor from '../../src/components/MealEditor'
 import { triggerIntersection } from '../testUtils/intersectionObserver'
 
 vi.mock('../../src/api/endpoints')
@@ -37,7 +37,8 @@ const egg: FoodSearchResult = {
 
 const oats: FoodSearchResult = { ...egg, barcode: '5000', name: 'Oats', brand: 'Kölln', suggested_unit: 'g' }
 
-const loggedOnly: MealName = {
+const breakfast: Meal = {
+  id: 'meal-1',
   name: 'Breakfast',
   items: [
     {
@@ -60,25 +61,23 @@ const loggedOnly: MealName = {
   fat_g: 11,
   times_logged: 2,
   last_logged_at: '2026-08-20T08:00:00Z',
-  saved_meal_id: null,
 }
 
-function renderEditor(meal?: MealName) {
+function renderEditor(meal?: Meal) {
   const onSaved = vi.fn()
   const onCancel = vi.fn()
-  render(<SavedMealEditor meal={meal} onSaved={onSaved} onCancel={onCancel} />)
+  render(<MealEditor meal={meal} onSaved={onSaved} onCancel={onCancel} />)
   return { onSaved, onCancel }
 }
 
 beforeEach(() => {
   vi.mocked(endpoints.searchFoods).mockReset().mockResolvedValue([])
   vi.mocked(endpoints.lookupBarcode).mockReset().mockResolvedValue(egg)
-  vi.mocked(endpoints.createSavedMeal).mockReset()
-  vi.mocked(endpoints.updateSavedMeal).mockReset()
-  vi.mocked(endpoints.renameMealName).mockReset()
+  vi.mocked(endpoints.createMeal).mockReset()
+  vi.mocked(endpoints.updateMeal).mockReset()
 })
 
-describe('SavedMealEditor', () => {
+describe('MealEditor', () => {
   it('prompts to add foods and only enables saving once there is a name and a valid amount', async () => {
     const user = userEvent.setup()
     renderEditor()
@@ -188,25 +187,37 @@ describe('SavedMealEditor', () => {
     expect(screen.getByText(/Unbranded ·/)).toBeInTheDocument()
   })
 
-  it('treats a rename of a logged-only meal case-insensitively', async () => {
+  it('creates a new meal, trimmed', async () => {
     const user = userEvent.setup()
-    const { onSaved } = renderEditor(loggedOnly)
+    const { onSaved } = renderEditor()
+    await user.type(screen.getByLabelText('Meal name'), ' Eggs ')
+    await user.type(screen.getByLabelText('Or add by barcode'), '6000{Enter}')
+    await user.click(await screen.findByRole('button', { name: 'Save meal' }))
+
+    expect(endpoints.createMeal).toHaveBeenCalledWith('Eggs', [expect.objectContaining({ name: 'Egg' })])
+    expect(endpoints.updateMeal).not.toHaveBeenCalled()
+    expect(onSaved).toHaveBeenCalled()
+  })
+
+  it('saves an edit to the meal it was opened on, trimmed', async () => {
+    const user = userEvent.setup()
+    const { onSaved } = renderEditor(breakfast)
     const name = screen.getByLabelText('Meal name')
     await user.clear(name)
-    await user.type(name, ' breakfast ')
+    await user.type(name, ' Brunch ')
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
-    expect(endpoints.createSavedMeal).toHaveBeenCalledWith('breakfast', [
+    expect(endpoints.updateMeal).toHaveBeenCalledWith('meal-1', 'Brunch', [
       expect.objectContaining({ name: 'Egg', input_unit: 'count', input_amount: 2 }),
     ])
-    expect(endpoints.renameMealName).not.toHaveBeenCalled()
+    expect(endpoints.createMeal).not.toHaveBeenCalled()
     expect(onSaved).toHaveBeenCalled()
   })
 
   it('falls back to a generic message when saving fails unexpectedly', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.createSavedMeal).mockRejectedValue(new Error('network'))
-    const { onSaved } = renderEditor(loggedOnly)
+    vi.mocked(endpoints.updateMeal).mockRejectedValue(new Error('network'))
+    const { onSaved } = renderEditor(breakfast)
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Could not save this meal.')).toBeInTheDocument()
     expect(onSaved).not.toHaveBeenCalled()
@@ -214,8 +225,8 @@ describe('SavedMealEditor', () => {
 
   it('shows an API error from saving', async () => {
     const user = userEvent.setup()
-    vi.mocked(endpoints.createSavedMeal).mockRejectedValue(new ApiError('Name taken', 400))
-    renderEditor(loggedOnly)
+    vi.mocked(endpoints.updateMeal).mockRejectedValue(new ApiError('Name taken', 400))
+    renderEditor(breakfast)
     await user.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(await screen.findByText('Name taken')).toBeInTheDocument()
   })
@@ -230,12 +241,12 @@ describe('SavedMealEditor', () => {
   it('ignores a submit (e.g. Enter in the name field) while the meal is incomplete', () => {
     const { onSaved } = renderEditor()
     fireEvent.submit(screen.getByLabelText('Meal name').closest('form')!)
-    expect(endpoints.createSavedMeal).not.toHaveBeenCalled()
+    expect(endpoints.createMeal).not.toHaveBeenCalled()
     expect(onSaved).not.toHaveBeenCalled()
   })
 
   it('shows a food without a barcode', () => {
-    renderEditor({ ...loggedOnly, items: [{ ...loggedOnly.items[0], barcode: null, name: 'Homemade bread' }] })
+    renderEditor({ ...breakfast, items: [{ ...breakfast.items[0], barcode: null, name: 'Homemade bread' }] })
     expect(screen.getByText('Homemade bread')).toBeInTheDocument()
   })
 
@@ -244,7 +255,7 @@ describe('SavedMealEditor', () => {
     const page = (offset: number) =>
       Array.from({ length: 25 }, (_, i) => ({ ...oats, barcode: String(offset + i), name: `Food ${offset + i}` }))
     vi.mocked(endpoints.searchFoods).mockResolvedValueOnce(page(0))
-    const { container } = render(<SavedMealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
+    const { container } = render(<MealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
     await user.type(screen.getByLabelText('Add a food'), 'food')
     expect(await screen.findByText('Food 0')).toBeInTheDocument()
 
@@ -269,7 +280,7 @@ describe('SavedMealEditor', () => {
     }
 
     it('shows nothing but the form when empty - no list, results, or banners', () => {
-      const { container } = render(<SavedMealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
+      const { container } = render(<MealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
       expect(container.querySelector('.entry-list')).not.toBeInTheDocument()
       expect(container.querySelector('.search-results')).not.toBeInTheDocument()
       expect(container.querySelector('.form__banner')).not.toBeInTheDocument()
@@ -318,7 +329,7 @@ describe('SavedMealEditor', () => {
     it('shows each food with its brand (or Unbranded) and calories', async () => {
       const user = userEvent.setup()
       vi.mocked(endpoints.lookupBarcode).mockResolvedValueOnce(egg).mockResolvedValueOnce(oats)
-      const { container } = render(<SavedMealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
+      const { container } = render(<MealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
       await user.type(screen.getByLabelText('Or add by barcode'), '6000{Enter}')
       await user.type(screen.getByLabelText('Or add by barcode'), '5000{Enter}')
       await screen.findByText('Oats')
@@ -329,7 +340,7 @@ describe('SavedMealEditor', () => {
 
     it('computes calories from grams once a food is switched to grams', async () => {
       const user = userEvent.setup()
-      const { container } = render(<SavedMealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
+      const { container } = render(<MealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
       await user.type(screen.getByLabelText('Or add by barcode'), '6000{Enter}')
       await user.click(await screen.findByRole('button', { name: 'Use grams instead' }))
       // 100g at 155 kcal/100g - not 100 eggs.
@@ -337,8 +348,8 @@ describe('SavedMealEditor', () => {
     })
 
     it('offers the unit toggle when editing only for foods logged in their own unit', () => {
-      const grams = { ...loggedOnly.items[0], name: 'Rice', input_unit: 'g', input_amount: 100, unit_to_grams: 1 }
-      renderEditor({ ...loggedOnly, items: [grams, loggedOnly.items[0]] })
+      const grams = { ...breakfast.items[0], name: 'Rice', input_unit: 'g', input_amount: 100, unit_to_grams: 1 }
+      renderEditor({ ...breakfast, items: [grams, breakfast.items[0]] })
       expect(screen.getAllByRole('button', { name: /instead/ })).toHaveLength(1)
       expect(screen.getByRole('button', { name: 'Use grams instead' })).toBeInTheDocument()
       expect(screen.getByLabelText('Amount (grams)')).toHaveValue(100)
@@ -362,7 +373,7 @@ describe('SavedMealEditor', () => {
       const user = userEvent.setup()
       const lookup = deferred<FoodSearchResult>()
       vi.mocked(endpoints.lookupBarcode).mockReturnValue(lookup.promise)
-      const { container } = render(<SavedMealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
+      const { container } = render(<MealEditor onSaved={vi.fn()} onCancel={vi.fn()} />)
       await user.type(screen.getByLabelText('Or add by barcode'), ' 6000 ')
       await user.click(screen.getByRole('button', { name: 'Look up' }))
 
@@ -388,8 +399,8 @@ describe('SavedMealEditor', () => {
     it('disables saving while it runs, and allows a retry after it fails', async () => {
       const user = userEvent.setup()
       const save = deferred<never>()
-      vi.mocked(endpoints.createSavedMeal).mockReturnValue(save.promise)
-      const { container } = render(<SavedMealEditor meal={loggedOnly} onSaved={vi.fn()} onCancel={vi.fn()} />)
+      vi.mocked(endpoints.updateMeal).mockReturnValue(save.promise)
+      const { container } = render(<MealEditor meal={breakfast} onSaved={vi.fn()} onCancel={vi.fn()} />)
       await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
       expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled()

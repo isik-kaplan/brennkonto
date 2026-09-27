@@ -15,8 +15,7 @@ from app.controllers.foods import foods_router
 from app.controllers.goals import goals_router
 from app.controllers.history import history_router
 from app.controllers.meal_groups import meal_groups_router
-from app.controllers.meal_names import meal_names_router
-from app.controllers.saved_meals import saved_meals_router
+from app.controllers.meals import meals_router
 from app.controllers.stats import stats_router
 from app.db import create_tables, get_db_session
 
@@ -37,8 +36,7 @@ def _build_route_handlers() -> list:
         foods_router,
         entries_router,
         meal_groups_router,
-        meal_names_router,
-        saved_meals_router,
+        meals_router,
         goals_router,
         favorites_router,
         stats_router,

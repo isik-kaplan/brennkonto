@@ -127,7 +127,7 @@ describe('Dashboard', () => {
   it('renames a meal group', async () => {
     const user = userEvent.setup()
     const groupedStats: DailyStats = { ...stats, entries: [{ ...stats.entries[0], meal_group_id: 'g1' }] }
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+    const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1'] }]
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(groupedStats)
     vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
     vi.mocked(endpoints.updateMealGroup).mockResolvedValue({ ...groups[0], name: 'Brunch' })
@@ -146,7 +146,7 @@ describe('Dashboard', () => {
   it('ungroups a meal', async () => {
     const user = userEvent.setup()
     const groupedStats: DailyStats = { ...stats, entries: [{ ...stats.entries[0], meal_group_id: 'g1' }] }
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+    const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1'] }]
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(groupedStats)
     vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
     vi.mocked(endpoints.deleteMealGroup).mockResolvedValue(undefined)

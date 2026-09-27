@@ -31,8 +31,7 @@ NUTELLA = {
         ("DELETE", f"/api/favorites/{MISSING}", None, "No favorite found with this id."),
         ("DELETE", f"/api/meal-groups/{MISSING}", None, "No meal group found with this id."),
         ("POST", "/api/meal-groups/", {"entry_ids": [str(MISSING)]}, "One or more entries were not found."),
-        ("DELETE", "/api/meal-names/?name=Nope", None, "No meal found with this name."),
-        ("DELETE", f"/api/saved-meals/{MISSING}", None, "No saved meal found with this id."),
+        ("DELETE", f"/api/meals/{MISSING}", None, "No meal found with this id."),
     ],
 )
 async def test_not_found_messages(authed_client, method, path, body, detail) -> None:

@@ -145,6 +145,7 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
                 "daily_fat_goal_g": row["daily_fat_goal_g"],
             },
         )
+    named_groups = []
     for row in old_groups:
         # meal_groups.id was already a Uuid column before this migration (introduced UUID-native
         # in the same release that added meal grouping) - reflection reads it back as a plain hex
@@ -154,6 +155,10 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
             new_meal_groups.insert(),
             {**row, "id": uuid_module.UUID(row["id"]), "user_id": user_id_map[row["user_id"]]},
         )
+        if row.get("name"):
+            named_groups.append(
+                (uuid_module.UUID(row["id"]), user_id_map[row["user_id"]], row["name"], row["created_at"])
+            )
     for row in old_entries:
         # Same string-vs-UUID-object issue as meal_groups.id above, for any entry that was
         # already linked to a group before this migration ran.
@@ -174,6 +179,8 @@ def _migrate_users_and_entries_to_uuid_ids(connection: Connection) -> None:
                 "meal_group_id": old_meal_group_id,
             },
         )
+    # Only now - a meal created from one of these snapshots its entries, just inserted above.
+    _link_groups_to_meals(connection, named_groups)
 
 
 def _backfill_goal_versions_from_user_columns(connection: Connection) -> None:
@@ -241,6 +248,69 @@ def _backfill_meal_group_id_for_ungrouped_entries(connection: Connection) -> Non
         connection.execute(food_entries.update().where(food_entries.c.id == entry_id).values(meal_group_id=group_id))
 
 
+def _add_meal_id_column_if_missing(connection: Connection) -> None:
+    columns = {column["name"] for column in inspect(connection).get_columns("meal_groups")}
+    if "meal_id" not in columns:
+        connection.execute(text("ALTER TABLE meal_groups ADD COLUMN meal_id CHAR(32)"))
+
+
+def _link_groups_to_meals(connection: Connection, named_groups: list[tuple]) -> None:
+    """Turns (group id, user id, name, created_at) - groups that used to carry their own name - into
+    links to a Meal: one per name per user (case-insensitively), whose foods are the most recent
+    occurrence's. Soft-deleted entries only count when an occurrence has nothing else, so a meal
+    survives while its entries sit restorable in the archive."""
+    from app.services.meals import item_from_entry, meal_key
+
+    meals = Base.metadata.tables["meals"]
+    meal_groups = Base.metadata.tables["meal_groups"]
+    food_entries = Base.metadata.tables["food_entries"]
+
+    by_meal: dict[tuple, list[tuple]] = {}
+    # Newest occurrence first. Compared as text: reflection hands back datetimes and raw SQL
+    # strings, both of which sort chronologically in their ISO-ish form, and neither may be set.
+    for group in sorted(named_groups, key=lambda group: str(group[3] or ""), reverse=True):
+        if group[2].strip():
+            by_meal.setdefault((group[1], meal_key(group[2])), []).append(group)
+
+    for (user_id, _), groups in by_meal.items():
+        items = []
+        for group_id, *_ in groups:
+            entries = connection.execute(
+                select(food_entries)
+                .where(food_entries.c.meal_group_id == group_id)
+                .order_by(food_entries.c.consumed_at, food_entries.c.id)
+            ).all()
+            live = [entry for entry in entries if entry.deleted_at is None]
+            if live or entries:
+                items = [item_from_entry(entry) for entry in live or entries]
+            if live:
+                break
+        meal_id = uuid7()
+        connection.execute(
+            meals.insert(), {"id": meal_id, "user_id": user_id, "name": groups[0][2].strip(), "items": items}
+        )
+        connection.execute(
+            meal_groups.update().where(meal_groups.c.id.in_([group[0] for group in groups])).values(meal_id=meal_id)
+        )
+
+
+def _link_named_groups_to_meals(connection: Connection) -> None:
+    # Groups used to be named by a `name` column of their own - replaced by meal_id. Idempotent:
+    # once the column is gone there's nothing left to do.
+    columns = {column["name"] for column in inspect(connection).get_columns("meal_groups")}
+    if "name" not in columns:
+        return
+    rows = connection.execute(
+        text("SELECT id, user_id, name, created_at FROM meal_groups WHERE name IS NOT NULL")
+    ).all()
+    # Raw SQL reads the Uuid columns back as hex strings.
+    _link_groups_to_meals(
+        connection,
+        [(uuid_module.UUID(row.id), uuid_module.UUID(row.user_id), row.name, row.created_at) for row in rows],
+    )
+    connection.execute(text("ALTER TABLE meal_groups DROP COLUMN name"))
+
+
 async def create_tables() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
@@ -249,7 +319,9 @@ async def create_tables() -> None:
         await connection.run_sync(_add_product_cache_unit_columns_if_missing)
         await connection.run_sync(_add_meal_group_id_column_if_missing)
         await connection.run_sync(_add_deleted_at_column_if_missing)
+        await connection.run_sync(_add_meal_id_column_if_missing)
         await connection.run_sync(_migrate_users_and_entries_to_uuid_ids)
+        await connection.run_sync(_link_named_groups_to_meals)
         await connection.run_sync(_backfill_meal_group_id_for_ungrouped_entries)
         await connection.run_sync(_backfill_goal_versions_from_user_columns)
         await connection.run_sync(_drop_legacy_goal_columns_from_users)

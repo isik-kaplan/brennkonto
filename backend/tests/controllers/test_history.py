@@ -104,7 +104,7 @@ async def test_history_groups_returns_a_named_combo_with_its_items(authed_client
     assert body[0]["times_logged"] == 1
 
 
-async def test_history_groups_dedupes_by_name_keeping_the_most_recent_occurrence(authed_client) -> None:
+async def test_history_groups_lists_a_meal_once_however_often_it_was_eaten(authed_client) -> None:
     first = (await authed_client.post("/api/entries/", json=NUTELLA_PAYLOAD)).json()
     await authed_client.post("/api/meal-groups/", json={"entry_ids": [first["id"]], "name": "Snack"})
 
@@ -179,3 +179,42 @@ async def test_history_groups_caps_results_at_30(authed_client) -> None:
 
     response = await authed_client.get("/api/history/groups")
     assert len(response.json()) == 30
+
+
+async def test_history_groups_puts_meals_not_eaten_yet_first_then_the_most_recent(authed_client) -> None:
+    for name, day in [("Old", "01"), ("Recent", "09"), ("Middle", "05")]:
+        entry = (
+            await authed_client.post(
+                "/api/entries/", json={**NUTELLA_PAYLOAD, "consumed_at": f"2026-08-{day}T08:00:00Z"}
+            )
+        ).json()
+        await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry["id"]], "name": name})
+    oats = {
+        "name": "Oats",
+        "input_amount": 60,
+        "calories_per_100g": 380,
+        "protein_per_100g": 13,
+        "carbs_per_100g": 60,
+        "fat_per_100g": 7,
+    }
+    await authed_client.post("/api/meals/", json={"name": "Porridge", "items": [oats]})
+
+    names = [meal["name"] for meal in (await authed_client.get("/api/history/groups")).json()]
+    assert names == ["Porridge", "Recent", "Middle", "Old"]
+
+
+async def test_history_groups_matches_the_query_case_insensitively(authed_client) -> None:
+    entry = (await authed_client.post("/api/entries/", json=NUTELLA_PAYLOAD)).json()
+    await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry["id"]], "name": "Breakfast"})
+    assert [meal["name"] for meal in (await authed_client.get("/api/history/groups?q=%20BREAK%20")).json()] == [
+        "Breakfast"
+    ]
+
+
+async def test_history_groups_only_lists_the_current_users_meals(authed_client) -> None:
+    entry = (await authed_client.post("/api/entries/", json=NUTELLA_PAYLOAD)).json()
+    await authed_client.post("/api/meal-groups/", json={"entry_ids": [entry["id"]], "name": "Breakfast"})
+    await authed_client.post(
+        "/api/auth/register", json={"email": "other@b.com", "password": "correcthorsebattery", "display_name": "Bob"}
+    )
+    assert (await authed_client.get("/api/history/groups")).json() == []

@@ -1,15 +1,14 @@
-from collections import OrderedDict
-from uuid import UUID
+from math import inf
 
 from litestar import Request, Router, get
 from litestar.params import Parameter
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import FoodEntry, MealGroup, SavedMeal
-from app.schemas import HistoryFoodOut, HistoryGroupItemOut, HistoryGroupOut
-from app.serializers import saved_meal_items_out
-from app.services.food_history import SCAN_LIMIT, logged_foods_matching
+from app.models import Meal
+from app.schemas import HistoryFoodOut, MealOut
+from app.services.food_history import logged_foods_matching
+from app.services.meals import meals_out
 
 
 _RESULT_LIMIT = 30
@@ -45,103 +44,16 @@ async def history_foods(
 
 
 @get("/groups")
-async def history_groups(
-    db_session: AsyncSession, request: Request, q: str = Parameter(default="")
-) -> list[HistoryGroupOut]:
-    entries = list(
-        await db_session.scalars(
-            select(FoodEntry)
-            .where(
-                FoodEntry.user_id == request.user.id,
-                FoodEntry.deleted_at.is_(None),
-                FoodEntry.meal_group_id.is_not(None),
-            )
-            .order_by(FoodEntry.consumed_at.desc())
-            .limit(SCAN_LIMIT)
-        )
-    )
+async def history_groups(db_session: AsyncSession, request: Request, q: str = Parameter(default="")) -> list[MealOut]:
     query = q.strip().lower()
-    saved_meals = [
+    meals = [
         meal
-        for meal in await db_session.scalars(
-            select(SavedMeal).where(SavedMeal.user_id == request.user.id).order_by(SavedMeal.name)
-        )
-        if not query or query in meal.name.strip().lower()
+        for meal in await db_session.scalars(select(Meal).where(Meal.user_id == request.user.id))
+        if query in meal.name.lower()
     ]
-    if not entries and not saved_meals:
-        return []
-
-    group_ids = {entry.meal_group_id for entry in entries}
-    groups = list(await db_session.scalars(select(MealGroup).where(MealGroup.id.in_(group_ids))))
-    # Only a deliberately-named combo is worth resurfacing here - an unnamed "group of one" is
-    # already covered by history_foods above, and an unnamed multi-item group has no label to
-    # browse or search by.
-    name_by_group_id = {group.id: group.name.strip() for group in groups if group.name and group.name.strip()}
-
-    # Clusters each named group's member entries together, in first-appearance order - since
-    # `entries` is sorted most-recent-first, that's also each group's own recency order.
-    members_by_group_id: OrderedDict[UUID, list[FoodEntry]] = OrderedDict()
-    for entry in entries:
-        if entry.meal_group_id not in name_by_group_id:
-            continue
-        members_by_group_id.setdefault(entry.meal_group_id, []).append(entry)
-
-    counts: dict[str, int] = {}
-    latest_by_name: OrderedDict[str, tuple[str, list[FoodEntry]]] = OrderedDict()
-    for group_id, members in members_by_group_id.items():
-        name = name_by_group_id[group_id]
-        name_key = name.lower()
-        if query and query not in name_key:
-            continue
-        counts[name_key] = counts.get(name_key, 0) + 1
-        latest_by_name.setdefault(name_key, (name, members))
-
-    # Saved meals come first - they were set up deliberately to be reused. One that has also been
-    # logged keeps its saved items (the template is the source of truth, not whatever was
-    # customized last time) but picks up the logged history's count and recency, and isn't
-    # listed a second time below.
-    results = []
-    for meal in saved_meals:
-        name_key = meal.name.strip().lower()
-        items = saved_meal_items_out(meal)
-        logged = latest_by_name.pop(name_key, None)
-        results.append(
-            HistoryGroupOut(
-                name=meal.name,
-                items=items,
-                calories=sum(item.grams * item.calories_per_100g / 100 for item in items),
-                last_logged_at=max(member.consumed_at for member in logged[1]) if logged else None,
-                times_logged=counts.get(name_key, 0),
-                saved_meal_id=meal.id,
-            )
-        )
-    for name_key, (name, members) in latest_by_name.items():
-        if len(results) >= _RESULT_LIMIT:
-            break
-        results.append(
-            HistoryGroupOut(
-                name=name,
-                items=[
-                    HistoryGroupItemOut(
-                        name=member.name,
-                        brand=member.brand,
-                        barcode=member.barcode,
-                        grams=member.grams,
-                        input_unit=member.input_unit,
-                        input_amount=member.input_amount,
-                        unit_to_grams=member.unit_to_grams,
-                        calories_per_100g=member.calories_per_100g,
-                        protein_per_100g=member.protein_per_100g,
-                        carbs_per_100g=member.carbs_per_100g,
-                        fat_per_100g=member.fat_per_100g,
-                    )
-                    for member in members
-                ],
-                calories=sum(member.calories for member in members),
-                last_logged_at=max(member.consumed_at for member in members),
-                times_logged=counts[name_key],
-            )
-        )
+    results = await meals_out(db_session, meals)
+    # Not eaten yet first - it was most likely just set up to be logged - then most recent first.
+    results.sort(key=lambda meal: meal.last_logged_at.timestamp() if meal.last_logged_at else inf, reverse=True)
     return results[:_RESULT_LIMIT]
 
 

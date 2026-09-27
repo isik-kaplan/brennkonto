@@ -220,7 +220,7 @@ describe('History', () => {
       meal_group_id: 'g1',
       deleted_at: null,
     }
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+    const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1'] }]
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entry]))
     vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
     vi.mocked(endpoints.updateMealGroup).mockResolvedValue({ ...groups[0], name: 'Brunch' })
@@ -261,7 +261,7 @@ describe('History', () => {
       meal_group_id: 'g1',
       deleted_at: null,
     }
-    const groups: MealGroup[] = [{ id: 'g1', name: 'Breakfast', entry_ids: ['1'] }]
+    const groups: MealGroup[] = [{ id: 'g1', meal_id: 'meal-g1', name: 'Breakfast', entry_ids: ['1'] }]
     vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today, [entry]))
     vi.mocked(endpoints.fetchMealGroups).mockReset().mockResolvedValue(groups)
     vi.mocked(endpoints.deleteMealGroup).mockResolvedValue(undefined)

@@ -98,35 +98,41 @@ class ProductCache(Base):
     fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
 
-class MealGroup(Base):
-    """A cluster of food entries logged together as one meal. Every entry always belongs to one -
-    even a "group of one" - so a single entry can be named the same way a multi-item meal can;
-    see app/controllers/entries.py's create_entry and app/controllers/meal_groups.py's
-    assign_fresh_singleton_group/delete_group_if_empty for how that invariant is kept."""
+class Meal(Base):
+    """A meal as a thing you eat: a name and the foods (with amounts) that make it up - "Breakfast",
+    "Porridge". It's the definition, not any one time it was eaten; each time is a MealGroup
+    linked to it by meal_id, which is what "logged 3x" counts. Created either on the Meals page, or
+    by naming a group of logged entries a name no meal has yet (snapshotting that group's foods).
 
-    __tablename__ = "meal_groups"
+    Items are a JSON list rather than a child table: they're only ever read and written as a whole,
+    never queried individually. Each is snapshotted the same way a FoodEntry snapshots its macros,
+    so nothing about it changes if the underlying product does. Names are unique per user,
+    case-insensitively - naming a group links it by name (see app/controllers/meal_groups.py)."""
 
-    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
-    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    name: Mapped[str | None] = mapped_column(String(120), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
-
-
-class SavedMeal(Base):
-    """A meal defined up front on the Meals page rather than grown out of logging - a reusable
-    template, not a record of anything eaten. Its items are snapshotted the same way a FoodEntry
-    snapshots its macros, so nothing about them changes if the underlying product does. Stored as
-    a JSON list rather than a child table: items are only ever read and written as a whole, never
-    queried individually. Logging one creates ordinary entries + a MealGroup under the same name,
-    so it then shows up in history exactly like a meal that was logged ad hoc."""
-
-    __tablename__ = "saved_meals"
+    __tablename__ = "meals"
 
     id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
     user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(120))
     items: Mapped[list[dict]] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+
+
+class MealGroup(Base):
+    """A cluster of food entries eaten together, one time. Every entry always belongs to one - even
+    a "group of one" - so a single entry can be named the same way a multi-item meal can; see
+    app/controllers/entries.py's create_entry and app/controllers/meal_groups.py's
+    assign_fresh_singleton_group/delete_group_if_empty for how that invariant is kept. A named
+    group is one occurrence of a Meal (meal_id); an unnamed one has none."""
+
+    __tablename__ = "meal_groups"
+
+    id: Mapped[uuid_module.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid7)
+    user_id: Mapped[uuid_module.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    meal_id: Mapped[uuid_module.UUID | None] = mapped_column(
+        ForeignKey("meals.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
