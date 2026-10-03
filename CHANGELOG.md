@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.2]
+
+### Added
+
+- Settings shows which version of brennkonto you're running, under the page title.
+
+### Fixed
+
+- The bottom tab bar on phones keeps all six labels on one line at typical phone widths (e.g. Pixel 10 Pro, Nothing Phone 2a) - "Log food" no longer wraps. On screens narrow enough that a label still wraps, its lines are now centered instead of hugging the left edge.
+
 ## [0.25.1]
 
 ### Fixed

@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { version } from '../../package.json'
 import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
 import type { DailyStats, User } from '../../src/api/types'
@@ -74,6 +75,12 @@ describe('Settings', () => {
     mockAuth({ user: null })
     const { container } = renderSettings()
     expect(container).toBeEmptyDOMElement()
+  })
+
+  it('shows the running app version from package.json', () => {
+    mockAuth()
+    renderSettings()
+    expect(screen.getByText(`brennkonto v${version}`)).toBeInTheDocument()
   })
 
   it('shows the signed-in email and logs out from the session card', async () => {

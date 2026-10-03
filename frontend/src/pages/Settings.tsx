@@ -4,6 +4,7 @@ import type { CSSProperties, FormEvent } from 'react'
 import { useFormState } from '@isik-kaplan/core/hooks'
 import { Link } from 'react-router'
 
+import { version } from '../../package.json'
 import { ApiError } from '../api/client'
 import { changePassword, fetchDailyStats, updateProfile } from '../api/endpoints'
 import type { User } from '../api/types'
@@ -22,7 +23,10 @@ export default function Settings() {
   return (
     <>
       <div className="page-header">
-        <h1>Settings</h1>
+        <div>
+          <h1>Settings</h1>
+          <span className="page-header__meta">brennkonto v{version}</span>
+        </div>
       </div>
 
       <div className="grid grid--2">
