@@ -1,4 +1,5 @@
 import os
+import time
 from collections.abc import AsyncIterator, Iterator
 from pathlib import Path
 
@@ -13,6 +14,11 @@ os.environ.setdefault("REGISTRATION_ENABLED", "True")
 os.environ.setdefault("DATABASE_PATH", str(Path(__file__).parent / "test.sqlite3"))
 os.environ.setdefault("SESSION_COOKIE_SECURE", "False")
 os.environ.setdefault("OFF_USER_AGENT", "Brennkonto-Test/0.1")
+
+# A local zone that is never UTC, whatever machine runs the suite: converting to the machine's zone
+# instead of UTC has to show up as a failure on a UTC CI runner too, not only on a laptop elsewhere.
+os.environ["TZ"] = "Asia/Kolkata"
+time.tzset()
 
 
 def _database_path() -> Path:
