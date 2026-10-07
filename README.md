@@ -80,7 +80,7 @@ the code it covers - it binds to the next node, so a comment in JSX (`{/* */}`) 
 Two whole classes are ignored by `stryker-plugins/ignore-equivalent.mjs`: fixed `className`/`style`
 values (jsdom lays nothing out) and empty hook dependency lists (any constant list runs once).
 
-Both also run in CI - by hand, and weekly - via `.github/workflows/mutation.yml`.
+Both also run in CI on every push to master (and by hand) via `.github/workflows/mutation.yml`.
 
 A `backend/scripts/seed_demo_data.py` script is available for seeding a couple of years of
 realistic daily food logs into a fresh account, useful for exercising the aggregate views:

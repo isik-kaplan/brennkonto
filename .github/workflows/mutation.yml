@@ -1,12 +1,11 @@
 name: Mutation
 
-# By hand and weekly rather than on every push: a full run re-tests every mutant, which takes a few
-# minutes on a many-core laptop and far longer on a two-core runner. The ordinary suites (and their
-# 100% coverage gates) still run on every push and pull request in test.yml.
+# Every push to master, and by hand. A full run re-tests every mutant, which takes far longer on a
+# two-core runner than test.yml's suites - pushes made while one is running queue behind it.
 on:
+  push:
+    branches: [master]
   workflow_dispatch:
-  schedule:
-    - cron: "0 4 * * 1"
 
 concurrency:
   group: mutation-${{ github.ref }}
