@@ -25,3 +25,4 @@ frontend/.stryker-tmp/
 backend/data/
 backend/static/
 *.sqlite3
+*.tsbuildinfo
