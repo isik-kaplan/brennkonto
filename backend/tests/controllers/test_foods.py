@@ -466,9 +466,7 @@ async def test_search_explains_that_open_food_facts_is_down_instead_of_a_500(aut
     )
 
 
-async def test_barcode_lookup_explains_that_open_food_facts_is_down(
-    authed_client, monkeypatch
-) -> None:
+async def test_barcode_lookup_explains_that_open_food_facts_is_down(authed_client, monkeypatch) -> None:
     async def failing_get_by_barcode(barcode: str) -> None:
         raise OpenFoodFactsUnavailableError
 
