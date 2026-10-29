@@ -54,7 +54,13 @@ export function useFoodSearch(): FoodSearchState {
           setPage(1)
           setHasMore(firstPage.length === PAGE_SIZE)
         })
-        .catch((error) => setSearchError(error instanceof ApiError ? error.message : 'Search failed.'))
+        .catch((error) => {
+          // The previous query's results would otherwise sit under the error looking like the
+          // answer to this one.
+          setResults([])
+          setHasMore(false)
+          setSearchError(error instanceof ApiError ? error.message : 'Search failed.')
+        })
         .finally(() => setIsSearching(false))
     }, DEBOUNCE_MS)
     return () => clearTimeout(timeout)

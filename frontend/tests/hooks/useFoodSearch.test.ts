@@ -87,6 +87,21 @@ describe('useFoodSearch', () => {
     await waitFor(() => expect(result.current.searchError).toBe('Search failed.'))
   })
 
+  it("drops the previous query's results when a new search fails, rather than leaving them under the error", async () => {
+    vi.mocked(endpoints.searchFoods).mockResolvedValueOnce(fullPage(0))
+    const { result } = renderWithSentinel()
+
+    act(() => result.current.setQuery('chicken'))
+    await waitFor(() => expect(result.current.results).toHaveLength(PAGE_SIZE))
+
+    vi.mocked(endpoints.searchFoods).mockRejectedValueOnce(new ApiError('Search unavailable.', 503))
+    act(() => result.current.setQuery('chicken breast'))
+    await waitFor(() => expect(result.current.searchError).toBe('Search unavailable.'))
+    expect(result.current.results).toEqual([])
+    expect(() => triggerIntersection()).toThrow()
+    expect(endpoints.searchFoods).toHaveBeenCalledTimes(2)
+  })
+
   it('clears results and resets to page 1 when the query drops below the minimum length', async () => {
     vi.mocked(endpoints.searchFoods).mockResolvedValue([fakeResult(1)])
     const { result } = renderWithSentinel()

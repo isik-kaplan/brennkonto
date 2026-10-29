@@ -3,6 +3,13 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.3]
+
+### Fixed
+
+- When Open Food Facts is down, slow or rate-limiting, searching for a product or looking up a barcode now says so ("Open Food Facts isn't responding right now...") instead of a bare "Internal Server Error".
+- A search that fails no longer leaves the previous search's results on screen, where they looked like the answer to what you'd just typed (e.g. chicken thighs and nuggets showing up for "chicken breast").
+
 ## [0.25.2]
 
 ### Added

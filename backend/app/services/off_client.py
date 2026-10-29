@@ -80,6 +80,11 @@ def _to_result(product: dict) -> FoodSearchResultOut | None:
     )
 
 
+class OpenFoodFactsUnavailableError(Exception):
+    """Open Food Facts couldn't be reached or answered with an error - a timeout, a dropped
+    connection, a rate limit or a 5xx on their side, as opposed to "no such product"."""
+
+
 class OpenFoodFactsClient:
     """Client over the public Open Food Facts APIs - the live query surface for the dataset
     described at https://world.openfoodfacts.org/data. Search goes through the Search-a-licious
@@ -93,22 +98,30 @@ class OpenFoodFactsClient:
         self._headers = {"User-Agent": settings.OFF_USER_AGENT}
 
     async def search(self, query: str, page_size: int) -> list[FoodSearchResultOut]:
-        async with httpx.AsyncClient(
-            base_url=settings.OFF_SEARCH_BASE_URL, headers=self._headers, timeout=10
-        ) as client:
-            response = await client.get("/search", params={"q": query, "page_size": page_size, "fields": self._fields})
-            response.raise_for_status()
-            hits = response.json().get("hits", [])
+        try:
+            async with httpx.AsyncClient(
+                base_url=settings.OFF_SEARCH_BASE_URL, headers=self._headers, timeout=10
+            ) as client:
+                response = await client.get(
+                    "/search", params={"q": query, "page_size": page_size, "fields": self._fields}
+                )
+                response.raise_for_status()
+                hits = response.json().get("hits", [])
+        except httpx.HTTPError as error:
+            raise OpenFoodFactsUnavailableError from error
         results = (_to_result(hit) for hit in hits)
         return [result for result in results if result is not None]
 
     async def get_by_barcode(self, barcode: str) -> FoodSearchResultOut | None:
-        async with httpx.AsyncClient(base_url=settings.OFF_BASE_URL, headers=self._headers, timeout=10) as client:
-            response = await client.get(f"/api/v2/product/{barcode}.json", params={"fields": self._fields})
-            if response.status_code == 404:
-                return None
-            response.raise_for_status()
-            payload = response.json()
+        try:
+            async with httpx.AsyncClient(base_url=settings.OFF_BASE_URL, headers=self._headers, timeout=10) as client:
+                response = await client.get(f"/api/v2/product/{barcode}.json", params={"fields": self._fields})
+                if response.status_code == 404:
+                    return None
+                response.raise_for_status()
+                payload = response.json()
+        except httpx.HTTPError as error:
+            raise OpenFoodFactsUnavailableError from error
         if payload.get("status") != 1:
             return None
         return _to_result(payload["product"])

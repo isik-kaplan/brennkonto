@@ -1,5 +1,5 @@
 from app.schemas import FoodSearchResultOut
-from app.services.off_client import off_client
+from app.services.off_client import OpenFoodFactsUnavailableError, off_client
 
 
 NUTELLA = FoodSearchResultOut(
@@ -450,3 +450,33 @@ async def test_search_dedupe_folds_case_the_way_lowercase_does(authed_client, mo
     monkeypatch.setattr(off_client, "search", fake_search)
     results = (await authed_client.get("/api/foods/search?q=stra")).json()
     assert sorted(result["barcode"] for result in results) == ["1", "2", "3", "4", "5", "6"]
+
+
+async def test_search_explains_that_open_food_facts_is_down_instead_of_a_500(authed_client, monkeypatch) -> None:
+    async def failing_search(query: str, page_size: int = 20) -> list[FoodSearchResultOut]:
+        raise OpenFoodFactsUnavailableError
+
+    monkeypatch.setattr(off_client, "search", failing_search)
+
+    response = await authed_client.get("/api/foods/search?q=chicken breast")
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Open Food Facts isn't responding right now, so products can't be searched. "
+        "This is on their end, not your connection - try again in a minute."
+    )
+
+
+async def test_barcode_lookup_explains_that_open_food_facts_is_down(
+    authed_client, monkeypatch
+) -> None:
+    async def failing_get_by_barcode(barcode: str) -> None:
+        raise OpenFoodFactsUnavailableError
+
+    monkeypatch.setattr(off_client, "get_by_barcode", failing_get_by_barcode)
+
+    response = await authed_client.get("/api/foods/barcode/0000000000000")
+    assert response.status_code == 503
+    assert response.json()["detail"] == (
+        "Open Food Facts isn't responding right now, so this barcode can't be looked up. "
+        "This is on their end, not your connection - try again in a minute."
+    )

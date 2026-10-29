@@ -1,10 +1,18 @@
 import httpx
+import pytest
 import respx
 from hypothesis import given
 from hypothesis import strategies as st
 
 from app.config import settings
-from app.services.off_client import OpenFoodFactsClient, _extract_macros, _infer_unit, _normalize_brand, _to_result
+from app.services.off_client import (
+    OpenFoodFactsClient,
+    OpenFoodFactsUnavailableError,
+    _extract_macros,
+    _infer_unit,
+    _normalize_brand,
+    _to_result,
+)
 
 
 def test_normalize_brand_joins_a_list() -> None:
@@ -250,3 +258,37 @@ async def test_get_by_barcode_asks_for_the_fields_with_the_user_agent_within_ten
     assert dict(request.url.params) == {"fields": OpenFoodFactsClient._fields}
     assert request.headers["User-Agent"] == settings.OFF_USER_AGENT
     assert request.extensions["timeout"] == TEN_SECONDS
+
+
+@pytest.mark.parametrize(
+    "side_effect",
+    [httpx.Response(503), httpx.Response(429), httpx.ReadTimeout("slow"), httpx.ConnectError("down")],
+    ids=["5xx", "rate-limited", "timeout", "unreachable"],
+)
+async def test_search_reports_open_food_facts_as_unavailable_when_it_fails(side_effect) -> None:
+    client = OpenFoodFactsClient()
+    with respx.mock(base_url=settings.OFF_SEARCH_BASE_URL) as mock:
+        route = mock.get("/search")
+        if isinstance(side_effect, httpx.Response):
+            route.mock(return_value=side_effect)
+        else:
+            route.mock(side_effect=side_effect)
+        with pytest.raises(OpenFoodFactsUnavailableError):
+            await client.search("chicken breast", page_size=100)
+
+
+@pytest.mark.parametrize(
+    "side_effect",
+    [httpx.Response(502), httpx.ReadTimeout("slow")],
+    ids=["5xx", "timeout"],
+)
+async def test_get_by_barcode_reports_open_food_facts_as_unavailable_when_it_fails(side_effect) -> None:
+    client = OpenFoodFactsClient()
+    with respx.mock(base_url=settings.OFF_BASE_URL) as mock:
+        route = mock.get("/api/v2/product/000.json")
+        if isinstance(side_effect, httpx.Response):
+            route.mock(return_value=side_effect)
+        else:
+            route.mock(side_effect=side_effect)
+        with pytest.raises(OpenFoodFactsUnavailableError):
+            await client.get_by_barcode("000")

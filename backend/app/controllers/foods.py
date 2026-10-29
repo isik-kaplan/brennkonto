@@ -1,14 +1,14 @@
 from datetime import datetime
 
 from litestar import Request, Router, get
-from litestar.exceptions import NotFoundException
+from litestar.exceptions import NotFoundException, ServiceUnavailableException
 from litestar.params import Parameter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import ProductCache
 from app.schemas import FoodSearchResultOut
 from app.services.food_history import logged_foods_matching
-from app.services.off_client import off_client
+from app.services.off_client import OpenFoodFactsUnavailableError, off_client
 
 
 # Results per page returned to the client - also the unit `page` counts in.
@@ -19,6 +19,15 @@ _PAGE_SIZE = 25
 # ranked slightly lower on text relevance, don't crowd out fresh OFF matches entirely. Grows with
 # `page` so later pages still have a freshly-ranked pool to slice from instead of running dry.
 _MIN_POOL = 100
+
+_OFF_UNAVAILABLE_SEARCH = (
+    "Open Food Facts isn't responding right now, so products can't be searched. "
+    "This is on their end, not your connection - try again in a minute."
+)
+_OFF_UNAVAILABLE_BARCODE = (
+    "Open Food Facts isn't responding right now, so this barcode can't be looked up. "
+    "This is on their end, not your connection - try again in a minute."
+)
 
 
 def _name_key(result: FoodSearchResultOut) -> tuple[str, str]:
@@ -85,7 +94,10 @@ async def search_foods(
     # the same way regardless of page - only the OFF pool size and the final slice move with
     # `page` - so pages tile onto each other without gaps or repeats for infinite scroll.
     pool_size = max(_MIN_POOL, _PAGE_SIZE * page)
-    results = await off_client.search(q, page_size=pool_size)
+    try:
+        results = await off_client.search(q, page_size=pool_size)
+    except OpenFoodFactsUnavailableError as error:
+        raise ServiceUnavailableException(_OFF_UNAVAILABLE_SEARCH) from error
     results = _dedupe_by_name(results)
     results.sort(key=lambda x: 0 if not x.brand else 1)
 
@@ -144,7 +156,10 @@ async def get_food_by_barcode(db_session: AsyncSession, barcode: str) -> FoodSea
     if cache is not None:
         return _cache_out(cache)
 
-    result = await off_client.get_by_barcode(barcode)
+    try:
+        result = await off_client.get_by_barcode(barcode)
+    except OpenFoodFactsUnavailableError as error:
+        raise ServiceUnavailableException(_OFF_UNAVAILABLE_BARCODE) from error
     if result is None:
         raise NotFoundException("No product found for this barcode.")
     await _upsert_cache(db_session, result)
