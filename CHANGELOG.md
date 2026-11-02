@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.25.4]
+
+### Fixed
+
+- A favorite's saved default amount no longer disappears when you log that food from search or a barcode. The amount form opens with "Save as favorite" already ticked for an existing favorite, and saving with "Remember this amount as the default" unticked was clearing the default; it's now only changed when you tick that box.
+
 ## [0.25.3]
 
 ### Fixed

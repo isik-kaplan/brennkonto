@@ -637,6 +637,79 @@ describe('LogFood save form', () => {
       )
     )
   })
+
+  describe('logging a food that is already a favorite with a saved default', () => {
+    const entry = {
+      id: '1',
+      name: eggs.name,
+      brand: eggs.brand,
+      barcode: eggs.barcode,
+      grams: 106,
+      input_unit: 'count',
+      input_amount: 2,
+      unit_to_grams: 53,
+      calories_per_100g: eggs.calories_per_100g,
+      protein_per_100g: eggs.protein_per_100g,
+      carbs_per_100g: eggs.carbs_per_100g,
+      fat_per_100g: eggs.fat_per_100g,
+      calories: 164,
+      protein_g: 13.8,
+      carbs_g: 1.2,
+      fat_g: 11.7,
+      consumed_at: '2026-08-01T12:00:00',
+      created_at: '2026-08-01T12:00:00Z',
+      updated_at: null,
+      meal_group_id: null,
+      deleted_at: null,
+    }
+
+    async function openFormForFavorite(user: ReturnType<typeof userEvent.setup>) {
+      vi.mocked(endpoints.fetchFavorites).mockResolvedValue([
+        makeFavorite({
+          barcode: eggs.barcode,
+          name: eggs.name,
+          brand: eggs.brand,
+          default_input_unit: 'count',
+          default_input_amount: 3,
+          default_unit_to_grams: 53,
+        }),
+      ])
+      vi.mocked(endpoints.lookupBarcode).mockResolvedValue(eggs)
+      vi.mocked(endpoints.createEntry).mockResolvedValue(entry)
+      renderLogFood()
+      await screen.findByText(/3count default/)
+      await user.type(screen.getByLabelText('Barcode'), '4')
+      await user.click(screen.getByRole('button', { name: 'Look up' }))
+      await screen.findByRole('heading', { name: 'Eggs' })
+    }
+
+    it('keeps that default when "Remember this amount" is left unchecked', async () => {
+      const user = userEvent.setup()
+      await openFormForFavorite(user)
+
+      await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+      await waitFor(() =>
+        expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+          expect.objectContaining({ default_input_unit: 'count', default_input_amount: 3, default_unit_to_grams: 53 })
+        )
+      )
+    })
+
+    it('replaces that default when "Remember this amount" is checked', async () => {
+      const user = userEvent.setup()
+      await openFormForFavorite(user)
+
+      await user.click(screen.getByLabelText('Remember this amount as the default'))
+      await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+      await waitFor(() =>
+        expect(endpoints.upsertFavorite).toHaveBeenCalledWith(
+          expect.objectContaining({ default_input_unit: 'count', default_input_amount: 1, default_unit_to_grams: 53 })
+        )
+      )
+    })
+  })
 })
 
 describe('LogFood favorites', () => {

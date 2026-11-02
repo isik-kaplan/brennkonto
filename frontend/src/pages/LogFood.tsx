@@ -317,6 +317,7 @@ export default function LogFood() {
         consumed_at: combineDateAndTime(consumedAt, consumedTime),
       })
       if (saveAsFavorite) {
+        const existing = favoriteByBarcode.get(product.barcode)
         await upsertFavorite({
           barcode: product.barcode,
           name: product.name,
@@ -325,11 +326,16 @@ export default function LogFood() {
           protein_per_100g: product.protein_per_100g,
           carbs_per_100g: product.carbs_per_100g,
           fat_per_100g: product.fat_per_100g,
-          // Sending these as null (rather than omitting) explicitly clears any previously-saved
-          // default when "remember this amount" isn't checked, rather than leaving a stale one.
-          default_input_unit: rememberAmount ? unit : null,
-          default_input_amount: rememberAmount ? amount : null,
-          default_unit_to_grams: rememberAmount ? (unit === 'g' ? 1 : product.unit_to_grams) : null,
+          // The upsert replaces all three fields, and the favorite checkbox starts ticked for an
+          // existing favorite - so resending what's saved is what stops an ordinary log of a
+          // one-off portion from wiping the default set through Edit.
+          default_input_unit: rememberAmount ? unit : (existing?.default_input_unit ?? null),
+          default_input_amount: rememberAmount ? amount : (existing?.default_input_amount ?? null),
+          default_unit_to_grams: rememberAmount
+            ? unit === 'g'
+              ? 1
+              : product.unit_to_grams
+            : (existing?.default_unit_to_grams ?? null),
         })
         await loadFavorites()
       }
