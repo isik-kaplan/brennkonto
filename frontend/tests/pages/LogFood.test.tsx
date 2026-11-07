@@ -162,7 +162,9 @@ describe('LogFood search', () => {
     const secondPage = deferred<FoodSearchResult[]>()
     vi.mocked(endpoints.searchFoods).mockReturnValueOnce(secondPage.promise)
 
-    act(() => triggerIntersection())
+    // The observer is created in an effect after the first page renders, which can land after its
+    // text does on a slow run (Stryker's instrumented dry run in CI), so retry until it exists.
+    await waitFor(() => act(() => triggerIntersection()))
     await waitFor(() => expect(container.querySelector('.search-results__sentinel .btn__spinner')).toBeInTheDocument())
     expect(endpoints.searchFoods).toHaveBeenCalledWith('product', 2)
 
