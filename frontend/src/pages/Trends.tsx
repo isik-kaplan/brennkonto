@@ -1,38 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 
 import { fetchRangeStats } from '../api/endpoints'
 import type { GroupBy, RangeStats } from '../api/types'
-import BarChart from '../components/BarChart'
-import { addDays, daysBetween, fromISODate, toISODate } from '../lib/dates'
+import TrendChart from '../components/TrendChart'
+import { addDays, daysBetween, toISODate } from '../lib/dates'
+import { buildPeriods, groupingsFor, lastNRange, longPeriodLabel } from '../lib/trendPeriods'
 
-type Preset = '7' | '30' | '90' | 'custom'
+type Interval = GroupBy | 'custom'
 
-function presetRange(preset: Preset, customStart: string, customEnd: string): { start: string; end: string } {
-  const end = toISODate(new Date())
-  if (preset === 'custom') {
-    return { start: customStart, end: customEnd }
-  }
-  return { start: addDays(end, -(Number(preset) - 1)), end }
+const GROUP_LABELS: Record<GroupBy, string> = { day: 'Days', week: 'Weeks', month: 'Months' }
+const INTERVAL_LABELS: Record<Interval, string> = { ...GROUP_LABELS, custom: 'Custom' }
+
+// Counts offered per interval, plus a ceiling for "Other" that keeps one request's bucket count sane.
+const COUNTS: Record<GroupBy, { presets: number[]; fallback: number; max: number }> = {
+  day: { presets: [7, 30, 90, 365], fallback: 7, max: 730 },
+  week: { presets: [4, 12, 26, 52], fallback: 12, max: 156 },
+  month: { presets: [3, 6, 12, 24], fallback: 6, max: 60 },
 }
 
-function defaultGroupBy(preset: Preset): GroupBy {
-  if (preset === '90') return 'week'
-  return 'day'
-}
-
-function shortLabel(periodStart: string, groupBy: GroupBy): string {
-  const date = fromISODate(periodStart)
-  if (groupBy === 'month') {
-    return date.toLocaleDateString(undefined, { month: 'short' })
-  }
-  // A week is labeled by the day it starts on, the same as a day.
-  return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
-}
-
-function previousPeriod(start: string, end: string): { start: string; end: string } {
-  const length = daysBetween(start, end)
+// The same stretch immediately before this one: the previous N weeks for "last N weeks", the
+// same number of days for a custom range.
+function previousPeriod(start: string, end: string, interval: Interval, count: number): { start: string; end: string } {
   const previousEnd = addDays(start, -1)
-  return { start: addDays(previousEnd, -(length - 1)), end: previousEnd }
+  if (interval !== 'custom') return lastNRange(interval, count, previousEnd)
+  return { start: addDays(previousEnd, -(daysBetween(start, end) - 1)), end: previousEnd }
 }
 
 function formatDelta(current: number, previous: number): string {
@@ -42,40 +33,99 @@ function formatDelta(current: number, previous: number): string {
   return `${delta > 0 ? '+' : ''}${delta} vs the previous period`
 }
 
+function MacroTile({
+  label,
+  value,
+  goal,
+  modifier,
+}: {
+  label: string
+  value: number
+  goal?: number
+  modifier: string
+}) {
+  const progress = goal ? Math.min(value / goal, 1) : 0
+  return (
+    <div className="trend-macro">
+      <div className="trend-macro__row">
+        <span className="trend-macro__label">{label}</span>
+        <span className="trend-macro__value numeral">
+          {Math.round(value)}g{goal !== undefined && <span className="trend-macro__goal"> / {goal}g</span>}
+        </span>
+      </div>
+      <div className="macro-bar__track">
+        <div className={`macro-bar__fill macro-bar__fill--${modifier}`} style={{ width: `${progress * 100}%` }} />
+      </div>
+    </div>
+  )
+}
+
 export default function Trends() {
-  const [preset, setPreset] = useState<Preset>('7')
-  const [groupBy, setGroupBy] = useState<GroupBy>('day')
-  const [customStart, setCustomStart] = useState(addDays(toISODate(new Date()), -6))
-  const [customEnd, setCustomEnd] = useState(toISODate(new Date()))
-  const [stats, setStats] = useState<RangeStats | null>(null)
-  const [previousStats, setPreviousStats] = useState<RangeStats | null>(null)
-  // Stryker disable next-line BooleanLiteral: nothing renders past the loader until stats arrive, whatever this says
-  const [isLoading, setIsLoading] = useState(true)
+  const today = toISODate(new Date())
+  const [interval, setIntervalChoice] = useState<Interval>('day')
+  const [count, setCount] = useState(COUNTS.day.fallback)
+  const [isOtherCount, setIsOtherCount] = useState(false)
+  const [countDraft, setCountDraft] = useState(String(COUNTS.day.fallback))
+  // Stryker disable next-line StringLiteral: any value the range can't use falls back to its first grouping, which is 'day' for the default 30-day range
+  const [customGroupBy, setCustomGroupBy] = useState<GroupBy>('day')
+  const [customStart, setCustomStart] = useState(addDays(today, -29))
+  const [customEnd, setCustomEnd] = useState(today)
+  const [loaded, setLoaded] = useState<{ key: string; stats: RangeStats; previousStats: RangeStats } | null>(null)
 
-  const load = useCallback(async () => {
-    const { start, end } = presetRange(preset, customStart, customEnd)
-    const previous = previousPeriod(start, end)
-    setIsLoading(true)
-    try {
-      const [current, before] = await Promise.all([
-        fetchRangeStats(start, end, groupBy),
-        fetchRangeStats(previous.start, previous.end, groupBy),
-      ])
-      setStats(current)
-      setPreviousStats(before)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [preset, groupBy, customStart, customEnd])
+  const { start, end } =
+    interval === 'custom' ? { start: customStart, end: customEnd } : lastNRange(interval, count, today)
+  const customGroupings = groupingsFor(daysBetween(start, end))
+  // A custom range's grouping follows its length; a grouping picked for an earlier, different
+  // length falls back to the default rather than drawing 300 hairline days.
+  const groupBy: GroupBy =
+    interval !== 'custom' ? interval : customGroupings.includes(customGroupBy) ? customGroupBy : customGroupings[0]
 
+  // Results are tagged with the request they answer, so a slow earlier request (a 365-day range)
+  // that resolves after a quick later one can never overwrite it, and a render between a control
+  // change and its response never pairs old points with the new grouping.
+  const requestKey = `${start}|${end}|${groupBy}`
   useEffect(() => {
-    load()
-  }, [load])
+    let isStale = false
+    const previous = previousPeriod(start, end, interval, count)
+    Promise.all([fetchRangeStats(start, end, groupBy), fetchRangeStats(previous.start, previous.end, groupBy)]).then(
+      ([current, before]) => {
+        if (!isStale) setLoaded({ key: requestKey, stats: current, previousStats: before })
+      }
+    )
+    return () => {
+      isStale = true
+    }
+  }, [requestKey, start, end, groupBy, interval, count])
 
-  function choosePreset(next: Preset) {
-    setPreset(next)
-    setGroupBy(defaultGroupBy(next))
+  const answer = loaded?.key === requestKey ? loaded : null
+  const stats = answer?.stats
+  const previousStats = answer?.previousStats
+
+  function chooseInterval(next: Interval) {
+    setIntervalChoice(next)
+    if (next === 'custom') return
+    setCount(COUNTS[next].fallback)
+    setCountDraft(String(COUNTS[next].fallback))
+    setIsOtherCount(false)
   }
+
+  function choosePresetCount(next: number) {
+    setCount(next)
+    setCountDraft(String(next))
+    setIsOtherCount(false)
+  }
+
+  function changeCountDraft(value: string) {
+    setCountDraft(value)
+    const parsed = Number(value)
+    // Only rendered for a day/week/month interval, never for custom.
+    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= COUNTS[interval as GroupBy].max) {
+      setCount(parsed)
+    }
+  }
+
+  const periods = stats && buildPeriods(stats.points, start, end, groupBy)
+  const latestGoal = stats?.points.at(-1)
 
   return (
     <>
@@ -84,34 +134,63 @@ export default function Trends() {
       </div>
 
       <div className="range-controls">
-        <div className="segmented" role="group" aria-label="Time range">
-          {(['7', '30', '90', 'custom'] as Preset[]).map((value) => (
+        <div className="segmented" role="group" aria-label="Interval">
+          {(['day', 'week', 'month', 'custom'] as Interval[]).map((value) => (
             <button
               key={value}
               type="button"
-              className={preset === value ? 'is-active' : ''}
-              onClick={() => choosePreset(value)}
+              className={interval === value ? 'is-active' : ''}
+              onClick={() => chooseInterval(value)}
             >
-              {value === 'custom' ? 'Custom' : `${value}d`}
+              {INTERVAL_LABELS[value]}
             </button>
           ))}
         </div>
 
-        <div className="segmented" role="group" aria-label="Group by">
-          {(['day', 'week', 'month'] as GroupBy[]).map((value) => (
-            <button
-              key={value}
-              type="button"
-              className={groupBy === value ? 'is-active' : ''}
-              onClick={() => setGroupBy(value)}
+        {interval !== 'custom' ? (
+          <div className="trend-count">
+            <span className="trend-count__lead">Last</span>
+            <div
+              className="segmented segmented--sm"
+              role="group"
+              aria-label={`How many ${GROUP_LABELS[interval].toLowerCase()}`}
             >
-              {value[0].toUpperCase() + value.slice(1)}
-            </button>
-          ))}
-        </div>
-
-        {preset === 'custom' && (
-          <>
+              {COUNTS[interval].presets.map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={!isOtherCount && count === value ? 'is-active' : ''}
+                  onClick={() => choosePresetCount(value)}
+                >
+                  {value}
+                </button>
+              ))}
+              <button type="button" className={isOtherCount ? 'is-active' : ''} onClick={() => setIsOtherCount(true)}>
+                Other
+              </button>
+            </div>
+            {isOtherCount && (
+              <div className="field" style={{ margin: 0 }}>
+                <label htmlFor="trend-count" className="visually-hidden">
+                  Number of {GROUP_LABELS[interval].toLowerCase()}
+                </label>
+                <input
+                  id="trend-count"
+                  className="input trend-count__input"
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={COUNTS[interval].max}
+                  value={countDraft}
+                  autoFocus
+                  onChange={(event) => changeCountDraft(event.target.value)}
+                />
+              </div>
+            )}
+            <span className="trend-count__lead">{GROUP_LABELS[interval].toLowerCase()}</span>
+          </div>
+        ) : (
+          <div className="trend-dates">
             <div className="field" style={{ margin: 0 }}>
               <label htmlFor="start" className="visually-hidden">
                 Start date
@@ -125,6 +204,9 @@ export default function Trends() {
                 onChange={(event) => setCustomStart(event.target.value)}
               />
             </div>
+            <span className="trend-dates__sep" aria-hidden="true">
+              to
+            </span>
             <div className="field" style={{ margin: 0 }}>
               <label htmlFor="end" className="visually-hidden">
                 End date
@@ -135,75 +217,101 @@ export default function Trends() {
                 type="date"
                 value={customEnd}
                 min={customStart}
-                max={toISODate(new Date())}
+                max={today}
                 onChange={(event) => setCustomEnd(event.target.value)}
               />
             </div>
-          </>
+          </div>
         )}
       </div>
 
-      {isLoading || !stats ? (
+      {!stats ? (
         <div className="centered-loader">Loading…</div>
       ) : (
         <>
-          <div className="stat-strip">
-            <div className="stat-tile">
-              <div className="stat-tile__label">Avg calories / logged day</div>
-              <div className="stat-tile__value">{Math.round(stats.average_calories)}</div>
-              {/* Loaded together with stats, so it's set whenever stats is. */}
-              {previousStats!.days_logged > 0 && (
-                <div className="stat-tile__delta">
-                  {formatDelta(stats.average_calories, previousStats!.average_calories)}
+          <section className="card trend-summary">
+            <div className="trend-summary__calories">
+              <div className="eyebrow">Average per logged day</div>
+              <div className="trend-summary__value">
+                <span className="numeral">{Math.round(stats.average_calories)}</span>
+                <span className="trend-summary__unit">kcal</span>
+              </div>
+              <div className="trend-summary__meta">
+                {latestGoal && <span>Goal {latestGoal.calorie_goal}</span>}
+                {/* Loaded together with stats, so it's set whenever stats is. */}
+                {previousStats!.days_logged > 0 && (
+                  <span className="stat-tile__delta">
+                    {formatDelta(stats.average_calories, previousStats!.average_calories)}
+                  </span>
+                )}
+              </div>
+              <div className="trend-summary__logged">
+                Logged <span className="numeral">{stats.days_logged}</span> of{' '}
+                <span className="numeral">{stats.days_in_range}</span> days
+              </div>
+            </div>
+            <div className="trend-summary__macros">
+              <MacroTile
+                label="Protein"
+                value={stats.average_protein_g}
+                goal={latestGoal?.protein_goal_g}
+                modifier="protein"
+              />
+              <MacroTile label="Carbs" value={stats.average_carbs_g} goal={latestGoal?.carbs_goal_g} modifier="carbs" />
+              <MacroTile label="Fat" value={stats.average_fat_g} goal={latestGoal?.fat_goal_g} modifier="fat" />
+            </div>
+          </section>
+
+          <section className="card">
+            <div className="trend-card-head">
+              <h2 className="card__title">Calories</h2>
+              {interval === 'custom' && customGroupings.length > 1 && (
+                <div className="segmented segmented--sm" role="group" aria-label="Group by">
+                  {customGroupings.map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      className={groupBy === value ? 'is-active' : ''}
+                      onClick={() => setCustomGroupBy(value)}
+                    >
+                      {GROUP_LABELS[value]}
+                    </button>
+                  ))}
                 </div>
               )}
             </div>
-            <div className="stat-tile">
-              <div className="stat-tile__label">Avg protein</div>
-              <div className="stat-tile__value">{Math.round(stats.average_protein_g)}g</div>
-            </div>
-            <div className="stat-tile">
-              <div className="stat-tile__label">Avg carbs</div>
-              <div className="stat-tile__value">{Math.round(stats.average_carbs_g)}g</div>
-            </div>
-            <div className="stat-tile">
-              <div className="stat-tile__label">Avg fat</div>
-              <div className="stat-tile__value">{Math.round(stats.average_fat_g)}g</div>
-            </div>
-          </div>
+            <TrendChart key={requestKey} periods={periods!} groupBy={groupBy} />
+          </section>
 
-          <div className="card">
-            <h2 className="card__title">Calories</h2>
-            <BarChart
-              points={stats.points.map((point) => ({
-                label: shortLabel(point.period_start, groupBy),
-                value: point.calories,
-              }))}
-              goal={stats.points.at(-1)?.calorie_goal}
-              sparse={stats.days_logged < Math.min(3, stats.days_in_range)}
-            />
-            <p className="page-header__meta" style={{ marginTop: 'var(--space-md)' }}>
-              Logged {stats.days_logged} of {stats.days_in_range} days in range. Dashed line marks your daily goal.
-            </p>
-          </div>
-
-          <div className="card">
-            <h2 className="card__title">By period</h2>
-            <ul className="entry-list">
-              {stats.points.map((point) => (
-                <li key={point.period_start} className="entry-row">
-                  <div>
-                    <div className="entry-row__name">{point.period_label}</div>
-                    <div className="entry-row__meta">
-                      P{Math.round(point.protein_g)} C{Math.round(point.carbs_g)} F{Math.round(point.fat_g)} ·{' '}
-                      {point.days_logged} day{point.days_logged === 1 ? '' : 's'} logged
+          {groupBy !== 'day' && (
+            <section className="card">
+              <h2 className="card__title">{GROUP_LABELS[groupBy]}</h2>
+              <ul className="trend-periods">
+                {[...periods!].reverse().map((period) => (
+                  <li key={period.start} className="trend-periods__row">
+                    <div>
+                      <div className="trend-periods__name">{longPeriodLabel(period, groupBy)}</div>
+                      <div className="trend-periods__meta">
+                        {period.daysLogged} of {period.daysInPeriod} day{period.daysInPeriod === 1 ? '' : 's'} logged
+                        {period.avgProtein !== null &&
+                          ` · P ${Math.round(period.avgProtein)}g · C ${Math.round(period.avgCarbs!)}g · F ${Math.round(period.avgFat!)}g per day`}
+                      </div>
                     </div>
-                  </div>
-                  <div className="entry-row__calories numeral">{Math.round(point.calories)} kcal</div>
-                </li>
-              ))}
-            </ul>
-          </div>
+                    <div className="trend-periods__value">
+                      {period.avgCalories === null ? (
+                        <span className="trend-periods__empty">—</span>
+                      ) : (
+                        <>
+                          <span className="numeral">{Math.round(period.avgCalories)}</span>
+                          <span className="trend-periods__unit">kcal / day</span>
+                        </>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
         </>
       )}
     </>

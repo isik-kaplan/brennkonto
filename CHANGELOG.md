@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.26.0]
+
+### Changed
+
+- Trends is rebuilt around what each bar means. Pick Days, Weeks or Months, then how many - the last 7 / 30 / 90 / 365 days, 4 / 12 / 26 / 52 weeks, 3 / 6 / 12 / 24 months, or any other number - or a Custom date range. "Last 12 weeks" means 12 whole calendar weeks ending with this one, so only the week in progress is ever partial.
+- Week and month bars now show the average per logged day instead of the week's or month's total, so they line up against the daily goal line. The goal is drawn for each bar, stepping where it changed.
+- The chart has a fixed height and a labelled y-axis, and its text no longer grows huge with two bars or shrinks to nothing with ninety. Tap, hover or tab to a bar to read its date, calories, goal and days logged.
+- Days, weeks or months with nothing logged show as a gap on the chart instead of being skipped, and weeks or months cut short by the range (or still in progress) are hatched.
+- The summary shows average calories with your goal, days logged, and protein, carbs and fat against their goals. The list under the chart shows weeks or months newest first, per logged day, with "n of m days logged"; it's hidden for days, where the chart already says the same thing.
+
 ## [0.25.4]
 
 ### Fixed
