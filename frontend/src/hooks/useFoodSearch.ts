@@ -25,9 +25,12 @@ export interface FoodSearchState {
 
 // Shared by LogFood and AddEntryPanel's product search: debounces typing, fetches the first page,
 // then infinite-scrolls further pages in as the sentinel element comes into view, rather than a
-// numbered pager or a "load more" button.
-export function useFoodSearch(): FoodSearchState {
-  const [query, setQuery] = useState('')
+// numbered pager or a "load more" button. Pass `controlledQuery` to keep the query somewhere else
+// (LogFood keeps it in the URL); AddEntryPanel's search keeps its own.
+export function useFoodSearch(controlledQuery?: { query: string; setQuery: (query: string) => void }): FoodSearchState {
+  const [ownQuery, setOwnQuery] = useState('')
+  const query = controlledQuery ? controlledQuery.query : ownQuery
+  const setQuery = controlledQuery ? controlledQuery.setQuery : setOwnQuery
   const [results, setResults] = useState<FoodSearchResult[]>([])
   const [page, setPage] = useState(1)
   // Stryker disable next-line BooleanLiteral: only read once there are results, and every search sets it first

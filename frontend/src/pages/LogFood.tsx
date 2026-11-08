@@ -8,6 +8,7 @@ import { createEntry, deleteFavorite, fetchFavorites, lookupBarcode, upsertFavor
 import type { Favorite, FoodSearchResult } from '../api/types'
 import HistoryPicker from '../components/HistoryPicker'
 import { useFoodSearch } from '../hooks/useFoodSearch'
+import { useQueryParams } from '../hooks/useQueryParams'
 import { combineDateAndTime, toISODate, toISOTime } from '../lib/dates'
 import { defaultAmountFor, unitLabel, withoutLeadingZeros } from '../lib/units'
 
@@ -35,8 +36,9 @@ function StarIcon({ filled }: { filled: boolean }): ReactNode {
 
 export default function LogFood() {
   const navigate = useNavigate()
+  const [params, updateParams] = useQueryParams()
   const { query, setQuery, results, isSearching, isLoadingMore, searchError, setSearchError, sentinelRef } =
-    useFoodSearch()
+    useFoodSearch({ query: params.get('q') ?? '', setQuery: (next) => updateParams({ q: next || null }) })
 
   const [barcode, setBarcode] = useState('')
   const [isLookingUp, setIsLookingUp] = useState(false)

@@ -10,6 +10,13 @@ export function toISODate(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+// For dates read from the URL: a real YYYY-MM-DD calendar day, so "2026-02-31" or "yesterday"
+// fall back to the page's default instead of reaching the API. The round trip rejects anything
+// toISODate wouldn't have produced itself - bad format, padding, or a day that rolls over.
+export function isISODate(value: string | null): value is string {
+  return value !== null && toISODate(fromISODate(value)) === value
+}
+
 export function fromISODate(value: string): Date {
   const [year, month, day] = value.split('-').map(Number)
   return new Date(year, month - 1, day)

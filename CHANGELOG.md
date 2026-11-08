@@ -3,6 +3,17 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.28.0]
+
+### Changed
+
+- Pages now keep what you're looking at in the address bar, so refreshing, bookmarking or sharing a link brings you back to the same view:
+  - History: the day you're viewing and whether removed entries are shown (`/history?date=2026-11-08&removed=1`).
+  - Trends: the interval and count, or a custom range with its grouping (`/trends?interval=week&count=12`, `/trends?interval=custom&start=2026-01-01&end=2026-06-30&group=month`).
+  - Log food: the search you typed (`/log?q=oats`).
+  - Meals: the meal being edited or built (`/meals?edit=new`).
+- A missing or invalid value in the link falls back to the usual default, such as today or the last 7 days. These changes don't add back-button stops, so stepping through days or typing a search doesn't fill up your history.
+
 ## [0.27.0]
 
 ### Added

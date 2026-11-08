@@ -8,6 +8,7 @@ import type { DailyStats, FoodEntry, MealGroup, RangeStats } from '../../src/api
 import { addDays, toISODate } from '../../src/lib/dates'
 import History from '../../src/pages/History'
 import { dragEntryOnto, stubRects } from '../testUtils/dragAndDrop'
+import { LocationProbe, currentSearch } from '../testUtils/locationProbe'
 
 vi.mock('../../src/api/endpoints')
 
@@ -62,13 +63,58 @@ beforeEach(() => {
   vi.mocked(endpoints.createEntry).mockReset()
 })
 
-function renderHistory() {
+function renderHistory(url = '/history') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <History />
+      <LocationProbe />
     </MemoryRouter>
   )
 }
+
+describe('History URL', () => {
+  it('opens on the date in the URL', async () => {
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(yesterday))
+    renderHistory(`/history?date=${yesterday}`)
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledWith(yesterday))
+    expect(screen.getByLabelText('Date')).toHaveValue(yesterday)
+    expect(screen.getByRole('button', { name: 'Next day' })).toBeEnabled()
+  })
+
+  it.each(['2026-02-31', 'yesterday', addDays(today, 1)])('falls back to today for date=%s', async (date) => {
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today))
+    renderHistory(`/history?date=${date}`)
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledWith(today))
+    expect(endpoints.fetchDailyStats).not.toHaveBeenCalledWith(date)
+  })
+
+  it('writes the viewed date to the URL, and drops it when the field is cleared', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(today))
+    renderHistory()
+    await waitFor(() => expect(endpoints.fetchDailyStats).toHaveBeenCalledWith(today))
+    expect(currentSearch().has('date')).toBe(false)
+
+    await user.click(screen.getByRole('button', { name: 'Previous day' }))
+    expect(currentSearch().get('date')).toBe(yesterday)
+
+    fireEvent.change(screen.getByLabelText('Date'), { target: { value: '' } })
+    expect(currentSearch().has('date')).toBe(false)
+  })
+
+  it('keeps Show removed in the URL', async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchDailyStats).mockResolvedValue(makeStats(yesterday))
+    renderHistory(`/history?date=${yesterday}&removed=1`)
+    await waitFor(() => expect(endpoints.fetchArchivedEntries).toHaveBeenCalledWith(yesterday))
+
+    await user.click(await screen.findByRole('button', { name: 'Hide removed' }))
+    expect(currentSearch().has('removed')).toBe(false)
+    expect(currentSearch().get('date')).toBe(yesterday)
+    await user.click(screen.getByRole('button', { name: 'Show removed' }))
+    expect(currentSearch().get('removed')).toBe('1')
+  })
+})
 
 describe('History', () => {
   it('loads today by default with Next disabled', async () => {

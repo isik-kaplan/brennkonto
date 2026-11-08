@@ -9,6 +9,7 @@ import type { Favorite, FoodSearchResult } from '../../src/api/types'
 import { toISODate } from '../../src/lib/dates'
 import LogFood from '../../src/pages/LogFood'
 import { triggerIntersection } from '../testUtils/intersectionObserver'
+import { LocationProbe, currentSearch } from '../testUtils/locationProbe'
 
 vi.mock('../../src/api/endpoints')
 
@@ -116,16 +117,36 @@ beforeEach(() => {
   vi.mocked(endpoints.deleteFavorite).mockReset()
 })
 
-function renderLogFood() {
+function renderLogFood(url = '/log') {
   return render(
-    <MemoryRouter initialEntries={['/log']}>
+    <MemoryRouter initialEntries={[url]}>
       <Routes>
         <Route path="/log" element={<LogFood />} />
         <Route path="/" element={<div>Dashboard page</div>} />
       </Routes>
+      <LocationProbe />
     </MemoryRouter>
   )
 }
+
+describe('LogFood URL', () => {
+  it('searches for the query in the URL on load', async () => {
+    vi.mocked(endpoints.searchFoods).mockResolvedValue([nutella])
+    renderLogFood('/log?q=nutella')
+    expect(screen.getByLabelText('Product name')).toHaveValue('nutella')
+    expect(await screen.findByText('Nutella', {}, { timeout: 1000 })).toBeInTheDocument()
+    expect(endpoints.searchFoods).toHaveBeenCalledWith('nutella', 1)
+  })
+
+  it('writes the query to the URL as you type, and drops it once cleared', async () => {
+    const user = userEvent.setup()
+    renderLogFood()
+    await user.type(screen.getByLabelText('Product name'), 'oat')
+    expect(currentSearch().get('q')).toBe('oat')
+    await user.clear(screen.getByLabelText('Product name'))
+    expect(currentSearch().has('q')).toBe(false)
+  })
+})
 
 describe('LogFood search', () => {
   it('does not search for a query shorter than 2 characters', async () => {

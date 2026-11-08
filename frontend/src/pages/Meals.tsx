@@ -5,6 +5,7 @@ import { deleteMeal, fetchMeals } from '../api/endpoints'
 import type { Meal, MealItem } from '../api/types'
 import ConfirmDialog from '../components/ConfirmDialog'
 import MealEditor from '../components/MealEditor'
+import { useQueryParams } from '../hooks/useQueryParams'
 import { displayDate } from '../lib/dates'
 
 function ItemRow({ item }: { item: MealItem }) {
@@ -38,8 +39,11 @@ export default function Meals() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
 
-  // 'new' while building a new meal, the meal's id while editing one, null otherwise.
-  const [editing, setEditing] = useState<string | null>(null)
+  // ?edit=new while building a new meal, ?edit=<id> while editing one, absent otherwise - in the
+  // URL so a refresh keeps the editor open. An id that matches no meal simply opens nothing.
+  const [params, updateParams] = useQueryParams()
+  const editing = params.get('edit')
+  const setEditing = (next: string | null) => updateParams({ edit: next })
   const [pendingRemove, setPendingRemove] = useState<Meal | null>(null)
 
   const load = useCallback(async () => {

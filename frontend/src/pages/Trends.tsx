@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react'
 import { fetchRangeStats } from '../api/endpoints'
 import type { GroupBy, RangeStats } from '../api/types'
 import TrendChart from '../components/TrendChart'
-import { addDays, daysBetween, toISODate } from '../lib/dates'
+import { useQueryParams } from '../hooks/useQueryParams'
+import { addDays, daysBetween, isISODate, toISODate } from '../lib/dates'
 import { buildPeriods, defaultGrouping, isGroupingUsable, lastNRange, longPeriodLabel } from '../lib/trendPeriods'
 
 type Interval = GroupBy | 'custom'
@@ -62,16 +63,36 @@ function MacroTile({
   )
 }
 
+function isInterval(value: string | null): value is Interval {
+  return value === 'custom' || GROUPINGS.includes(value as GroupBy)
+}
+
+function isValidCount(value: number, interval: GroupBy): boolean {
+  return Number.isInteger(value) && value >= 1 && value <= COUNTS[interval].max
+}
+
 export default function Trends() {
   const today = toISODate(new Date())
-  const [interval, setIntervalChoice] = useState<Interval>('day')
-  const [count, setCount] = useState(COUNTS.day.fallback)
-  const [isOtherCount, setIsOtherCount] = useState(false)
-  const [countDraft, setCountDraft] = useState(String(COUNTS.day.fallback))
+  // The range lives in the URL - ?interval=week&count=12, or
+  // ?interval=custom&start=YYYY-MM-DD&end=YYYY-MM-DD&group=week - so a refresh or a shared link
+  // shows the same chart. Anything missing or invalid falls back to the defaults below.
+  const [params, updateParams] = useQueryParams()
+  const intervalParam = params.get('interval')
+  const interval: Interval = isInterval(intervalParam) ? intervalParam : 'day'
+  const countParam = Number(params.get('count'))
+  const count = interval === 'custom' ? 0 : isValidCount(countParam, interval) ? countParam : COUNTS[interval].fallback
+  const [isOtherCount, setIsOtherCount] = useState(interval !== 'custom' && !COUNTS[interval].presets.includes(count))
+  const [countDraft, setCountDraft] = useState(String(count))
   // Null until someone picks one, so the range's own default applies.
-  const [customGroupBy, setCustomGroupBy] = useState<GroupBy | null>(null)
-  const [customStart, setCustomStart] = useState(addDays(today, -29))
-  const [customEnd, setCustomEnd] = useState(today)
+  const groupParam = params.get('group')
+  const customGroupBy = GROUPINGS.includes(groupParam as GroupBy) ? (groupParam as GroupBy) : null
+  const startParam = params.get('start')
+  const endParam = params.get('end')
+  const customEnd = isISODate(endParam) ? endParam : today
+  const defaultStart = addDays(today, -29)
+  const requestedStart = isISODate(startParam) ? startParam : defaultStart
+  // Only a hand-edited URL can put the start after the end; the date inputs never allow it.
+  const customStart = requestedStart <= customEnd ? requestedStart : addDays(customEnd, -29)
   const [loaded, setLoaded] = useState<{ key: string; stats: RangeStats; previousStats: RangeStats } | null>(null)
 
   const { start, end } =
@@ -106,16 +127,19 @@ export default function Trends() {
   const stats = answer?.stats
   const previousStats = answer?.previousStats
 
+  // Each interval keeps only its own params, so the URL never carries a stale count or range.
   function chooseInterval(next: Interval) {
-    setIntervalChoice(next)
-    if (next === 'custom') return
-    setCount(COUNTS[next].fallback)
+    if (next === 'custom') {
+      updateParams({ interval: next, count: null })
+      return
+    }
+    updateParams({ interval: next, count: null, start: null, end: null, group: null })
     setCountDraft(String(COUNTS[next].fallback))
     setIsOtherCount(false)
   }
 
   function choosePresetCount(next: number) {
-    setCount(next)
+    updateParams({ count: String(next) })
     setCountDraft(String(next))
     setIsOtherCount(false)
   }
@@ -124,10 +148,14 @@ export default function Trends() {
     setCountDraft(value)
     const parsed = Number(value)
     // Only rendered for a day/week/month/year interval, never for custom.
-    if (Number.isInteger(parsed) && parsed >= 1 && parsed <= COUNTS[interval as GroupBy].max) {
-      setCount(parsed)
+    if (isValidCount(parsed, interval as GroupBy)) {
+      updateParams({ count: String(parsed) })
     }
   }
+
+  const setCustomStart = (value: string) => updateParams({ start: value || null })
+  const setCustomEnd = (value: string) => updateParams({ end: value || null })
+  const setCustomGroupBy = (value: GroupBy) => updateParams({ group: value })
 
   const periods = stats && buildPeriods(stats.points, start, end, groupBy)
   const latestGoal = stats?.points.at(-1)

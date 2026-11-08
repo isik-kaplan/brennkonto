@@ -23,7 +23,8 @@ import ConfirmDialog from '../components/ConfirmDialog'
 import EntryList, { type EntryEditValues } from '../components/EntryList'
 import RangeSummary from '../components/RangeSummary'
 import { useHistoryPreferences } from '../hooks/useHistoryPreferences'
-import { addDays, displayDate, fromISODate, toISODate } from '../lib/dates'
+import { useQueryParams } from '../hooks/useQueryParams'
+import { addDays, displayDate, fromISODate, isISODate, toISODate } from '../lib/dates'
 import type { MetricKey } from '../lib/metrics'
 import { METRICS } from '../lib/metrics'
 
@@ -36,9 +37,18 @@ function shortDayLabel(periodStart: string): string {
 export default function History() {
   // Settings' "History defaults" only ever seeds this initial state - once the page has mounted,
   // toggling a metric or Show amounts here is a per-visit adjustment, not a rewrite of the saved
-  // default. Read once via the hook's lazy initializer, same as `date` and the toggles below.
+  // default. Read once via the hook's lazy initializer, same as the toggles below.
   const { preferences } = useHistoryPreferences()
-  const [date, setDate] = useState(toISODate(new Date()))
+  // The viewed date and the removed-entries toggle live in the URL (?date=YYYY-MM-DD&removed=1),
+  // so a refresh or a shared link lands on the same day. A missing, malformed or future date
+  // means today.
+  const [params, updateParams] = useQueryParams()
+  const today = toISODate(new Date())
+  const dateParam = params.get('date')
+  // Stryker disable next-line EqualityOperator: a date of today falls back to today, so < and <= agree
+  const date = isISODate(dateParam) && dateParam <= today ? dateParam : today
+  const showRemoved = params.get('removed') === '1'
+  const setDate = (next: string) => updateParams({ date: next || null })
   const [stats, setStats] = useState<DailyStats | null>(null)
   // Stryker disable next-line ArrayDeclaration: only read once the first load has set it, together with stats
   const [groups, setGroups] = useState<MealGroup[]>([])
@@ -46,7 +56,6 @@ export default function History() {
   // Stryker disable next-line BooleanLiteral: nothing renders past the loader until stats arrive, whatever this says
   const [isLoading, setIsLoading] = useState(true)
   const [deletingId, setDeletingId] = useState<string | null>(null)
-  const [showRemoved, setShowRemoved] = useState(false)
   const [archivedEntries, setArchivedEntries] = useState<FoodEntry[]>([])
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState<FoodEntry | null>(null)
   const [activeMetrics, setActiveMetrics] = useState<Set<MetricKey>>(() => new Set(preferences.activeMetrics))
@@ -130,7 +139,7 @@ export default function History() {
     if (showRemoved) await loadArchived()
   }
 
-  const isToday = date === toISODate(new Date())
+  const isToday = date === today
 
   // A repeated entry always lands on today, never on whatever date is currently being viewed - so
   // there's only something to refresh here when today is what's already on screen. Browsing a
@@ -171,7 +180,7 @@ export default function History() {
             className="input"
             type="date"
             value={date}
-            max={toISODate(new Date())}
+            max={today}
             onChange={(event) => setDate(event.target.value)}
           />
         </div>
@@ -293,7 +302,11 @@ export default function History() {
           )}
 
           <p style={{ marginTop: 'var(--space-lg)' }}>
-            <button type="button" className="btn btn--ghost btn--small" onClick={() => setShowRemoved((v) => !v)}>
+            <button
+              type="button"
+              className="btn btn--ghost btn--small"
+              onClick={() => updateParams({ removed: showRemoved ? null : '1' })}
+            >
               {showRemoved ? 'Hide removed' : 'Show removed'}
             </button>
           </p>

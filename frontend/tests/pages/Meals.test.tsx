@@ -8,6 +8,7 @@ import { ApiError } from '../../src/api/client'
 import * as endpoints from '../../src/api/endpoints'
 import type { FoodSearchResult, Meal, MealItem } from '../../src/api/types'
 import Meals from '../../src/pages/Meals'
+import { LocationProbe, currentSearch } from '../testUtils/locationProbe'
 
 vi.mock('../../src/api/endpoints')
 
@@ -75,10 +76,11 @@ const eggResult: FoodSearchResult = {
   unit_to_grams: 50,
 }
 
-function renderMeals() {
+function renderMeals(url = '/meals') {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={[url]}>
       <Meals />
+      <LocationProbe />
     </MemoryRouter>
   )
 }
@@ -90,6 +92,36 @@ beforeEach(() => {
   vi.mocked(endpoints.lookupBarcode).mockReset()
   vi.mocked(endpoints.createMeal).mockReset()
   vi.mocked(endpoints.updateMeal).mockReset()
+})
+
+describe('Meals URL', () => {
+  it('opens the new-meal editor from ?edit=new', async () => {
+    renderMeals('/meals?edit=new')
+    expect(await screen.findByText('New meal')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '+ Add meal' })).toBeDisabled()
+  })
+
+  it("opens a meal's editor from ?edit=<id>, and keeps the URL in step", async () => {
+    const user = userEvent.setup()
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([breakfast, porridge])
+    renderMeals(`/meals?edit=${porridge.id}`)
+    await screen.findByText('Breakfast')
+    expect(screen.queryByRole('button', { name: 'Edit Porridge' })).not.toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(currentSearch().has('edit')).toBe(false)
+    await user.click(screen.getByRole('button', { name: 'Edit Breakfast' }))
+    expect(currentSearch().get('edit')).toBe(breakfast.id)
+    await user.click(screen.getByRole('button', { name: '+ Add meal' }))
+    expect(currentSearch().get('edit')).toBe('new')
+  })
+
+  it('opens nothing for an id that matches no meal', async () => {
+    vi.mocked(endpoints.fetchMeals).mockResolvedValue([breakfast])
+    renderMeals('/meals?edit=gone')
+    expect(await screen.findByRole('button', { name: 'Edit Breakfast' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+  })
 })
 
 describe('Meals', () => {

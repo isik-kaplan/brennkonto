@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import * as endpoints from '../../src/api/endpoints'
 import type { RangeStats, RangeStatsPoint } from '../../src/api/types'
 import Trends from '../../src/pages/Trends'
+import { LocationProbe, currentSearch } from '../testUtils/locationProbe'
 
 vi.mock('../../src/api/endpoints')
 
@@ -56,12 +58,91 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+function renderTrends(url = '/trends') {
+  return render(
+    <MemoryRouter initialEntries={[url]}>
+      <Trends />
+      <LocationProbe />
+    </MemoryRouter>
+  )
+}
+
 async function renderLoaded() {
-  render(<Trends />)
+  renderTrends()
   await screen.findByText('Average per logged day')
 }
 
 describe('Trends', () => {
+  it('opens on the interval and count in the URL', async () => {
+    renderTrends('/trends?interval=week&count=26')
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-05-11', TODAY, 'week'))
+    expect(screen.getByRole('button', { name: 'Weeks' })).toHaveClass('is-active')
+    expect(screen.getByRole('button', { name: '26' })).toHaveClass('is-active')
+    expect(screen.queryByLabelText('Number of weeks')).not.toBeInTheDocument()
+  })
+
+  it('opens Other for a count from the URL that is not a preset', async () => {
+    renderTrends('/trends?interval=month&count=9')
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-03-01', TODAY, 'month'))
+    expect(screen.getByRole('button', { name: 'Other' })).toHaveClass('is-active')
+    expect(screen.getByLabelText('Number of months')).toHaveValue(9)
+  })
+
+  it.each(['interval=fortnight', 'count=0', 'count=731', 'count=2.5'])(
+    'falls back to the last 7 days for %s',
+    async (query) => {
+      renderTrends(`/trends?${query}`)
+      await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-11-01', TODAY, 'day'))
+      expect(screen.getByRole('button', { name: '7' })).toHaveClass('is-active')
+    }
+  )
+
+  it('opens on the custom range and grouping in the URL', async () => {
+    renderTrends('/trends?interval=custom&start=2026-01-01&end=2026-06-30&group=month')
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-01-01', '2026-06-30', 'month'))
+    expect(screen.getByLabelText('Start date')).toHaveValue('2026-01-01')
+    expect(screen.getByLabelText('End date')).toHaveValue('2026-06-30')
+  })
+
+  it.each([
+    ['start=bogus&end=bogus', '2026-10-09', TODAY],
+    ['start=2026-10-20&end=2026-10-10', '2026-09-11', '2026-10-10'],
+    ['start=2026-10-10&end=2026-10-10', '2026-10-10', '2026-10-10'],
+  ])('falls back to a sane custom range for %s', async (query, start, end) => {
+    renderTrends(`/trends?interval=custom&${query}&group=nope`)
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith(start, end, 'day'))
+  })
+
+  it('writes the range to the URL, keeping only the chosen interval params', async () => {
+    await renderLoaded()
+    expect(currentSearch().toString()).toBe('')
+
+    click('Weeks')
+    click('26')
+    expect(currentSearch().toString()).toBe('interval=week&count=26')
+
+    click('Other')
+    fireEvent.change(screen.getByLabelText('Number of weeks'), { target: { value: '9' } })
+    expect(currentSearch().get('count')).toBe('9')
+
+    click('Custom')
+    expect(currentSearch().toString()).toBe('interval=custom')
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-01-01' } })
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-06-30' } })
+    click('Months')
+    expect(currentSearch().toString()).toBe('interval=month')
+  })
+
+  it('writes the custom grouping and dates to the URL', async () => {
+    renderTrends('/trends?interval=custom&start=2026-01-01')
+    await screen.findByLabelText('Start date')
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '2026-06-30' } })
+    expect(currentSearch().get('end')).toBe('2026-06-30')
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-01-01', '2026-06-30', 'week'))
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '' } })
+    expect(currentSearch().has('start')).toBe(false)
+  })
+
   it('opens on the last 7 days, compared with the 7 before', async () => {
     await renderLoaded()
     expect(fetchMock()).toHaveBeenCalledWith('2026-11-01', TODAY, 'day')
@@ -340,7 +421,7 @@ describe('Trends', () => {
     fetchMock().mockImplementation(
       (start, _end, groupBy) => new Promise((resolve) => (pending[`${start}|${groupBy}`] = resolve))
     )
-    render(<Trends />)
+    renderTrends()
     expect(screen.getByText('Loading…')).toBeInTheDocument()
 
     click('Weeks')

@@ -9,12 +9,30 @@ import {
   displayDateLong,
   fromDatetimeLocalValue,
   fromISODate,
+  isISODate,
   toDatetimeLocalValue,
   toISODate,
   toISOTime,
 } from '../../src/lib/dates'
 
 const dateArb = fc.date({ min: new Date(2000, 0, 1), max: new Date(2099, 11, 31), noInvalidDate: true })
+
+describe('isISODate', () => {
+  it.each(['2026-11-08', '2024-02-29'])('accepts %s', (value) => expect(isISODate(value)).toBe(true))
+
+  it.each([
+    null,
+    '',
+    '2026-02-31',
+    '2025-02-29',
+    '2026-13-01',
+    '2026-1-5',
+    'x2026-11-08',
+    '2026-11-08x',
+    '0999-01-01',
+    'today',
+  ])('rejects %s', (value) => expect(isISODate(value)).toBe(false))
+})
 
 describe('toISODate / fromISODate', () => {
   test.prop([dateArb])('round-trips through fromISODate(toISODate(date))', (date) => {
