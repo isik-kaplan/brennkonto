@@ -172,32 +172,57 @@ describe('Trends', () => {
     expect(fetchMock()).toHaveBeenCalledWith('2026-10-08', '2026-10-19', 'day')
   })
 
-  it('offers a custom range only the groupings that suit its length, falling back when one stops fitting', async () => {
+  it('counts whole calendar years, comparing with the years before them', async () => {
+    await renderLoaded()
+    click('Years')
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2025-01-01', TODAY, 'year'))
+    expect(fetchMock()).toHaveBeenCalledWith('2023-01-01', '2024-12-31', 'year')
+    expect(screen.getByRole('button', { name: '2' })).toHaveClass('is-active')
+    for (const name of ['3', '5']) expect(screen.getByRole('button', { name })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Years' })).toBeInTheDocument()
+    click('Other')
+    expect(screen.getByLabelText('Number of years')).toHaveAttribute('max', '10')
+  })
+
+  it('offers a custom range every grouping, disabling the ones that would not draw a comparison', async () => {
     await renderLoaded()
     click('Custom')
-    const groupBy = await screen.findByRole('group', { name: 'Group by' })
-    expect(within(groupBy).getByRole('button', { name: 'Days' })).toHaveClass('is-active')
-    expect(within(groupBy).getByRole('button', { name: 'Weeks' })).not.toHaveClass('is-active')
-    fireEvent.click(within(groupBy).getByRole('button', { name: 'Weeks' }))
-    await waitFor(() => expect(fetchMock()).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), 'week'))
+    const groupBy = () => within(screen.getByRole('group', { name: 'Group by' }))
+    const option = (name: string) => groupBy().getByRole('button', { name })
+    await screen.findByRole('group', { name: 'Group by' })
 
-    // 30 days → 100 days: weeks still fit, so the choice holds.
-    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-07-31' } })
-    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-07-31', TODAY, 'week'))
+    // 30 days, Oct 9 - Nov 7: two months, but all within one year.
+    expect(option('Days')).toHaveClass('is-active')
+    expect(option('Weeks')).not.toHaveClass('is-active')
+    expect(option('Days')).toBeEnabled()
+    expect(option('Weeks')).toBeEnabled()
+    expect(option('Months')).toBeEnabled()
+    expect(option('Years')).toBeDisabled()
+    expect(option('Years')).toHaveAttribute('title', 'This range is too short to group by year')
+    expect(option('Months')).not.toHaveAttribute('title')
 
-    // Back to 30 days via months: months don't fit 30 days, so it falls back to days.
-    fireEvent.click(
-      within(await screen.findByRole('group', { name: 'Group by' })).getByRole('button', { name: 'Months' })
-    )
-    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-07-31', TODAY, 'month'))
-    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-10-09' } })
-    await waitFor(() => expect(fetchMock()).toHaveBeenLastCalledWith(expect.anything(), expect.anything(), 'day'))
+    fireEvent.click(option('Months'))
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-10-09', TODAY, 'month'))
+    expect(option('Months')).toHaveClass('is-active')
 
-    // Two weeks or less: days only, so no switch at all.
+    // Into last year: years open up, and the picked grouping holds.
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2025-12-01' } })
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2025-12-01', TODAY, 'month'))
+    expect(option('Years')).toBeEnabled()
+    fireEvent.click(option('Years'))
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2025-12-01', TODAY, 'year'))
+
+    // Back inside one year, years no longer fit: the range's own default takes over.
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2026-11-01' } })
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-11-01', TODAY, 'day'))
-    await screen.findByText('Average per logged day')
-    expect(screen.queryByRole('group', { name: 'Group by' })).not.toBeInTheDocument()
+    expect(option('Months')).toBeDisabled()
+    fireEvent.click(option('Days'))
+
+    // Past 730 days, days would be hairlines: disabled, and the default is months.
+    fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '2024-11-07' } })
+    await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2024-11-07', TODAY, 'month'))
+    expect(option('Days')).toBeDisabled()
+    expect(option('Days')).toHaveAttribute('title', 'This range is too long to group by day')
   })
 
   it('never offers the grouping switch outside a custom range', async () => {

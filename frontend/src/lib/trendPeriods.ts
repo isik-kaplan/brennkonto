@@ -18,16 +18,19 @@ export interface TrendPeriod {
   isPartial: boolean
 }
 
-// Bucket boundaries mirror the backend's _bucket_key: weeks start on Monday, months on the 1st.
+// Bucket boundaries mirror the backend's _bucket_key: weeks start on Monday, months on the 1st,
+// years on January 1st.
 export function bucketStart(date: string, groupBy: GroupBy): string {
   if (groupBy === 'day') return date
   if (groupBy === 'week') return addDays(date, -((fromISODate(date).getDay() + 6) % 7))
+  if (groupBy === 'year') return `${date.slice(0, 4)}-01-01`
   return `${date.slice(0, 8)}01`
 }
 
 export function bucketEnd(start: string, groupBy: GroupBy): string {
   if (groupBy === 'day') return start
   if (groupBy === 'week') return addDays(start, 6)
+  if (groupBy === 'year') return `${start.slice(0, 4)}-12-31`
   const first = fromISODate(start)
   return toISODate(new Date(first.getFullYear(), first.getMonth() + 1, 0))
 }
@@ -37,17 +40,34 @@ export function bucketEnd(start: string, groupBy: GroupBy): string {
 export function lastNRange(groupBy: GroupBy, count: number, end: string): { start: string; end: string } {
   if (groupBy === 'day') return { start: addDays(end, -(count - 1)), end }
   if (groupBy === 'week') return { start: addDays(bucketStart(end, 'week'), -7 * (count - 1)), end }
+  if (groupBy === 'year') return { start: `${Number(end.slice(0, 4)) - (count - 1)}-01-01`, end }
   const current = fromISODate(end)
   return { start: toISODate(new Date(current.getFullYear(), current.getMonth() - (count - 1), 1)), end }
 }
 
-// Long ranges cap out at a coarser grouping and short ones never offer one, so every combination
-// on screen draws a chart worth reading: no single "month" bar for a week, no 90 hairline days.
-export function groupingsFor(days: number): GroupBy[] {
-  if (days <= 14) return ['day']
-  if (days <= 62) return ['day', 'week']
-  if (days <= 200) return ['week', 'month']
-  return ['month']
+export const MAX_BARS = 730
+
+// How many bars a range draws at a grouping, counting the clipped ones at either end.
+export function bucketCount(start: string, end: string, groupBy: GroupBy): number {
+  if (groupBy === 'day') return daysBetween(start, end)
+  if (groupBy === 'week') return (daysBetween(bucketStart(start, 'week'), bucketStart(end, 'week')) - 1) / 7 + 1
+  const years = Number(end.slice(0, 4)) - Number(start.slice(0, 4))
+  if (groupBy === 'year') return years + 1
+  return years * 12 + Number(end.slice(5, 7)) - Number(start.slice(5, 7)) + 1
+}
+
+// A grouping is worth offering when it compares at least two bars without drawing more than the
+// chart can hold. Days are the exception for a single day, which has nothing finer to fall back to.
+export function isGroupingUsable(start: string, end: string, groupBy: GroupBy): boolean {
+  const count = bucketCount(start, end, groupBy)
+  return count <= MAX_BARS && (count >= 2 || groupBy === 'day')
+}
+
+// What a custom range opens on before anyone picks: the finest grouping that stays readable.
+export function defaultGrouping(days: number): GroupBy {
+  if (days <= 62) return 'day'
+  if (days <= 200) return 'week'
+  return 'month'
 }
 
 // The backend only returns buckets that have entries, labelled by their full calendar span. This
@@ -84,6 +104,7 @@ export function buildPeriods(points: RangeStatsPoint[], start: string, end: stri
 export function shortPeriodLabel(period: TrendPeriod, groupBy: GroupBy): string {
   const date = fromISODate(period.start)
   if (groupBy === 'month') return date.toLocaleDateString(undefined, { month: 'short' })
+  if (groupBy === 'year') return period.start.slice(0, 4)
   return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
 }
 
@@ -96,7 +117,10 @@ export function longPeriodLabel(period: TrendPeriod, groupBy: GroupBy): string {
   if (groupBy === 'month' && !period.isPartial) {
     return startDate.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
   }
-  const format: Intl.DateTimeFormatOptions = { day: 'numeric', month: 'short' }
+  if (groupBy === 'year' && !period.isPartial) return period.start.slice(0, 4)
+  // A clipped year names its own year, since its dates alone could belong to any.
+  const format: Intl.DateTimeFormatOptions =
+    groupBy === 'year' ? { day: 'numeric', month: 'short', year: 'numeric' } : { day: 'numeric', month: 'short' }
   if (period.start === period.end) return startDate.toLocaleDateString(undefined, format)
   return `${startDate.toLocaleDateString(undefined, format)} – ${endDate.toLocaleDateString(undefined, format)}`
 }

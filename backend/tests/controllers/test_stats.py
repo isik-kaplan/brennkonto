@@ -31,6 +31,11 @@ def test_bucket_key_month_is_the_first_of_the_month(d: date) -> None:
     assert key.month == d.month
 
 
+@given(d=dates)
+def test_bucket_key_year_is_the_first_of_january(d: date) -> None:
+    assert _bucket_key(d, "year") == date(d.year, 1, 1)
+
+
 def test_bucket_key_rejects_an_unsupported_group_by() -> None:
     with pytest.raises(Exception, match="Unsupported group_by"):
         _bucket_key(date(2026, 8, 1), "fortnight")
@@ -148,6 +153,19 @@ async def test_range_stats_groups_by_month(authed_client) -> None:
     assert body["points"][0]["period_label"] == "August 2026"
 
 
+async def test_range_stats_groups_by_year(authed_client) -> None:
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2025-12-31T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-01-01T12:00:00Z"})
+    await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-31T12:00:00Z"})
+
+    response = await authed_client.get("/api/stats/range?start=2025-06-01&end=2026-08-31&group_by=year")
+    points = response.json()["points"]
+    assert [(p["period_label"], p["period_start"], p["days_logged"]) for p in points] == [
+        ("2025", "2025-01-01", 1),
+        ("2026", "2026-01-01", 2),
+    ]
+
+
 async def test_range_stats_average_ignores_days_with_no_entries(authed_client) -> None:
     await authed_client.post("/api/entries/", json={**ENTRY_PAYLOAD, "consumed_at": "2026-08-01T12:00:00Z"})
 
@@ -235,6 +253,7 @@ async def test_range_stats_points_include_the_per_macro_goals(authed_client) -> 
         (date(2026, 9, 1), "month", ("September 2026", date(2026, 9, 1), date(2026, 9, 30))),
         (date(2026, 2, 1), "month", ("February 2026", date(2026, 2, 1), date(2026, 2, 28))),
         (date(2028, 2, 1), "month", ("February 2028", date(2028, 2, 1), date(2028, 2, 29))),
+        (date(2026, 1, 1), "year", ("2026", date(2026, 1, 1), date(2026, 12, 31))),
     ],
 )
 def test_bucket_label(key, group_by, expected) -> None:

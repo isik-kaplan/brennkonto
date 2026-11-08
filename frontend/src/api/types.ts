@@ -145,7 +145,7 @@ export interface DailyStats {
   entries: FoodEntry[]
 }
 
-export type GroupBy = 'day' | 'week' | 'month'
+export type GroupBy = 'day' | 'week' | 'month' | 'year'
 
 export interface RangeStatsPoint {
   period_label: string

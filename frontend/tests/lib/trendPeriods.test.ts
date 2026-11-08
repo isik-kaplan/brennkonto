@@ -3,10 +3,12 @@ import { describe, expect, it } from 'vitest'
 import type { RangeStatsPoint } from '../../src/api/types'
 import {
   type TrendPeriod,
+  bucketCount,
   bucketEnd,
   bucketStart,
   buildPeriods,
-  groupingsFor,
+  defaultGrouping,
+  isGroupingUsable,
   lastNRange,
   longPeriodLabel,
   niceScale,
@@ -58,8 +60,9 @@ describe('bucketStart', () => {
     expect(bucketStart('2026-11-02', 'week')).toBe('2026-11-02')
   })
 
-  it('snaps a month to its first day', () => {
+  it('snaps a month to its first day and a year to January 1st', () => {
     expect(bucketStart('2026-11-07', 'month')).toBe('2026-11-01')
+    expect(bucketStart('2026-11-07', 'year')).toBe('2026-01-01')
   })
 })
 
@@ -74,6 +77,10 @@ describe('bucketEnd', () => {
     expect(bucketEnd('2026-02-01', 'month')).toBe('2026-02-28')
     expect(bucketEnd('2024-02-01', 'month')).toBe('2024-02-29')
     expect(bucketEnd('2026-12-01', 'month')).toBe('2026-12-31')
+  })
+
+  it('ends a year on December 31st', () => {
+    expect(bucketEnd('2026-01-01', 'year')).toBe('2026-12-31')
   })
 })
 
@@ -92,19 +99,57 @@ describe('lastNRange', () => {
     expect(lastNRange('month', 1, '2026-11-07')).toEqual({ start: '2026-11-01', end: '2026-11-07' })
     expect(lastNRange('month', 12, '2026-11-07')).toEqual({ start: '2025-12-01', end: '2026-11-07' })
   })
+
+  it('starts N whole calendar years back', () => {
+    expect(lastNRange('year', 1, '2026-11-07')).toEqual({ start: '2026-01-01', end: '2026-11-07' })
+    expect(lastNRange('year', 3, '2026-11-07')).toEqual({ start: '2024-01-01', end: '2026-11-07' })
+  })
 })
 
-describe('groupingsFor', () => {
+describe('bucketCount', () => {
   it.each([
-    [1, ['day']],
-    [14, ['day']],
-    [15, ['day', 'week']],
-    [62, ['day', 'week']],
-    [63, ['week', 'month']],
-    [200, ['week', 'month']],
-    [201, ['month']],
-  ])('offers sensible groupings for %i days', (days, expected) => {
-    expect(groupingsFor(days)).toEqual(expected)
+    ['2026-11-01', '2026-11-07', 'day', 7],
+    ['2026-11-02', '2026-11-08', 'week', 1],
+    ['2026-11-01', '2026-11-07', 'week', 2],
+    ['2026-10-25', '2026-11-07', 'week', 3],
+    ['2026-11-01', '2026-11-30', 'month', 1],
+    ['2026-10-31', '2026-11-01', 'month', 2],
+    ['2025-12-01', '2026-11-07', 'month', 12],
+    ['2026-01-01', '2026-12-31', 'year', 1],
+    ['2025-12-31', '2026-01-01', 'year', 2],
+  ] as const)('counts %s to %s by %s as %i bars', (start, end, groupBy, expected) => {
+    expect(bucketCount(start, end, groupBy)).toBe(expected)
+  })
+})
+
+describe('isGroupingUsable', () => {
+  it('needs at least two bars to compare', () => {
+    expect(isGroupingUsable('2026-11-02', '2026-11-08', 'week')).toBe(false)
+    expect(isGroupingUsable('2026-11-01', '2026-11-07', 'week')).toBe(true)
+    expect(isGroupingUsable('2026-11-01', '2026-11-07', 'month')).toBe(false)
+    expect(isGroupingUsable('2026-10-31', '2026-11-01', 'month')).toBe(true)
+    expect(isGroupingUsable('2026-01-01', '2026-11-07', 'year')).toBe(false)
+  })
+
+  it('still allows a single day, which has nothing finer to fall back to', () => {
+    expect(isGroupingUsable('2026-11-07', '2026-11-07', 'day')).toBe(true)
+  })
+
+  it('caps the bars a chart draws at 730', () => {
+    expect(isGroupingUsable('2024-11-08', '2026-11-07', 'day')).toBe(true)
+    expect(isGroupingUsable('2024-11-07', '2026-11-07', 'day')).toBe(false)
+  })
+})
+
+describe('defaultGrouping', () => {
+  it.each([
+    [1, 'day'],
+    [62, 'day'],
+    [63, 'week'],
+    [200, 'week'],
+    [201, 'month'],
+  ])('opens %i days grouped by %s', (days, expected) => {
+    expect(defaultGrouping(days)).toBe(expected)
   })
 })
 
@@ -151,6 +196,7 @@ describe('labels', () => {
     expect(shortPeriodLabel(period({ start: '2026-11-02' }), 'day')).toBe('Nov 2')
     expect(shortPeriodLabel(period({ start: '2026-11-02' }), 'week')).toBe('Nov 2')
     expect(shortPeriodLabel(period({ start: '2026-11-01' }), 'month')).toBe('Nov')
+    expect(shortPeriodLabel(period({ start: '2026-01-01' }), 'year')).toBe('2026')
   })
 
   it('spells out a day with its weekday', () => {
@@ -167,6 +213,14 @@ describe('labels', () => {
   it('gives a week its date span, collapsed to one date when it is a single day', () => {
     expect(longPeriodLabel(period({ start: '2026-11-02', end: '2026-11-08' }), 'week')).toBe('Nov 2 – Nov 8')
     expect(longPeriodLabel(period({ start: '2026-11-01', end: '2026-11-01', isPartial: true }), 'week')).toBe('Nov 1')
+  })
+})
+
+describe('year labels', () => {
+  it('names a whole year, and gives a partial one dated ends that include the year', () => {
+    expect(longPeriodLabel(period({ start: '2025-01-01', end: '2025-12-31' }), 'year')).toBe('2025')
+    const partial = period({ start: '2026-01-01', end: '2026-11-07', isPartial: true })
+    expect(longPeriodLabel(partial, 'year')).toBe('Jan 1, 2026 – Nov 7, 2026')
   })
 })
 

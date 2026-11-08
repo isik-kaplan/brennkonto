@@ -158,6 +158,12 @@ describe('TrendChart', () => {
     expect(labels).toHaveLength(15)
   })
 
+  it('marks every other label minor, counting back from the newest, so a narrow chart can drop them', () => {
+    render(<TrendChart periods={days(15)} groupBy="day" />)
+    const minor = [...document.querySelectorAll('.trend-chart__x-label.is-minor')].map((label) => label.textContent)
+    expect(minor).toEqual(['Nov 6', 'Nov 12'])
+  })
+
   it('labels every bar when there are few enough', () => {
     render(<TrendChart periods={days(7)} groupBy="day" />)
     const labels = [...document.querySelectorAll('.trend-chart__x-label')].map((label) => label.textContent)

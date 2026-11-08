@@ -4,11 +4,12 @@ import { fetchRangeStats } from '../api/endpoints'
 import type { GroupBy, RangeStats } from '../api/types'
 import TrendChart from '../components/TrendChart'
 import { addDays, daysBetween, toISODate } from '../lib/dates'
-import { buildPeriods, groupingsFor, lastNRange, longPeriodLabel } from '../lib/trendPeriods'
+import { buildPeriods, defaultGrouping, isGroupingUsable, lastNRange, longPeriodLabel } from '../lib/trendPeriods'
 
 type Interval = GroupBy | 'custom'
 
-const GROUP_LABELS: Record<GroupBy, string> = { day: 'Days', week: 'Weeks', month: 'Months' }
+const GROUPINGS: GroupBy[] = ['day', 'week', 'month', 'year']
+const GROUP_LABELS: Record<GroupBy, string> = { day: 'Days', week: 'Weeks', month: 'Months', year: 'Years' }
 const INTERVAL_LABELS: Record<Interval, string> = { ...GROUP_LABELS, custom: 'Custom' }
 
 // Counts offered per interval, plus a ceiling for "Other" that keeps one request's bucket count sane.
@@ -16,6 +17,7 @@ const COUNTS: Record<GroupBy, { presets: number[]; fallback: number; max: number
   day: { presets: [7, 30, 90, 365], fallback: 7, max: 730 },
   week: { presets: [4, 12, 26, 52], fallback: 12, max: 156 },
   month: { presets: [3, 6, 12, 24], fallback: 6, max: 60 },
+  year: { presets: [2, 3, 5], fallback: 2, max: 10 },
 }
 
 // The same stretch immediately before this one: the previous N weeks for "last N weeks", the
@@ -66,19 +68,22 @@ export default function Trends() {
   const [count, setCount] = useState(COUNTS.day.fallback)
   const [isOtherCount, setIsOtherCount] = useState(false)
   const [countDraft, setCountDraft] = useState(String(COUNTS.day.fallback))
-  // Stryker disable next-line StringLiteral: any value the range can't use falls back to its first grouping, which is 'day' for the default 30-day range
-  const [customGroupBy, setCustomGroupBy] = useState<GroupBy>('day')
+  // Null until someone picks one, so the range's own default applies.
+  const [customGroupBy, setCustomGroupBy] = useState<GroupBy | null>(null)
   const [customStart, setCustomStart] = useState(addDays(today, -29))
   const [customEnd, setCustomEnd] = useState(today)
   const [loaded, setLoaded] = useState<{ key: string; stats: RangeStats; previousStats: RangeStats } | null>(null)
 
   const { start, end } =
     interval === 'custom' ? { start: customStart, end: customEnd } : lastNRange(interval, count, today)
-  const customGroupings = groupingsFor(daysBetween(start, end))
-  // A custom range's grouping follows its length; a grouping picked for an earlier, different
-  // length falls back to the default rather than drawing 300 hairline days.
+  // A grouping picked for an earlier, different range falls back to the default once it stops
+  // fitting, rather than drawing one lone bar or a thousand hairline days.
   const groupBy: GroupBy =
-    interval !== 'custom' ? interval : customGroupings.includes(customGroupBy) ? customGroupBy : customGroupings[0]
+    interval !== 'custom'
+      ? interval
+      : customGroupBy && isGroupingUsable(start, end, customGroupBy)
+        ? customGroupBy
+        : defaultGrouping(daysBetween(start, end))
 
   // Results are tagged with the request they answer, so a slow earlier request (a 365-day range)
   // that resolves after a quick later one can never overwrite it, and a render between a control
@@ -118,7 +123,7 @@ export default function Trends() {
   function changeCountDraft(value: string) {
     setCountDraft(value)
     const parsed = Number(value)
-    // Only rendered for a day/week/month interval, never for custom.
+    // Only rendered for a day/week/month/year interval, never for custom.
     if (Number.isInteger(parsed) && parsed >= 1 && parsed <= COUNTS[interval as GroupBy].max) {
       setCount(parsed)
     }
@@ -135,7 +140,7 @@ export default function Trends() {
 
       <div className="range-controls">
         <div className="segmented" role="group" aria-label="Interval">
-          {(['day', 'week', 'month', 'custom'] as Interval[]).map((value) => (
+          {([...GROUPINGS, 'custom'] as Interval[]).map((value) => (
             <button
               key={value}
               type="button"
@@ -265,13 +270,19 @@ export default function Trends() {
           <section className="card">
             <div className="trend-card-head">
               <h2 className="card__title">Calories</h2>
-              {interval === 'custom' && customGroupings.length > 1 && (
+              {interval === 'custom' && (
                 <div className="segmented segmented--sm" role="group" aria-label="Group by">
-                  {customGroupings.map((value) => (
+                  {GROUPINGS.map((value) => (
                     <button
                       key={value}
                       type="button"
                       className={groupBy === value ? 'is-active' : ''}
+                      disabled={!isGroupingUsable(start, end, value)}
+                      title={
+                        isGroupingUsable(start, end, value)
+                          ? undefined
+                          : `This range is too ${value === 'day' ? 'long' : 'short'} to group by ${value}`
+                      }
                       onClick={() => setCustomGroupBy(value)}
                     >
                       {GROUP_LABELS[value]}

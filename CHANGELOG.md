@@ -3,6 +3,20 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.27.0]
+
+### Added
+
+- Trends can group by year: a new Years interval shows the last 2, 3, 5 or any other number of whole calendar years.
+
+### Changed
+
+- A Custom range now always offers Days, Weeks, Months and Years. One that can't draw at least two bars for the range (Months within a single month, Years within a single year), or would draw more than 730 (Days over two years), is greyed out with a note saying why. Before, Months and Years were simply missing for shorter ranges.
+
+### Fixed
+
+- On narrow phones, the Custom date fields stay inside the screen edges, and the chart's date labels no longer run into each other.
+
 ## [0.26.0]
 
 ### Changed

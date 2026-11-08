@@ -21,7 +21,9 @@ def _bucket_key(entry_date: date, group_by: str) -> date:
         return entry_date - timedelta(days=entry_date.weekday())
     if group_by == "month":
         return entry_date.replace(day=1)
-    raise ValidationException(f"Unsupported group_by: {group_by!r}. Use 'day', 'week', or 'month'.")
+    if group_by == "year":
+        return entry_date.replace(month=1, day=1)
+    raise ValidationException(f"Unsupported group_by: {group_by!r}. Use 'day', 'week', 'month', or 'year'.")
 
 
 def _bucket_label(key: date, group_by: str) -> tuple[str, date, date]:
@@ -30,6 +32,8 @@ def _bucket_label(key: date, group_by: str) -> tuple[str, date, date]:
     if group_by == "week":
         end = key + timedelta(days=6)
         return f"{key.strftime('%d %b')} – {end.strftime('%d %b')}", key, end
+    if group_by == "year":
+        return str(key.year), key, key.replace(month=12, day=31)
     month_end = key.replace(day=calendar.monthrange(key.year, key.month)[1])
     return key.strftime("%B %Y"), key, month_end
 
@@ -79,11 +83,11 @@ async def range_stats(
 ) -> RangeStatsOut:
     if start > end:
         raise ValidationException("start must be on or before end.")
-    if group_by not in ("day", "week", "month"):
+    if group_by not in ("day", "week", "month", "year"):
         # Validated here rather than left to _bucket_key alone - that check only fires once per
         # entry, so an empty range (valid dates, no logged days yet) would silently accept a
         # bogus group_by and return an empty result instead of rejecting the request.
-        raise ValidationException(f"Unsupported group_by: {group_by!r}. Use 'day', 'week', or 'month'.")
+        raise ValidationException(f"Unsupported group_by: {group_by!r}. Use 'day', 'week', 'month', or 'year'.")
 
     # consumed_at is a full timestamp - `<= end` would silently exclude anything logged after
     # midnight on the end day, so the upper bound is exclusive at the start of the following day.

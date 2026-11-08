@@ -1320,6 +1320,20 @@ svg {
   gap: var(--space-xs);
 }
 
+@container (max-width: 640px) {
+  .trend-dates {
+    width: 100%;
+  }
+
+  .range-controls .trend-dates .field {
+    flex: 1 1 0;
+  }
+
+  .trend-dates .input {
+    padding-inline: var(--space-xs);
+  }
+}
+
 .trend-dates__sep {
   font-size: var(--text-sm);
   color: var(--color-neutral);
@@ -1476,6 +1490,12 @@ svg {
   text-align: center;
   font-size: var(--text-xs);
   color: var(--color-neutral);
+}
+
+@container (max-width: 420px) {
+  .trend-chart__x-label.is-minor {
+    visibility: hidden;
+  }
 }
 
 .trend-chart__legend {
@@ -1669,6 +1689,11 @@ svg {
 .segmented button.is-active {
   background: var(--color-ink);
   color: var(--color-paper);
+}
+
+.segmented button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 /* A segmented control with too many/long options for one row (Range summary's five presets,

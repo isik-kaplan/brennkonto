@@ -128,11 +128,18 @@ export default function TrendChart({ periods, groupBy }: TrendChartProps) {
         </div>
         <div />
         <div className="trend-chart__x" aria-hidden="true">
-          {periods.map((period, index) => (
-            <span key={period.start} className="trend-chart__x-label">
-              {(periods.length - 1 - index) % labelEvery === 0 ? shortPeriodLabel(period, groupBy) : ''}
-            </span>
-          ))}
+          {periods.map((period, index) => {
+            const stepsBack = (periods.length - 1 - index) / labelEvery
+            // Every other label is minor, so a narrow chart can drop them and keep the rest apart.
+            return (
+              <span
+                key={period.start}
+                className={stepsBack % 2 === 1 ? 'trend-chart__x-label is-minor' : 'trend-chart__x-label'}
+              >
+                {Number.isInteger(stepsBack) ? shortPeriodLabel(period, groupBy) : ''}
+              </span>
+            )
+          })}
         </div>
       </div>
 
