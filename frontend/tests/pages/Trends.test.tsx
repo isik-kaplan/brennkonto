@@ -141,6 +141,8 @@ describe('Trends', () => {
     await waitFor(() => expect(fetchMock()).toHaveBeenCalledWith('2026-01-01', '2026-06-30', 'week'))
     fireEvent.change(screen.getByLabelText('Start date'), { target: { value: '' } })
     expect(currentSearch().has('start')).toBe(false)
+    fireEvent.change(screen.getByLabelText('End date'), { target: { value: '' } })
+    expect(currentSearch().has('end')).toBe(false)
   })
 
   it('opens on the last 7 days, compared with the 7 before', async () => {
