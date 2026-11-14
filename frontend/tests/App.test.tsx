@@ -52,6 +52,7 @@ describe('App routing', () => {
     mockAuth({ isLoading: true })
     renderAt('/')
     expect(screen.getByText('Loading…')).toBeInTheDocument()
+    expect(screen.getByText('brennkonto')).toBeInTheDocument()
   })
 
   it('shows a loader, not the page, on a protected route while auth reloads with a user already set', () => {

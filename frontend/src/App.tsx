@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 
 import AppShell from './components/AppShell'
+import BrandLoader from './components/BrandLoader'
 import ConnectionError from './components/ConnectionError'
 import { useAuth } from './hooks/useAuth'
 import Dashboard from './pages/Dashboard'
@@ -22,7 +23,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
     return <ConnectionError onRetry={retryConnection} />
   }
   if (isLoading) {
-    return <div className="centered-loader">Loading…</div>
+    return <BrandLoader />
   }
   if (!user) {
     return <Navigate to="/login" replace />
@@ -37,7 +38,7 @@ export function RequireGuest({ children }: { children: ReactNode }) {
     return <ConnectionError onRetry={retryConnection} />
   }
   if (isLoading) {
-    return <div className="centered-loader">Loading…</div>
+    return <BrandLoader />
   }
   if (user) {
     return <Navigate to="/" replace />

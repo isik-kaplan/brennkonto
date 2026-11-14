@@ -3,6 +3,12 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.29.0]
+
+### Changed
+
+- The loading screen that shows while you're being signed in now carries the brennkonto wordmark and a gently pulsing mark, instead of a lone "Loading…".
+
 ## [0.28.0]
 
 ### Changed

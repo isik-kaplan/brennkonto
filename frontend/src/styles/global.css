@@ -1936,3 +1936,48 @@ svg {
   min-height: 60vh;
   color: var(--color-neutral);
 }
+
+.brand-loader {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  min-height: 100dvh;
+}
+
+.brand-loader__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2xs);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-lg);
+}
+
+.brand-loader__mark {
+  animation: brand-loader-pulse 1.3s var(--ease-in-out) infinite;
+}
+
+.brand-loader__status {
+  color: var(--color-neutral);
+  font-size: var(--text-sm);
+}
+
+@keyframes brand-loader-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.82);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-loader__mark {
+    animation: none;
+  }
+}
