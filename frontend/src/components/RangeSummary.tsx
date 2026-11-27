@@ -5,6 +5,7 @@ import type { RangeStats } from '../api/types'
 import { daysBetween, toISODate } from '../lib/dates'
 import { RANGE_PRESETS, groupByForDays, presetDateRange } from '../lib/rangePresets'
 import type { RangePresetKey } from '../lib/rangePresets'
+import BrandLoader from './BrandLoader'
 
 interface RangeSummaryProps {
   // Which preset the section opens on - Settings' "Range summary default" (useHistoryPreferences).
@@ -93,7 +94,7 @@ export default function RangeSummary({ defaultPreset }: RangeSummaryProps) {
       </div>
 
       {isLoading || !stats ? (
-        <div className="centered-loader">Loading…</div>
+        <BrandLoader inline />
       ) : (
         <div className="stat-strip">
           <div className="stat-tile">

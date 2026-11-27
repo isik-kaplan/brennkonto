@@ -1955,6 +1955,11 @@ svg {
   font-size: var(--text-lg);
 }
 
+.brand-loader--inline {
+  gap: var(--space-xs);
+  font-size: var(--text-sm);
+}
+
 .brand-loader__mark {
   animation: brand-loader-pulse 1.3s var(--ease-in-out) infinite;
 }

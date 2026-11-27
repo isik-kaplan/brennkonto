@@ -3,6 +3,16 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.30.0]
+
+### Changed
+
+- Loading inside a page (Today, History, Trends and History's range summary) now shows the pulsing brennkonto mark beside "Loading…", matching the sign-in screen.
+
+### Fixed
+
+- Adding, editing, moving or removing an entry on History no longer blanks the day and jumps the page: the numbers and list update in place, and the add panel stays open with its confirmation so you can keep adding.
+
 ## [0.29.0]
 
 ### Changed
@@ -116,7 +126,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - The Calories legend swatch (in History's metric toggles and their matching Settings picker) was invisible whenever its toggle was active/pressed - it uses the neutral ink color, which is also the pressed toggle's background. Legend swatches now get a border in the button's own text color, so the swatch outline stays visible no matter what it's sitting on.
-- The "Range summary default" picker in Settings could overflow past its card's edge: the control only wrapped onto multiple rows below a 640px *viewport*, but Settings lays its cards out two per row, so a card can be narrower than that on viewports nowhere near 640px. It now wraps based on the card's own width instead.
+- The "Range summary default" picker in Settings could overflow past its card's edge: the control only wrapped onto multiple rows below a 640px _viewport_, but Settings lays its cards out two per row, so a card can be narrower than that on viewports nowhere near 640px. It now wraps based on the card's own width instead.
 - Range summary's "Days logged" denominator used the full length of the selected preset (e.g. 182 for "Last 6 months") even for an account newer than that - so someone who joined 40 days ago and logged every single day since would see it read as `40 / 182`, as if most of that history were empty. It's now capped to the user's own logging history, so the same account reads `40 / 40`.
 
 ### Removed

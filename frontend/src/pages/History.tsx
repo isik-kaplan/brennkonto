@@ -19,6 +19,7 @@ import {
 import type { DailyStats, FoodEntry, MealGroup, RangeStats } from '../api/types'
 import AddEntryPanel from '../components/AddEntryPanel'
 import BarChart from '../components/BarChart'
+import BrandLoader from '../components/BrandLoader'
 import ConfirmDialog from '../components/ConfirmDialog'
 import EntryList, { type EntryEditValues } from '../components/EntryList'
 import RangeSummary from '../components/RangeSummary'
@@ -53,8 +54,10 @@ export default function History() {
   // Stryker disable next-line ArrayDeclaration: only read once the first load has set it, together with stats
   const [groups, setGroups] = useState<MealGroup[]>([])
   const [trend, setTrend] = useState<RangeStats | null>(null)
-  // Stryker disable next-line BooleanLiteral: nothing renders past the loader until stats arrive, whatever this says
-  const [isLoading, setIsLoading] = useState(true)
+  // The day the on-screen stats belong to. The loader only replaces the card while a different day
+  // is on its way in; reloading the same day after an add or edit swaps the numbers in place, so
+  // the add panel stays open and the page doesn't collapse and jump.
+  const [loadedDate, setLoadedDate] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const [archivedEntries, setArchivedEntries] = useState<FoodEntry[]>([])
   const [pendingPermanentDelete, setPendingPermanentDelete] = useState<FoodEntry | null>(null)
@@ -62,19 +65,15 @@ export default function History() {
   const [showAmounts, setShowAmounts] = useState(preferences.showAmounts)
 
   const load = useCallback(async () => {
-    setIsLoading(true)
-    try {
-      const [dailyStats, mealGroups, trendStats] = await Promise.all([
-        fetchDailyStats(date),
-        fetchMealGroups(),
-        fetchRangeStats(addDays(date, -(TREND_WINDOW_DAYS - 1)), date, 'day'),
-      ])
-      setStats(dailyStats)
-      setGroups(mealGroups)
-      setTrend(trendStats)
-    } finally {
-      setIsLoading(false)
-    }
+    const [dailyStats, mealGroups, trendStats] = await Promise.all([
+      fetchDailyStats(date),
+      fetchMealGroups(),
+      fetchRangeStats(addDays(date, -(TREND_WINDOW_DAYS - 1)), date, 'day'),
+    ])
+    setStats(dailyStats)
+    setGroups(mealGroups)
+    setTrend(trendStats)
+    setLoadedDate(date)
   }, [date])
 
   useEffect(() => {
@@ -195,8 +194,8 @@ export default function History() {
         </button>
       </div>
 
-      {isLoading || !stats ? (
-        <div className="centered-loader">Loading…</div>
+      {loadedDate !== date || !stats ? (
+        <BrandLoader inline />
       ) : (
         <div className="card">
           <h2 className="card__title">{displayDate(date)}</h2>

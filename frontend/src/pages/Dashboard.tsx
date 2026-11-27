@@ -12,6 +12,7 @@ import {
   updateMealGroup,
 } from '../api/endpoints'
 import type { DailyStats, FoodEntry, MealGroup } from '../api/types'
+import BrandLoader from '../components/BrandLoader'
 import EntryList, { type EntryEditValues } from '../components/EntryList'
 import MacroSummary from '../components/MacroSummary'
 import { displayDateLong, toISODate } from '../lib/dates'
@@ -83,7 +84,7 @@ export default function Dashboard() {
       </div>
 
       {isLoading || !stats ? (
-        <div className="centered-loader">Loading…</div>
+        <BrandLoader inline />
       ) : (
         <>
           <div className="card">

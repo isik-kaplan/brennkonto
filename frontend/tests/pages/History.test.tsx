@@ -760,6 +760,41 @@ describe('History', () => {
       expect(endpoints.fetchArchivedEntries).not.toHaveBeenCalled()
     })
 
+    it('keeps the panel open with its confirmation while the same day reloads', async () => {
+      const user = userEvent.setup()
+      let finish!: (stats: DailyStats) => void
+      vi.mocked(endpoints.fetchDailyStats)
+        .mockResolvedValueOnce(makeStats(today, []))
+        .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+      vi.mocked(endpoints.searchFoods).mockResolvedValue([
+        {
+          barcode: '1',
+          name: 'Nutella',
+          brand: 'Ferrero',
+          calories_per_100g: 539,
+          protein_per_100g: 6.3,
+          carbs_per_100g: 57.5,
+          fat_per_100g: 30.9,
+          suggested_unit: 'g',
+          unit_to_grams: 1,
+        },
+      ])
+      vi.mocked(endpoints.createEntry).mockResolvedValue(createdEntry)
+      renderHistory()
+      await screen.findByText('Nothing logged yet today.')
+
+      await user.click(screen.getByRole('button', { name: '+ Add entry' }))
+      await user.type(screen.getByLabelText('Product name'), 'nutella')
+      await user.click(await screen.findByText('Nutella'))
+      await user.click(screen.getByRole('button', { name: 'Save entry' }))
+
+      expect(await screen.findByText('Added Nutella.')).toBeInTheDocument()
+      expect(screen.queryByText('Loading…')).not.toBeInTheDocument()
+      await act(async () => finish(makeStats(today, [createdEntry])))
+      expect(screen.getByText('Added Nutella.')).toBeInTheDocument()
+      expect(screen.getByLabelText('Product name')).toBeInTheDocument()
+    })
+
     it('also reloads the archive if it is currently shown', async () => {
       const user = userEvent.setup()
       vi.mocked(endpoints.fetchArchivedEntries).mockResolvedValue([])

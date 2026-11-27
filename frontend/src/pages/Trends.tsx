@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 
 import { fetchRangeStats } from '../api/endpoints'
 import type { GroupBy, RangeStats } from '../api/types'
+import BrandLoader from '../components/BrandLoader'
 import TrendChart from '../components/TrendChart'
 import { useQueryParams } from '../hooks/useQueryParams'
 import { addDays, daysBetween, isISODate, toISODate } from '../lib/dates'
@@ -259,7 +260,7 @@ export default function Trends() {
       </div>
 
       {!stats ? (
-        <div className="centered-loader">Loading…</div>
+        <BrandLoader inline />
       ) : (
         <>
           <section className="card trend-summary">
